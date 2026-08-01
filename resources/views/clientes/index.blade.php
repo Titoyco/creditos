@@ -33,7 +33,7 @@
                 @endif
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 pt-1.5 border-t border-slate-200/70">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 pt-1.5 border-t border-slate-200/70">
                 <select name="id_sucursal" onchange="this.form.submit()" class="text-xs py-1 px-2 border-slate-300 rounded-md bg-white font-medium text-slate-600">
                     <option value="">Todas las Sucursales</option>
                     @foreach($sucursales as $sucursal)
@@ -67,6 +67,13 @@
                         <option value="{{ $est->codigo }}" {{ request('estado_banco') == $est->codigo ? 'selected' : '' }}>{{ $est->codigo }} - {{ $est->descripcion }}</option>
                     @endforeach
                 </select>
+
+                <label class="space-x-1.5 cursor-pointer hover:text-blue-700 transition-colors">
+                    <input type="checkbox" name="has_saldo" value="1" {{ request('has_saldo') ? 'checked' : '' }} 
+                           class="rounded border-slate-400 text-blue-600 focus:ring-blue-500 h-3 w-3" onchange="this.form.submit()">
+                    <span>Saldo > 0</span>
+                </label>
+
             </div>
         </form>
     </div>
@@ -92,11 +99,15 @@
 
                     <tr class="{{ $bgFila }} transition-colors">
                         <td class="py-1.5 px-3 font-mono font-bold text-slate-900 border-r border-slate-200/60">
+                            <a href="{{ route('clientes.estado-cuenta', $cliente->id) }}" title="Estado de Cuenta" class="hover:bg-slate-300  px-1.5 py-0.5 rounded uppercase transition-all shadow-sm">
                             {{ $cliente->dni }}
+                            </a>
                         </td>
                         
                         <td class="py-1.5 px-3 border-r border-slate-200/60">
+                            
                             <div class="flex items-center space-x-1.5">
+                                <a href="{{ route('clientes.estado-cuenta', $cliente->id) }}" title="Estado de Cuenta" class="hover:bg-slate-300 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all shadow-sm">
                                 @if($estaSuspendido)
                                     <span class="bg-rose-700 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase leading-none">SUSPENDIDO</span>
                                     <span class="font-bold text-rose-950 uppercase truncate">{{ $cliente->nombre }}</span>
@@ -104,6 +115,7 @@
                                     <span class="bg-blue-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase leading-none">TITULAR</span>
                                     <span class="font-bold text-slate-900 uppercase truncate">{{ $cliente->nombre }}</span>
                                 @endif
+                                </a>
                             </div>
                         </td>
                         
@@ -121,23 +133,24 @@
 
                         <td class="py-1 px-2 text-center">
                             <div class="flex flex-col items-end space-y-1">
-                                <div class="flex items-center justify-end space-x-1">
+                                <div class="flex items-center justify-end space-x-1 ">
                                     @if(!$estaSuspendido)
-                                        <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" title="Nuevo Crédito" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all shadow-sm flex items-center">
+                                        <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" title="Nuevo Crédito" class="w-32 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all shadow-sm flex items-center">
                                             + CRÉDITO
                                         </a>
                                     @else
-                                        <span class="bg-slate-200 text-slate-500 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase italic border border-slate-300">
+                                        <span class="w-32 bg-slate-200 text-slate-500 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase italic border border-slate-300">
                                             SUSPENDIDO
                                         </span>
                                     @endif
 
-                                    <a href="{{ route('clientes.estado-cuenta', $cliente->id) }}" title="Estado de Cuenta" class="bg-slate-700 hover:bg-slate-800 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all shadow-sm">
-                                        E. CUENTA
-                                    </a>
-                                </div>
 
-                                <div class="flex items-center justify-end space-x-1">
+                                    
+                                    <a href="{{ route('clientes.estado-cuenta', $cliente->id) }}" title="Estado de Cuenta" class="p-0.5 text-slate-400 hover:text-blue-700 hover:bg-blue-100 rounded transition-all">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </a>
                                     <a href="{{ route('clientes.show', $cliente->id) }}" title="Ver Legajo" class="p-0.5 text-slate-400 hover:text-blue-700 hover:bg-blue-100 rounded transition-all">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                     </a>
@@ -191,8 +204,8 @@
                                 <div class="flex flex-col items-end space-y-1">
                                     <div class="flex items-center justify-end space-x-1">
                                         @if(!$padreSuspendido)
-                                            <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id, 'id_autorizado' => $autorizado->id]) }}" title="Crédito Adicional" class="bg-emerald-100 border border-emerald-300 hover:bg-emerald-600 hover:text-white text-emerald-800 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all flex items-center">
-                                                + ADIC.
+                                            <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id, 'id_autorizado' => $autorizado->id]) }}" title="Crédito Adicional" class="w-32 bg-emerald-100 border border-amber-300 hover:bg-amber-600 hover:text-white text-emerald-800 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all flex items-center">
+                                                + CRED. AUTORIZADO
                                             </a>
                                         @endif
                                         <a href="{{ route('clientes.show', $autorizado->id) }}" title="Legajo Autorizado" class="p-0.5 text-slate-400 hover:text-blue-700 hover:bg-blue-100 rounded transition-all">

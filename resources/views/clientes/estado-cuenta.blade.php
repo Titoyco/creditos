@@ -2,7 +2,7 @@
     <!-- Encabezado y Pestañas -->
     <div class="mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-200 pb-2">
         <div class="flex items-center space-x-3">
-            <a href="{{ route('clientes.index') }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+            <a href="{{  url()->previous()  }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             </a>
             <div>
@@ -47,22 +47,46 @@
         </div>
     </div>
 
+
+
     <form action="#" method="POST">
         @csrf
         
         <!-- Toolbar Tabla -->
         <div class="bg-slate-50 p-2 rounded-t-md border border-slate-300 border-b-0 flex items-center justify-between shadow-sm">
+            
+            <!-- Izquierda: Título y Contador -->
             <div class="flex items-center space-x-2 pl-1">
                 <span class="text-xs font-bold text-slate-800 uppercase">Créditos Activos</span>
                 <span class="text-[9px] font-black bg-slate-200 border border-slate-300 text-slate-600 px-1.5 py-0.5 rounded">{{ $creditosAbiertos->count() }}</span>
             </div>
-            <div class="flex space-x-2">
+            
+            <!-- Derecha: Botones y Acciones -->
+            <div class="flex items-center space-x-2">
                 <button type="button" class="bg-emerald-100 hover:bg-emerald-600 hover:text-white text-emerald-900 border border-emerald-300 px-3 py-1 rounded text-[10px] font-bold uppercase transition-all shadow-sm">
                     💵 Cobrar Sel.
                 </button>
                 <button type="button" class="bg-amber-100 hover:bg-amber-500 hover:text-white text-amber-900 border border-amber-300 px-3 py-1 rounded text-[10px] font-bold uppercase transition-all shadow-sm">
                     🔄 Refinanciar Sel.
                 </button>
+
+                <!-- Separador vertical -->
+                <div class="w-px h-5 bg-slate-300 mx-1"></div>
+
+                <!-- Botón Condicional -->
+                @if(isset($cliente->suspendido) && $cliente->suspendido)
+                    <div class="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1 rounded shadow-sm flex items-center">
+                        <span class="font-black text-[10px] uppercase">⛔ CLIENTE SUSPENDIDO</span>
+                    </div>
+                @else
+                    <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" 
+                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] py-1 px-3 rounded uppercase transition-all flex items-center justify-center space-x-1 shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>NUEVO CRÉDITO</span>
+                    </a>
+                @endif
             </div>
         </div>
 

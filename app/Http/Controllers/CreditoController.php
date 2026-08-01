@@ -240,10 +240,12 @@ class CreditoController extends Controller
             $limiteDisponible = max(0, $limiteTotal - $totalOtorgadoActivo);
 
             // 6. Totales Financieros de la Cartera Activa del Cliente
-            $totalSinPagar = (float) $cuotasActivas->sum('saldo_actual');
+            $totalCreditosActivos = (float) $cuotasActivas->sum('valor_base');
             $totalEntregado = (float) $cuotasActivas->sum('entrego');
             $totalIntereses = (float) $cuotasActivas->sum('intereses');
-            $totalAPagar = (float) $cuotasActivas->sum('a_pagar');
+            $totalAPagar = (float) $cuotasActivas->sum('saldo_actual');
+
+            $aFavor = (float) $cliente->saldo ?? 0;
 
             return view('creditos.create', compact(
                 'cliente',
@@ -252,10 +254,11 @@ class CreditoController extends Controller
                 'vencimientos',
                 'limiteTotal',
                 'limiteDisponible',
-                'totalSinPagar',
                 'totalEntregado',
+                'totalCreditosActivos',
                 'totalIntereses',
-                'totalAPagar'
+                'totalAPagar',
+                'aFavor'
             ));
         }
 

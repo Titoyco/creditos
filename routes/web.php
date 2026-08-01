@@ -8,6 +8,7 @@ use App\Http\Controllers\SucursalController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\PermisoController;
+use App\Http\Controllers\PresentacionController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
@@ -69,13 +70,19 @@ Route::middleware('auth')->group(function () {
 
     // --- MÓDULO SISTEMA ---
     Route::prefix('sistema')->group(function () {
+        Route::get('/', function () {return view('sistema.index');})->name('sistema.index');
         Route::resource('usuarios', UserController::class);
         Route::resource('permisos', PermisoController::class);
-        
+        Route::resource('sucursales', SucursalController::class);
+        Route::resource('presentaciones', PresentacionController::class);
+        Route::get('/presentaciones/cambiar', [PresentacionController::class, 'cambiar'])->name('sistema.presentaciones.cambiar');
+        Route::get('/sucursales/{sucursal}/cambiar', [SucursalController::class, 'cambiar'])->name('sucursales.cambiar');
+
+                
         Route::get('/provincias', [UbicacionController::class, 'provincias'])->name('provincias.index');
         Route::get('/localidades', [UbicacionController::class, 'localidades'])->name('localidades.index');
         
-        Route::get('/presentacion', [CreditoController::class, 'cambioPresentacion'])->name('sistema.presentacion');
+        
     });
 
     // --- PERFIL DE USUARIO ---

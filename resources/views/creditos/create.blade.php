@@ -17,7 +17,7 @@
         <!-- Header Compacto -->
         <div class="flex items-center justify-between py-2 border-b border-slate-200 mb-3">
             <div class="flex items-center space-x-3">
-                <a href="{{ route('clientes.index') }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+                <a href="{{  url()->previous()  }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                 </a>
                 <div>
@@ -26,6 +26,12 @@
                         <span class="bg-blue-100 text-blue-900 font-mono font-bold text-[10px] px-2 py-0.5 rounded border border-blue-200">DNI: {{ $cliente->dni }}</span>
                     </h1>
                 </div>
+            </div>
+            <div class="flex items-center space-x-2 bg-green-100 px-3 py-1.5 rounded-md border border-slate-200">
+                <span class="text-[9px] font-bold text-slate-500 uppercase">Saldo a Favor:</span>
+                <span class="font-mono font-black text-sm tabular-nums" :class="subtotal > limiteDisponible ? 'text-red-700' : 'text-emerald-700'">
+                    $ {{ number_format($aFavor, 2, ',', '.') }}
+                </span>
             </div>
             
             <div class="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-200">
@@ -65,12 +71,12 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Valor Venta ($)</label>
-                                        <input type="number" step="0.01" name="importe_original" x-model="valorVenta" required
+                                        <input type="number" step="0.1" name="importe_original" x-model="valorVenta" required
                                                class="w-full text-sm font-mono font-black rounded border-slate-300 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2 bg-white shadow-sm" placeholder="0.00">
                                     </div>
                                     <div>
                                         <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Entrega / A Favor ($)</label>
-                                        <input type="number" step="0.01" name="a_favor" x-model="aFavor" 
+                                        <input type="number" step="0.1" name="a_favor" x-model="aFavor" value="{{ $aFavor }}" required
                                                class="w-full text-sm font-mono font-bold rounded border-slate-300 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2 bg-slate-50 shadow-sm" placeholder="0.00">
                                     </div>
                                 </div>
@@ -178,15 +184,19 @@
                     <div class="col-span-2 mb-1">
                         <span class="font-bold text-[10px] text-slate-700 uppercase tracking-wider">Estado Financiero (Cartera Activa)</span>
                     </div>
+                    <div class="col-span-2 bg-amber-100 p-2 rounded border border-emerald-200 flex justify-between items-center">
+                        <span class="text-[10px] font-bold text-emerald-800 uppercase block">Total deuda</span>
+                        <span class="text-base font-black text-emerald-700 font-mono tabular-nums">$ {{ number_format($totalCreditosActivos, 2, ',', '.') }}</span>
+                    </div>
                     <div class="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-center">
                         <span class="text-[9px] font-bold text-slate-500 uppercase block">Total Entregado</span>
                         <span class="text-sm font-black text-slate-900 font-mono tabular-nums">$ {{ number_format($totalEntregado, 2, ',', '.') }}</span>
                     </div>
-                    <div class="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-center">
+                    <div class="bg-red-50 p-2 rounded border border-red-200 flex flex-col justify-center">
                         <span class="text-[9px] font-bold text-slate-500 uppercase block">Intereses Acum.</span>
                         <span class="text-sm font-black text-red-800 font-mono tabular-nums">$ {{ number_format($totalIntereses, 2, ',', '.') }}</span>
                     </div>
-                    <div class="col-span-2 bg-emerald-50 p-2 rounded border border-emerald-200 flex justify-between items-center">
+                    <div class="col-span-2 bg-emerald-100 p-2 rounded border border-emerald-200 flex justify-between items-center">
                         <span class="text-[10px] font-bold text-emerald-800 uppercase block">Total a Pagar (Saldo)</span>
                         <span class="text-base font-black text-emerald-700 font-mono tabular-nums">$ {{ number_format($totalAPagar, 2, ',', '.') }}</span>
                     </div>

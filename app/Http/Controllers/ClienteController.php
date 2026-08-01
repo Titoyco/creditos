@@ -62,10 +62,18 @@ class ClienteController extends Controller
         if ($request->filled('estado_banco')) {
             $query->where('estado_banco', $request->estado_banco);
         }
+        
+        // Saldo > 0
+        if ($request->boolean('has_saldo')) {
+            $query->where('saldo', '>', 0);
+            };
 
         $clientes = $query->orderBy('nombre', 'asc')
                         ->paginate(15)
                         ->withQueryString();
+
+
+        
 
         $sucursales   = Sucursal::orderBy('nombre')->get();
         $localidades  = Localidad::orderBy('nombre')->get();
