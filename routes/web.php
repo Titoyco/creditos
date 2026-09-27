@@ -27,7 +27,10 @@ Route::get('/login', function () {
     return view('auth.login');
 })->name('login');
 
-Route::post('/cambiar-sucursal', [SucursalController::class, 'updateGlobal'])->name('sucursal.update.global');
+// ⚠️ Protegido con 'auth': depende de la sesión del usuario (sucursal activa + permiso 'cambiar-sucursal').
+Route::post('/cambiar-sucursal', [SucursalController::class, 'updateGlobal'])
+    ->name('sucursal.update.global')
+    ->middleware('auth');
 
 Route::middleware('auth')->group(function () {
 
@@ -41,8 +44,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/{cliente}/estado-cuenta', [ClienteController::class, 'estadoCuenta'])->name('clientes.estado-cuenta');
         Route::put('/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
         Route::delete('/{cliente}', [ClienteController::class, 'destroy'])->name('clientes.destroy');
-        Route::get('/{cliente}/creditos', [ClienteController::class, 'creditos'])->name('clientes.creditos');
-        Route::get('/{cliente}/movimientos', [ClienteController::class, 'movimientos'])->name('clientes.movimientos');
+        // ❌ DESHABILITADAS: ClienteController no implementa creditos() ni movimientos() (HTTP 500).
+        // Reemplazadas funcionalmente por 'clientes.show' y 'clientes.estado-cuenta'.
+        // Route::get('/{cliente}/creditos', [ClienteController::class, 'creditos'])->name('clientes.creditos');
+        // Route::get('/{cliente}/movimientos', [ClienteController::class, 'movimientos'])->name('clientes.movimientos');
     });
 
     // --- MÓDULO CRÉDITOS ---
@@ -54,17 +59,21 @@ Route::middleware('auth')->group(function () {
 
         // ⚠️ RUTAS CON PARÁMETRO {credito} DESPUÉS
         Route::get('/{credito}', [CreditoController::class, 'show'])->name('creditos.show');
-        Route::get('/{credito}/editar', [CreditoController::class, 'edit'])->name('creditos.edit');
-        Route::put('/{credito}', [CreditoController::class, 'update'])->name('creditos.update');
-        Route::delete('/{credito}', [CreditoController::class, 'destroy'])->name('creditos.destroy');
+        // ❌ DESHABILITADAS: CreditoController no implementa edit()/update()/destroy() (HTTP 500).
+        // Un crédito se edita vía 'creditos.pagar' (pago de cuota) y se anula vía lote/rendición.
+        // Route::get('/{credito}/editar', [CreditoController::class, 'edit'])->name('creditos.edit');
+        // Route::put('/{credito}', [CreditoController::class, 'update'])->name('creditos.update');
+        // Route::delete('/{credito}', [CreditoController::class, 'destroy'])->name('creditos.destroy');
         
         // Corregido: Se quitó el prefijo duplicado "/creditos/" adentro del grupo
         Route::get('/{credito}/pagare', [CreditoController::class, 'imprimirPagare'])->name('creditos.pagare');
         
-        Route::get('/{credito}/cuotas', [CreditoController::class, 'cuotas'])->name('creditos.cuotas');
-        Route::get('/{credito}/cuotas/{cuota}', [CreditoController::class, 'showCuota'])->name('creditos.cuotas.show');
-        Route::get('/{credito}/cuotas/{cuota}/editar', [CreditoController::class, 'editCuota'])->name('creditos.cuotas.edit');
-        Route::put('/{credito}/cuotas/{cuota}', [CreditoController::class, 'updateCuota'])->name('creditos.cuotas.update');
+        // ❌ DESHABILITADAS: no existen cuotas()/showCuota()/editCuota()/updateCuota() en CreditoController (HTTP 500).
+        // La cobranza se resuelve con 'creditos.pagar' y el detalle con 'creditos.show'.
+        // Route::get('/{credito}/cuotas', [CreditoController::class, 'cuotas'])->name('creditos.cuotas');
+        // Route::get('/{credito}/cuotas/{cuota}', [CreditoController::class, 'showCuota'])->name('creditos.cuotas.show');
+        // Route::get('/{credito}/cuotas/{cuota}/editar', [CreditoController::class, 'editCuota'])->name('creditos.cuotas.edit');
+        // Route::put('/{credito}/cuotas/{cuota}', [CreditoController::class, 'updateCuota'])->name('creditos.cuotas.update');
         Route::post('/{cuota}/pagar', [CreditoController::class, 'pagarCuota'])->name('creditos.pagar');
     });
 
@@ -74,9 +83,14 @@ Route::middleware('auth')->group(function () {
         Route::resource('usuarios', UserController::class);
         Route::resource('permisos', PermisoController::class);
         Route::resource('sucursales', SucursalController::class);
-        Route::resource('presentaciones', PresentacionController::class);
-        Route::get('/presentaciones/cambiar', [PresentacionController::class, 'cambiar'])->name('sistema.presentaciones.cambiar');
-        Route::get('/sucursales/{sucursal}/cambiar', [SucursalController::class, 'cambiar'])->name('sucursales.cambiar');
+        // ✅ Presentaciones: el controlador solo implementa index() + cambiar().
+        // Se reemplaza Route::resource() (que generaba create/store/show/edit/update/destroy → HTTP 500)
+        // por una ruta explícita de listado. El cambio de lote es POST y se declara ANTES del listado.
+        Route::post('/presentaciones/cambiar', [PresentacionController::class, 'cambiar'])->name('sistema.presentaciones.cambiar');
+        Route::get('/presentaciones', [PresentacionController::class, 'index'])->name('sistema.presentaciones.index');
+        // ❌ DESHABILITADA: SucursalController no implementa cambiar() (HTTP 500);
+        // el cambio de sucursal activa se hace con 'sucursal.update.global' (POST /cambiar-sucursal).
+        // Route::get('/sucursales/{sucursal}/cambiar', [SucursalController::class, 'cambiar'])->name('sucursales.cambiar');
 
                 
         Route::get('/provincias', [UbicacionController::class, 'provincias'])->name('provincias.index');

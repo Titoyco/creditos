@@ -38,6 +38,16 @@ class Credito extends Model
         return $this->hasMany(Cuota::class, 'id_credito');
     }
 
+    /**
+     * Presentación (lote) ORIGEN del crédito — FUENTE DE VERDAD del lote inicial.
+     *
+     * ⚠️ El lote donde nació el crédito se resuelve SIEMPRE por la FK relacional
+     * `id_presentacion` (esta relación). NO existe columna física `presentacion_origen`
+     * en la tabla `creditos`; cualquier consulta que necesite el lote de origen debe
+     * hacer INNER JOIN con `presentaciones` vía `creditos.id_presentacion`.
+     * El lote exigible actual de una cuota se calcula con `presentaciones.numero + cuotas.num_cuota`
+     * (ver Cuota::getLoteCalculadoAttribute / Cuota::lote_calculado).
+     */
     public function presentacion(): BelongsTo
     {
         return $this->belongsTo(Presentacion::class, 'id_presentacion');
@@ -66,7 +76,11 @@ class Credito extends Model
         // Ejemplo resultado: R00001234T
         return "{$tipoPart}{$numeroCredito}{$sucursalPart}";
     }
-    // relacion autorizado
+    /**
+     * Firma autorizada que respalda el crédito.
+     * ⚠️ `creditos.id_autorizado` referencia `cliente_autorizados.id` (NO `clientes.id`).
+     * NULL = crédito tomado directamente por el titular.
+     */
     public function autorizado(): BelongsTo
     {
         return $this->belongsTo(ClienteAutorizado::class, 'id_autorizado');

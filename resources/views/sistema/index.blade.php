@@ -14,7 +14,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         
         <!-- 1. Presentaciones -->
-        <a href="{{ route('presentaciones.index') }}" class="bg-white rounded-md border border-slate-300 shadow-sm p-4 hover:border-blue-500 hover:ring-1 hover:ring-blue-500 transition-all flex flex-col group">
+        <a href="{{ route('sistema.presentaciones.index') }}" class="bg-white rounded-md border border-slate-300 shadow-sm p-4 hover:border-blue-500 hover:ring-1 hover:ring-blue-500 transition-all flex flex-col group">
             <div class="flex items-center space-x-3 mb-2">
                 <div class="p-2 bg-slate-100 border border-slate-200 rounded text-slate-600 group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:text-white transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>

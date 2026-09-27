@@ -13,8 +13,12 @@ class Presentacion extends Model
         'numero',          // Número de lote o presentación (ej: 500, 510, etc.)
         'fecha_inicio',
         'fecha_fin',
-        'tasa_cuotas', // % de financiación base
-        'tasa_mora'     // % de recargo por atraso
+        'interes_credito', // % de financiación base del lote (columna REAL en 'presentaciones')
+        'interes_mora',    // % de mora aplicado al cerrar el lote (columna REAL en 'presentaciones')
+        // ⚠️ 'tasa_cuotas' y 'tasa_mora' NO existen como columnas en 'presentaciones';
+        // se mantienen solo por compatibilidad con código legado. Fuente oficial: interes_credito / interes_mora.
+        'tasa_cuotas',
+        'tasa_mora'
     ];
 
     /**

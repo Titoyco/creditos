@@ -9,7 +9,9 @@ use App\Models\Sucursal;
 use App\Models\Presentacion;
 use App\Models\SucursalIndice;
 use App\Models\Cliente;
+use App\Models\ClienteAutorizado;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class CreditoController extends Controller
 {
@@ -137,7 +139,8 @@ class CreditoController extends Controller
             'saldo_actual' => ($cuota->valor_base + $cuota->intereses) - $request->monto
         ]);
 
-        return back()->with('status', 'Pago registrado correctamente');
+        // Nombre de la variable de sesión 'success' alineado a <x-notification-modal /> (specs/ui-guidelines.md §9).
+        return back()->with('success', 'Pago registrado correctamente');
     }
 
     public function create(Request $request)
@@ -153,10 +156,15 @@ class CreditoController extends Controller
                 'autorizados'
             ])->findOrFail($clienteId);
             
-            // Verificamos si la operación la realiza una firma autorizada
+            // Verificamos si la operación la realiza una firma autorizada.
+            // ⚠️ $autorizadoId es el ID del REGISTRO de autorización (cliente_autorizados.id),
+            // NO el id de un cliente: 'creditos.id_autorizado' apunta a 'cliente_autorizados'.
             $autorizado = null;
             if ($autorizadoId) {
-                $autorizado = $cliente->autorizados->where('id', $autorizadoId)->first();
+                $autorizado = ClienteAutorizado::with('cliente')
+                    ->where('id', $autorizadoId)
+                    ->where('id_titular', $cliente->id) // Solo autorizaciones vigentes de ESTE titular
+                    ->first();
             }
 
             // 1. Obtención de la Presentación Activa (Sesión -> Máximo ID de DB -> Fallback a 102)
@@ -271,6 +279,14 @@ class CreditoController extends Controller
             'tipo_credito' => 'required|in:C,D,R',
             'importe_original' => 'required|numeric|min:1',
             'cantidad_cuotas' => 'required|integer|min:1',
+            // ⚠️ 'id_autorizado' es el ID del registro en 'cliente_autorizados' (no un clientes.id) y
+            // debe pertenecer al titular que solicita el crédito. Si no viene, se persiste NULL.
+            'id_autorizado' => [
+                'nullable',
+                'integer',
+                Rule::exists('cliente_autorizados', 'id')
+                    ->where('id_titular', $request->input('id_cliente')),
+            ],
         ]);
 
         // Ejecutamos una transacción de base de datos para asegurar consistencia absoluta
@@ -301,7 +317,7 @@ class CreditoController extends Controller
             $credito = Credito::create([
                 'id_cliente' => $request->id_cliente,
                 'id_sucursal' => $request->id_sucursal,
-                'id_autorizado' => $request->id_cliente, // Por defecto, el cliente es el autorizado
+                'id_autorizado' => $request->input('id_autorizado') ?: null, // NULL = crédito del propio titular
                 'id_presentacion' => $request->id_presentacion,
                 'credito' => $codigoCredito,
                 'tipo_credito' => $request->tipo_credito,

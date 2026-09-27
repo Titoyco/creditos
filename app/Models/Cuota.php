@@ -30,12 +30,22 @@ class Cuota extends Model
     }
 
     /**
-     * Cálculo dinámico del número de lote (Presentación de crédito + nro de cuota)
+     * Cálculo dinámico del número de lote.
+     *
+     * @deprecated Nomenclatura obsoleta. El accesor oficial es `lote_calculado`
+     *             (getLoteCalculadoAttribute). Se conserva delegando en él para no
+     *             romper vistas antiguas; la implementación anterior sumaba un Modelo
+     *             a un entero (`$this->credito->presentacion + $this->num_cuota`), lo
+     *             que provocaba un error fatal.
      */
     public function getLotePresentacionAttribute() {
-        return $this->credito->presentacion + $this->num_cuota;
+        return $this->lote_calculado;
     }
 
+    /**
+     * ACCESOR OFICIAL DE LOTE: número base de la presentación del crédito (origen)
+     * + número de cuota. Ej: presentación #500, cuota 3 => lote 503.
+     */
     public function getLoteCalculadoAttribute()
     {
         // Accedemos al campo 'numero' de la tabla presentaciones a través del crédito

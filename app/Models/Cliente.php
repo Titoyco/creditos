@@ -48,7 +48,7 @@ class Cliente extends Model
             'cliente_autorizados',         // Tabla pivot
             'id_titular',                  // Clave foránea local en la pivot
             'id_autorizado'                // Clave foránea externa en la pivot
-        )->withPivot(['relacion_aut', 'fecha_autorizado', 'limite_aut']) // Traer columnas extra
+        )->withPivot(['id', 'relacion_aut', 'fecha_autorizado', 'limite_aut']) // 'id' = PK de cliente_autorizados (usado por creditos.id_autorizado)
         ->withTimestamps();
     }
 

@@ -60,7 +60,7 @@
                             <h2 class="font-bold text-[10px] text-slate-700 uppercase tracking-wider">1. Parámetros de Venta</h2>
                             @if($autorizado)
                                 <span class="bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase">
-                                    Firma: {{ $autorizado->nombre }}
+                                    Firma: {{ $autorizado->cliente->nombre ?? 'S/D' }}
                                 </span>
                             @endif
                         </div>
@@ -211,7 +211,7 @@
                     <div class="flex-1 overflow-y-auto p-2 space-y-1.5 bg-slate-50/50">
                         @if($cliente->novedades && $cliente->novedades->count() > 0)
                             @foreach($cliente->novedades as $novedad)
-                                <div class="p-2 rounded text-[10px] border-l-2 shadow-2xs bg-white border border-slate-200 {{ $novedad->tipo == 0 ? 'border-l-rose-500' : 'border-l-emerald-500' }}">
+                                <div class="p-2 rounded text-[10px] border-l-2 shadow-sm bg-white border border-slate-200 {{ $novedad->tipo == 0 ? 'border-l-rose-500' : 'border-l-emerald-500' }}">
                                     <div class="flex justify-between items-center mb-1">
                                         <div class="flex items-center space-x-1.5">
                                             <span class="font-bold text-slate-800 uppercase">{{ $novedad->user?->name ?? $novedad->usuario_nombre ?? 'Admin' }}</span>

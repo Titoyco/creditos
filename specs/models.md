@@ -1,0 +1,282 @@
+# Especificación de Modelos: Clientes, Créditos y Cuotas
+
+Este documento describe en detalle las entidades principales del sistema (`Cliente`, `Credito` y `Cuota`), sus esquemas en base de datos (migraciones), tipos de datos, atributos asignables en masa (*fillable*), relaciones Eloquent y métodos / accesores calculados.
+
+---
+
+## 0. Armonización con `routes-and-controllers.md` (revisión vigente)
+
+Cambios de coherencia aplicados (código + especificaciones), ya verificados:
+
+| Tema | Definición única adoptada | Dónde se corrigió |
+|---|---|---|
+| Lote origen del crédito | FK relacional **`creditos.id_presentacion`** (`Credito::presentacion()`). **No existe** columna física `presentacion_origen`. | §2.1, §2.1.1, §2.3 |
+| Lote exigible de una cuota | `presentaciones.numero + cuotas.num_cuota` ⇒ `Cuota::lote_calculado` (accesor oficial); `lote_presentacion` queda **deprecado** (alias). | §3.4 |
+| FK de firma autorizada | `creditos.id_autorizado` → **`cliente_autorizados.id`**; `NULL` = crédito del titular. | §2.1, §2.1.1, §2.3 |
+| Consulta de cierre de lote | INNER JOIN `creditos.id_presentacion` → `presentaciones` (nunca `creditos.presentacion_origen`). | `routes-and-controllers.md` §3.3 |
+| Tasas de presentación | Columnas reales `interes_credito` / `interes_mora` (en `$fillable`); `tasa_cuotas` / `tasa_mora` **no existen** como columnas. | `routes-and-controllers.md` §3.3 |
+
+---
+
+## 1. Modelo `Cliente`
+
+- **Clase**: `App\Models\Cliente`
+- **Tabla**: `clientes`
+- **Migración**: `database/migrations/2026_03_21_124052_create_clientes_table.php`
+
+### 1.1 Esquema de Base de Datos y Tipos de Datos
+
+| Columna | Tipo BD | Modificadores / Restricciones | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK, Auto-increment | Identificador único del cliente |
+| `dni` | `integer` | UNIQUE | DNI / Documento del cliente |
+| `nombre` | `varchar(191)` | Not Null | Apellido y Nombre del cliente |
+| `id_sucursal` | `bigint unsigned` | FK -> `sucursales(id)` | Sucursal a la que pertenece |
+| `medio_pago_preferido` | `integer` | Default `0` | Forma de cobro preferida (0: Efectivo, 1: Banco, etc.) |
+| `cbu` | `varchar(25)` | Nullable | CBU / Cuenta bancaria para débitos |
+| `tipo_haber` | `bigint` | Default `1` | Clasificación del ingreso / haber del cliente |
+| `saldo` | `decimal(12,2)` | Default `0.00` | Saldo actual en cuenta |
+| `limite` | `decimal(12,2)` | Default `0.00` | Límite crediticio asignado |
+| `max_cuotas` | `integer` | Default `3` | Cantidad máxima permitida de cuotas |
+| `suspendido` | `boolean` | Default `false` | Indicador de suspensión preventiva |
+| `estado_banco` | `varchar(3)` | Nullable | Código de estado bancario (Ej: ACT, MOR, BAJ) |
+| `fecha_estado_banco` | `date` | Nullable | Fecha del último estado bancario |
+| `direccion` | `varchar(191)` | Not Null | Dirección particular del cliente |
+| `id_localidad` | `bigint unsigned` | FK -> `localidades(id)` | Localidad particular del cliente |
+| `email` | `varchar(191)` | Nullable | Correo electrónico de contacto |
+| `tel1` | `varchar(50)` | Not Null | Teléfono principal de contacto |
+| `tel2` | `varchar(50)` | Nullable | Teléfono secundario alternativo |
+| `familiar` | `varchar(191)` | Nullable | Nombre del familiar / referencia personal |
+| `tipo_familiar` | `varchar(50)` | Nullable | Vínculo familiar (Ej: Padre, Hermano, Cónyuge) |
+| `direccion_familiar` | `varchar(191)` | Nullable | Dirección de residencia del familiar |
+| `id_localidad_familiar` | `bigint unsigned` | Nullable, FK -> `localidades(id)` | Localidad de residencia del familiar |
+| `email_familiar` | `varchar(191)` | Nullable | Correo del familiar |
+| `tel_familiar` | `varchar(50)` | Nullable | Teléfono del familiar |
+| `trabajo` | `varchar(191)` | Nullable | Empleador o lugar de trabajo |
+| `direccion_trabajo` | `varchar(191)` | Nullable | Dirección del lugar de trabajo |
+| `id_localidad_trabajo` | `bigint unsigned` | Nullable, FK -> `localidades(id)` | Localidad del lugar de trabajo |
+| `tel_trabajo` | `varchar(50)` | Nullable | Teléfono laboral |
+| `obs` | `text` | Nullable | Observaciones y notas generales del cliente |
+| `created_at` | `timestamp` | Nullable | Fecha y hora de creación del registro |
+| `updated_at` | `timestamp` | Nullable | Fecha y hora de última modificación |
+
+### 1.2 Atributos Fillable
+
+```php
+protected $fillable = [
+    'dni', 'nombre', 'medio_pago_preferido', 'cbu', 'id_sucursal', 'tipo_haber',
+    'saldo', 'limite', 'max_cuotas', 'suspendido', 'obs', 'estado_banco', 'fecha_estado_banco',
+    'direccion', 'id_localidad', 'email', 'tel1', 'tel2',
+    'familiar', 'tipo_familiar', 'direccion_familiar', 'id_localidad_familiar', 'email_familiar', 'tel_familiar',
+    'trabajo', 'direccion_trabajo', 'id_localidad_trabajo', 'tel_trabajo'
+];
+```
+
+### 1.3 Relaciones Eloquent
+
+- **`sucursal()`**: `BelongsTo` con `Sucursal::class` (FK: `id_sucursal`).
+- **`localidad()`**: `BelongsTo` con `Localidad::class` (FK: `id_localidad`).
+- **`localidadFamiliar()`**: `BelongsTo` con `Localidad::class` (FK: `id_localidad_familiar`).
+- **`localidadTrabajo()`**: `BelongsTo` con `Localidad::class` (FK: `id_localidad_trabajo`).
+- **`creditos()`**: `HasMany` con `Credito::class` (FK en créditos: `id_cliente`).
+- **`autorizados()`**: `BelongsToMany` con `Cliente::class` a través de tabla pivote `cliente_autorizados` (Claves: `id_titular` -> `id_autorizado`), con campos pivote `['relacion_aut', 'fecha_autorizado', 'limite_aut']` y timestamps. Clientes a quienes este titular autorizó a comprar.
+- **`titulares()`**: `BelongsToMany` con `Cliente::class` a través de tabla pivote `cliente_autorizados` (Claves: `id_autorizado` -> `id_titular`), con los mismos campos pivote. Titulares de los cuales este cliente es autorizado/adicional.
+- **`novedades()`**: `HasMany` con `ClienteNovedad::class` (FK: `id_cliente`), ordenado por `latest()`.
+
+### 1.4 Accesores y Métodos de Conveniencia
+
+- **`getLimiteEfectivoAttribute()`**: Determina el límite de crédito aplicable. Si actúa como cliente autorizado y tiene `limite_aut` definido en la tabla intermedia, toma dicho valor; en caso contrario, toma el límite asignado en su propio registro.
+
+
+---
+
+## 2. Modelo `Credito`
+
+- **Clase**: `App\Models\Credito`
+- **Tabla**: `creditos`
+- **Migración**: `database/migrations/2026_07_22_224059_create_creditos_table.php`
+
+### 2.1 Esquema de Base de Datos y Tipos de Datos
+
+| Columna | Tipo BD | Modificadores / Restricciones | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK, Auto-increment | Identificador único del crédito |
+| `id_cliente` | `bigint unsigned` | FK -> `clientes(id)` on delete cascade | Titular de la operación crediticia |
+| `id_sucursal` | `bigint unsigned` | FK -> `sucursales(id)` | Sucursal donde se origina la operación |
+| `id_autorizado` | `bigint unsigned` | FK -> `cliente_autorizados(id)` on delete cascade | Registro de autorización que realiza o habilita la compra |
+| `id_presentacion` | `bigint unsigned` | FK -> `presentaciones(id)` | **Lote / Presentación de ORIGEN del crédito** — fuente de verdad del lote inicial (ver §2.1.1). No existe columna física `presentacion_origen`. |
+| `credito` | `varchar(20)` | UNIQUE | Código / número de comprobante o venta |
+| `tipo_credito` | `varchar(1)` | Not Null | Letra o clasificación del crédito (ej. `C`, `D`, `R`) |
+| `importe_original` | `decimal(12,2)` | Not Null | Monto de capital inicial financiado |
+| `cantidad_cuotas` | `integer` | Not Null | Número total de cuotas pactadas |
+| `valor_cuota_ref` | `decimal(12,2)` | Not Null | Monto de referencia pactado por cuota |
+| `fecha_credito` | `date` | Not Null | Fecha de emisión / alta del crédito |
+| `fecha_cancelacion` | `date` | Nullable | Fecha efectiva de cancelación total del crédito |
+| `created_at` | `timestamp` | Nullable | Fecha y hora de creación |
+| `updated_at` | `timestamp` | Nullable | Fecha y hora de última modificación |
+
+### 2.1.1 Lote de origen y firma autorizada (armonizado con `routes-and-controllers.md` §3.3)
+
+**Lote origen (definición canónica):**
+
+- La **fuente de verdad** del lote donde nació el crédito es la FK relacional **`creditos.id_presentacion`**,
+  expuesta por `Credito::presentacion()` (`belongsTo(Presentacion::class, 'id_presentacion')`).
+- **No** existe la columna física `creditos.presentacion_origen` (verificado en
+  `database/migrations/2026_07_22_224059_create_creditos_table.php`, que sólo declara `id_presentacion`).
+  Cualquier consulta que necesite el lote de origen debe hacer **INNER JOIN con `presentaciones`**
+  a través de `creditos.id_presentacion`.
+- El **lote exigible de una cuota** se obtiene sumando el número del lote origen más el ordinal de la cuota:
+  `presentaciones.numero + cuotas.num_cuota` ⇒ accesor oficial `Cuota::lote_calculado`
+  (`Cuota::getLoteCalculadoAttribute()`, ver §3.4).
+- Ejemplo: crédito creado en la presentación `numero = 500`, cuota `num_cuota = 3` ⇒ lote `503`
+  (exigible cuando el sistema abra la presentación 503).
+
+**Firma autorizada (`id_autorizado`):**
+
+- `creditos.id_autorizado` es FK a **`cliente_autorizados(id)`** (la *autorización*), **no** a `clientes(id)`.
+- `NULL` = crédito tomado directamente por el titular (`id_cliente`).
+- Para obtener los datos del firmante se navega `credito.autorizado.cliente`
+  (`ClienteAutorizado::cliente()` ⇒ `belongsTo(Cliente::class, 'id_autorizado')`).
+- El valor correcto a enviar en el alta es `cliente_autorizados.id` (en `clientes.index` se obtiene con
+  `$autorizado->pivot->id`, ya que `Cliente::autorizados()` es un `BelongsToMany` sobre esa tabla).
+
+### 2.2 Atributos Fillable
+
+```php
+protected $fillable = [
+    'id_cliente', 
+    'id_sucursal', 
+    'id_autorizado',
+    'id_presentacion',
+    'credito',
+    'tipo_credito',
+    'importe_original',
+    'cantidad_cuotas', 
+    'valor_cuota_ref',
+    'fecha_credito', 
+    'fecha_cancelacion'
+];
+```
+
+### 2.3 Relaciones Eloquent
+
+- **`cliente()`**: `BelongsTo` con `Cliente::class` (FK: `id_cliente`). Cliente titular del crédito.
+- **`autorizado()`**: `BelongsTo` con `ClienteAutorizado::class` (FK: `id_autorizado` → `cliente_autorizados.id`). Autorización bajo la cual se tomó el crédito; `NULL` = crédito propio del titular. No es una FK a `clientes` (ver §2.1.1).
+- **`sucursal()`**: `BelongsTo` con `Sucursal::class` (FK: `id_sucursal`). Sucursal asociada al crédito.
+- **`presentacion()`**: `BelongsTo` con `Presentacion::class` (FK: `id_presentacion`). **Lote de ORIGEN del crédito** — fuente de verdad del lote inicial (§2.1.1); sustituye a la inexistente columna `presentacion_origen`.
+- **`cuotas()`**: `HasMany` con `Cuota::class` (FK en cuotas: `id_credito`). Cuotas que componen el crédito.
+
+### 2.4 Accesores y Métodos de Conveniencia
+
+- **`getFullIdentificadorAttribute()`**: Genera el identificador único compuesto del crédito bajo el formato `{tipo_credito}{numero_a_8_digitos}{codigo_sucursal}` (Ej: `R00001234T`).
+
+---
+
+## 3. Modelo `Cuota`
+
+- **Clase**: `App\Models\Cuota`
+- **Tabla**: `cuotas`
+- **Migración**: `database/migrations/2026_07_22_224059_create_cuotas_table.php`
+
+### 3.1 Esquema de Base de Datos y Tipos de Datos
+
+| Columna | Tipo BD | Modificadores / Restricciones | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK, Auto-increment | Identificador único de la cuota |
+| `id_credito` | `bigint unsigned` | FK -> `creditos(id)` on delete cascade | Crédito al que corresponde la cuota |
+| `num_cuota` | `integer` | Not Null | Número de cuota ordinal (1, 2, 3...) |
+| `valor_base` | `decimal(12,2)` | Not Null | Importe pactado original (Capital + Interés de financiación) |
+| `intereses` | `decimal(12,2)` | Default `0.00` | Recargos o mora calculada acumulada |
+| `entrego` | `decimal(12,2)` | Default `0.00` | Importe acumulado pagado por el cliente |
+| `saldo_actual` | `decimal(12,2)` | Not Null | Saldo exigible neto actual (`[valor_base + intereses] - entrego`) |
+| `fecha_cobro` | `date` | Nullable | Fecha efectiva en que se percibió el pago |
+| `medio_pago` | `varchar(50)` | Nullable | Medio utilizado para la cobranza |
+| `referencia_pago` | `varchar(191)` | Nullable | Comprobante / identificador de transacción de pago |
+| `banco_envio` | `varchar(100)` | Nullable | Entidad bancaria o cámara a la que se remite el cobro |
+| `fecha_ultimo_envio` | `date` | Nullable | Fecha del último envío al débito o cobro bancario |
+| `estado_bancario` | `varchar(5)` | Nullable | Código de respuesta bancaria (Ej: ACE, R10, R02) |
+| `obs_devolucion` | `text` | Nullable | Detalle de motivos o motivo de rechazo bancario |
+| `created_at` | `timestamp` | Nullable | Fecha y hora de creación |
+| `updated_at` | `timestamp` | Nullable | Fecha y hora de última modificación |
+
+### 3.2 Atributos Fillable
+
+```php
+protected $fillable = [
+    'id_credito',
+    'num_cuota',
+    'valor_base',
+    'intereses',
+    'entrego',
+    'saldo_actual',
+    'fecha_cobro',
+    'medio_pago',
+    'referencia_pago',
+    'banco_envio',
+    'fecha_ultimo_envio',
+    'estado_bancario',
+    'obs_devolucion'
+];
+```
+
+### 3.3 Relaciones Eloquent
+
+- **`credito()`**: `BelongsTo` con `Credito::class` (FK: `id_credito`). Crédito contenedor de la cuota.
+
+### 3.4 Accesores y Métodos de Conveniencia
+
+- **`getLoteCalculadoAttribute()` → `lote_calculado`**: ⭐ **ACCESOR OFICIAL DE LOTE**. Suma el número base de la
+  presentación de origen (`$this->credito->presentacion->numero`) con el número de cuota (`$this->num_cuota`).
+  Definición canónica del sistema: lote exigible = `presentaciones.numero + cuotas.num_cuota`
+  (ver §2.1.1 y `routes-and-controllers.md` §3.3). Es el accesor usado por `CreditoController@create`.
+- **`getLotePresentacionAttribute()` → `lote_presentacion`**: ⚠ **DEPRECADO**. Nomenclatura obsoleta y
+  contradictoria: su implementación anterior (`$this->credito->presentacion + $this->num_cuota`) sumaba un
+  *Modelo* a un entero (error fatal de PHP). Se conserva únicamente como alias que **delega en `lote_calculado`**
+  para no romper vistas antiguas. **Todo código nuevo debe usar `lote_calculado`**; no usar `lote_presentacion`
+  ni introducir columnas del tipo `presentacion_origen` en consultas.
+- **`getCodigoGestionAttribute()`**: Genera el código único de seguimiento concatenando el identificador compuesto del crédito (`full_identificador`) y el número de cuota (Ej: `R00001234T1`).
+
+---
+
+## 4. Diagrama de Relaciones Entidad-Relación
+
+```text
++--------------------+           1:N          +--------------------+           1:N          +--------------------+
+|      Cliente       | ---------------------> |      Credito       | ---------------------> |       Cuota        |
++--------------------+                        +--------------------+                        +--------------------+
+| id (PK)            |                        | id (PK)            |                        | id (PK)            |
+| dni                |                        | id_cliente (FK)    |                        | id_credito (FK)    |
+| nombre             |                        | id_autorizado (FK) |                        | num_cuota          |
+| id_sucursal (FK)   |                        | id_sucursal (FK)   |                        | valor_base         |
+| id_localidad (FK)  |                        | id_presentacion(FK)|                        | intereses          |  ← LOTE ORIGEN (§2.1.1)
+| saldo, limite...   |                        | credito (codigo)   |                        | entrego            |
++--------------------+                        | tipo_credito       |                        | saldo_actual       |
+       |     ^                                | importe_original   |                        | estado_bancario    |
+       |     |                                | cantidad_cuotas    |                        +--------------------+
+       |     |                                +--------------------+
+       |     |
+       |     +-------------------------+
+       |   N:M autorizados/titulares   |
+       v                               |
++------------------------------------------+
+|            ClienteAutorizado             |
++------------------------------------------+
+| id (PK)                                  |
+| id_titular (FK -> clientes.id)           |
+| id_autorizado (FK -> clientes.id)        |
+| limite_aut, relacion_aut...              |
++------------------------------------------+
+```
+
+---
+
+## 5. Notas de integridad referencial (armonizadas con `routes-and-controllers.md`)
+
+1. `creditos.id_autorizado` → **`cliente_autorizados.id`** (⚠ **no** `clientes.id`). `NULL` = crédito del titular.
+2. `creditos.id_presentacion` → `presentaciones.id`: **lote de origen**; no existe `creditos.presentacion_origen`.
+3. Lote exigible de una cuota = `presentaciones.numero + cuotas.num_cuota` ⇒ `Cuota::lote_calculado` (accesor oficial).
+4. `presentaciones` declara las columnas reales **`interes_credito` / `interes_mora`** (ambas en `$fillable`);
+   `tasa_cuotas` / `tasa_mora` **no existen** como columnas de la tabla.
+5. `Cliente::autorizados()` expone `pivot->id` (= `cliente_autorizados.id`), que es el valor que debe viajar en
+   `id_autorizado` al dar de alta un crédito adicional (`clientes.index` → `creditos.create`).
+

@@ -51,7 +51,9 @@ class PresentacionController extends Controller
             DB::beginTransaction();
 
             $ahora = now();
-            $tasaMora = $presentacionActual->interes_mora; // O usamos el nuevo si preferís: $request->interes_mora
+            // Tasa de mora del lote que se está cerrando (respaldo: la tasa enviada por el formulario).
+            // Cast explícito a float para evitar NULL dentro del DB::raw (generaba SQL inválido).
+            $tasaMora = (float) ($presentacionActual->interes_mora ?? $request->interes_mora);
 
             // 2. Cerrar la presentación actual
             $presentacionActual->update(['fecha_fin' => $ahora]);
@@ -76,13 +78,15 @@ class PresentacionController extends Controller
                 ]);
 
             // 5. Volver exigibles las cuotas del nuevo ciclo (saldo_actual = valor_base)
-            // Lógica: credito.presentacion_origen + cuota.num_cuota == nuevaPresentacion.numero
-            // Y que actualmente su saldo sea 0.
+            // Lógica: (presentaciones.numero del lote ORIGEN del crédito) + cuota.num_cuota == nuevaPresentacion.numero
+            // ⚠️ El lote origen es la FK relacional 'creditos.id_presentacion'; NO existe columna
+            //    física 'creditos.presentacion_origen'. Por eso se resuelve con INNER JOIN a 'presentaciones'.
             $numeroNuevo = $nuevaPresentacion->numero;
 
             DB::table('cuotas')
                 ->join('creditos', 'cuotas.id_credito', '=', 'creditos.id')
-                ->whereRaw('(creditos.presentacion_origen + cuotas.num_cuota) = ?', [$numeroNuevo])
+                ->join('presentaciones', 'creditos.id_presentacion', '=', 'presentaciones.id')
+                ->whereRaw('(presentaciones.numero + cuotas.num_cuota) = ?', [$numeroNuevo])
                 ->where('cuotas.saldo_actual', '=', 0) // Que no haya sido adelantada/exigida
                 ->update([
                     'cuotas.saldo_actual' => DB::raw('cuotas.valor_base')
@@ -90,7 +94,7 @@ class PresentacionController extends Controller
 
             DB::commit();
 
-            return redirect()->route('presentaciones.index')->with('success', 'Presentación #'.$numeroNuevo.' abierta. Intereses y saldos actualizados correctamente.');
+            return redirect()->route('sistema.presentaciones.index')->with('success', 'Presentación #'.$numeroNuevo.' abierta. Intereses y saldos actualizados correctamente.');
 
         } catch (\Exception $e) {
             DB::rollBack();

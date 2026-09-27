@@ -204,7 +204,9 @@
                                 <div class="flex flex-col items-end space-y-1">
                                     <div class="flex items-center justify-end space-x-1">
                                         @if(!$padreSuspendido)
-                                            <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id, 'id_autorizado' => $autorizado->id]) }}" title="Crédito Adicional" class="w-32 bg-emerald-100 border border-amber-300 hover:bg-amber-600 hover:text-white text-emerald-800 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all flex items-center">
+                                            {{-- id_autorizado = ID del REGISTRO de autorización (cliente_autorizados.id),
+                                                 que es lo que espera la FK 'creditos.id_autorizado'. --}}
+                                            <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id, 'id_autorizado' => $autorizado->pivot->id]) }}" title="Crédito Adicional" class="w-32 bg-emerald-100 border border-amber-300 hover:bg-amber-600 hover:text-white text-emerald-800 font-bold text-[9px] px-1.5 py-0.5 rounded uppercase transition-all flex items-center">
                                                 + CRED. AUTORIZADO
                                             </a>
                                         @endif
