@@ -91,5 +91,20 @@
             </p>
         </a>
 
+        <!-- 7. Copias de Seguridad (Backup) -->
+        <a href="{{ route('sistema.backup.index') }}" class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-300 dark:border-slate-700 shadow-sm p-4 hover:border-emerald-500 dark:hover:border-emerald-400 hover:ring-1 hover:ring-emerald-500 transition-all flex flex-col group">
+            <div class="flex items-center space-x-3 mb-2">
+                <div class="p-2 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 dark:group-hover:bg-emerald-600 group-hover:border-emerald-600 group-hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                </div>
+                <h2 class="font-bold text-[11px] text-slate-800 dark:text-slate-100 uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Copias de Seguridad</h2>
+            </div>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
+                Descarga de la base de datos completa en archivo ZIP y restauración con resguardo preventivo automático.
+            </p>
+        </a>
+
     </div>
 </x-app-layout>

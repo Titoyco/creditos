@@ -10,6 +10,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\PresentacionController;
 use App\Http\Controllers\AuditoriaController;
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
@@ -22,11 +23,6 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 Route::get('/', function () {
     return view('dashboard');
 })->middleware(['auth'])->name('dashboard');
-
-// 2. Ruta de Login (Pública)
-Route::get('/login', function () {
-    return view('auth.login');
-})->name('login');
 
 // ⚠️ Protegido con 'auth': depende de la sesión del usuario (sucursal activa + permiso 'cambiar-sucursal').
 Route::post('/cambiar-sucursal', [SucursalController::class, 'updateGlobal'])
@@ -110,6 +106,13 @@ Route::middleware('auth')->group(function () {
         Route::post('/ubicaciones/localidades', [UbicacionController::class, 'storeLocalidad'])->name('sistema.ubicaciones.localidades.store');
         Route::put('/ubicaciones/localidades/{localidad}', [UbicacionController::class, 'updateLocalidad'])->name('sistema.ubicaciones.localidades.update');
         Route::delete('/ubicaciones/localidades/{localidad}', [UbicacionController::class, 'destroyLocalidad'])->name('sistema.ubicaciones.localidades.destroy');
+
+        // Copias de Seguridad (Backup y Restauración)
+        Route::get('/backup', [BackupController::class, 'index'])->name('sistema.backup.index');
+        Route::post('/backup/generar', [BackupController::class, 'generate'])->name('sistema.backup.generate');
+        Route::get('/backup/{filename}/descargar', [BackupController::class, 'download'])->name('sistema.backup.download');
+        Route::post('/backup/restaurar', [BackupController::class, 'restore'])->name('sistema.backup.restore');
+        Route::delete('/backup/{filename}', [BackupController::class, 'destroy'])->name('sistema.backup.destroy');
     });
 
     // --- PERFIL DE USUARIO ---

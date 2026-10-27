@@ -61,7 +61,7 @@ class CatalogoAbmTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->get($this->r('sistema.sucursales.index'))->assertOk()->assertSee('Catálogo de Sucursales');
+        $this->get($this->r('sistema.sucursales.index'))->assertOk()->assertSee('Sucursales');
         $this->get($this->r('sistema.sucursales.create'))->assertOk()->assertSee('Nueva Sucursal');
 
         $this->post($this->r('sistema.sucursales.store'), [

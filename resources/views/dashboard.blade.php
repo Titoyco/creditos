@@ -12,7 +12,7 @@
                 <div>
                     <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-blue-700/60 dark:bg-slate-800/80 border border-blue-500/40 dark:border-slate-700 text-blue-200 dark:text-blue-300 mb-1">
                         <span class="w-1.5 h-1.5 rounded-full {{ Auth::user()->is_admin ? 'bg-amber-400' : 'bg-emerald-400' }} animate-pulse"></span>
-                        {{ Auth::user()->is_admin ? 'Modo Superusuario Administrador' : 'Modo Operador de Sucursal' }}
+                        {{ Auth::user()->is_admin ? 'Modo Administrador' : 'Modo Operador de Sucursal' }}
                     </div>
                     <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
                         Panel de Control — La Marina
@@ -219,7 +219,7 @@
                         </div>
                         @if(Auth::user()->is_admin)
                             <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                                Superusuario
+                                Administrador
                             </span>
                         @else
                             <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">

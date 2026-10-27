@@ -93,10 +93,15 @@
                             </span>
                         </div>
 
-                        <div class="mr-4 border-r border-blue-700 dark:border-slate-800 pr-4">
-                            <p class="text-[10px] uppercase text-blue-300 dark:text-slate-400 font-black leading-none mb-1 tracking-tighter">Usuario</p>
-                            <p class="text-sm font-bold italic">{{ Auth::user()->name }}</p>
-                        </div>
+                        <a href="{{ route('profile.edit') }}" title="Editar mi perfil y clave" class="group block mr-4 border-r border-blue-700 dark:border-slate-800 pr-4 hover:opacity-95 transition text-left">
+                            <p class="text-[10px] uppercase text-blue-300 dark:text-slate-400 font-black leading-none mb-1 tracking-tighter flex items-center gap-1">
+                                <span>Mi Perfil</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5 text-blue-300 opacity-60 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                            </p>
+                            <p class="text-sm font-bold italic text-white group-hover:text-amber-300 transition">{{ Auth::user()->name }}</p>
+                        </a>
 
                         @if(Auth::user()->is_admin)
                         <div class="mr-4 border-r border-blue-700 dark:border-slate-800 pr-4">

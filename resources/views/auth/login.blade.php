@@ -26,7 +26,7 @@
                     <label for="username" class="block text-xs font-black text-slate-700 uppercase mb-2 ml-1">Usuario</label>
                     <input type="text" id="username" name="username" required autofocus 
                         class="w-full px-4 py-3 rounded-xl border-slate-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-sm font-semibold"
-                        placeholder="Ej: Admin o vendedorush1">
+                        placeholder="Ingrese su nombre de usuario">
                     @error('username')
                         <p class="text-red-500 text-xs mt-2 font-bold">{{ $message }}</p>
                     @enderror
@@ -66,64 +66,12 @@
             </form>
         </div>
 
-        {{-- Accesos Rápidos para Prueba de Sucursales y Roles --}}
-        <div class="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-2xl shadow-sm">
-            <p class="text-[11px] font-black uppercase text-slate-500 tracking-wider text-center mb-3">
-                Accesos Rápidos de Prueba (Clic para auto-rellenar)
-            </p>
-            <div class="grid grid-cols-1 gap-2">
-                <button type="button" onclick="setCredenciales('Admin', 'admin123')" 
-                    class="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl transition text-left">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                        <span class="text-xs font-black text-amber-950">Superusuario (Admin)</span>
-                    </div>
-                    <span class="text-[10px] font-bold text-amber-800 uppercase bg-amber-200/60 px-2 py-0.5 rounded-md">Todas las Sucursales</span>
-                </button>
-
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                    <button type="button" onclick="setCredenciales('vendedorush1', 'ush123')" 
-                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
-                        <p class="text-[11px] font-black text-slate-800">vendedorush1</p>
-                        <p class="text-[9px] font-bold text-blue-700 truncate">Ush. San Martín</p>
-                    </button>
-
-                    <button type="button" onclick="setCredenciales('vendedorush2', 'ush123')" 
-                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
-                        <p class="text-[11px] font-black text-slate-800">vendedorush2</p>
-                        <p class="text-[9px] font-bold text-blue-700 truncate">Ush. Antártida</p>
-                    </button>
-
-                    <button type="button" onclick="setCredenciales('vendedortw', 'tw123')" 
-                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
-                        <p class="text-[11px] font-black text-slate-800">vendedortw</p>
-                        <p class="text-[9px] font-bold text-blue-700 truncate">Trelew Centro</p>
-                    </button>
-
-                    <button type="button" onclick="setCredenciales('vendedorint', 'int123')" 
-                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
-                        <p class="text-[11px] font-black text-slate-800">vendedorint</p>
-                        <p class="text-[9px] font-bold text-blue-700 truncate">Interior / Camión</p>
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <p class="text-center text-gray-400 text-xs mt-6">
             &copy; {{ date('Y') }} La Marina — Ushuaia & Trelew
         </p>
     </div>
 
     <script>
-        function setCredenciales(username, password) {
-            document.getElementById('username').value = username;
-            document.getElementById('password').value = password;
-            // Destacar visualmente el botón de ingreso
-            const btn = document.querySelector('button[type="submit"]');
-            btn.classList.add('ring-4', 'ring-amber-400');
-            setTimeout(() => btn.classList.remove('ring-4', 'ring-amber-400'), 1000);
-        }
-
         function togglePassword() {
             const passwordInput = document.getElementById('password');
             const eyePath = document.getElementById('eye-path');

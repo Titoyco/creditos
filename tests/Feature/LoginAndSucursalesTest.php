@@ -24,8 +24,9 @@ class LoginAndSucursalesTest extends TestCase
         $response = $this->get('/login');
         $response->assertStatus(200);
         $response->assertSee('LA MARINA');
-        $response->assertSee('vendedorush1');
-        $response->assertSee('Admin');
+        $response->assertDontSee('vendedorush1');
+        $response->assertDontSee('admin123');
+        $response->assertDontSee('Accesos Rápidos');
     }
 
     public function test_admin_can_login_and_switch_branches(): void
@@ -44,7 +45,7 @@ class LoginAndSucursalesTest extends TestCase
         // Dashboard renders for Admin
         $dashboardResponse = $this->actingAs($admin)->get('/');
         $dashboardResponse->assertStatus(200);
-        $dashboardResponse->assertSee('Modo Superusuario Administrador');
+        $dashboardResponse->assertSee('Modo Administrador');
         $dashboardResponse->assertSee('Sucursal Activa (Admin)');
         $dashboardResponse->assertDontSee('Abrir Caja');
         $dashboardResponse->assertDontSee('Ver Catálogo');
