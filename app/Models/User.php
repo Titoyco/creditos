@@ -54,4 +54,21 @@ class User extends Authenticatable
         return $this->belongsTo(Sucursal::class, 'id_sucursal');
     }
 
+    public function provinciaId(): int
+    {
+        if ($this->sucursal && $this->sucursal->id_provincia) {
+            return (int) $this->sucursal->id_provincia;
+        }
+        return in_array((int) $this->id_sucursal, [1, 2]) ? 2 : 1;
+    }
+
+    public function isTdf(): bool
+    {
+        return $this->provinciaId() === 2;
+    }
+
+    public function isChubut(): bool
+    {
+        return $this->provinciaId() === 1;
+    }
 }

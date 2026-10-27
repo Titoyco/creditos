@@ -96,7 +96,9 @@ La versión anterior de este documento describía patrones que **no existen en e
   `layouts/guest.blade.php`; el layout autenticado no declara el `<link>` de la fuente.
 - Font **monoespaciada** (`font-mono`) obligatoria para todo valor monetario, DNI, código de crédito,
   fecha/hora y porcentaje de interés.
-- `tabular-nums` obligatorio en toda cifra monetaria dentro de grillas y KPIs.
+- `tabular-nums` obligatorio en toda cifra monetaria dentro de grillas y KPIs **y en todo valor que se
+  refresca en vivo, como el reloj operativo del header** (ver §2): sin ancho de dígito fijo, el contenido
+  "bailaría" en cada actualización.
 
 ---
 
@@ -130,8 +132,29 @@ internas: siempre extender el layout.
                     </span>
                 </div>
 
-                <!-- Derecha: usuario + sucursal activa + logout -->
+                <!-- Derecha: reloj operativo + usuario + sucursal activa + logout -->
                 <div class="hidden sm:flex sm:items-center sm:ms-6 text-white text-right z-10">
+
+                    <!-- Reloj operativo (tiempo real en el cliente, sin polling al servidor) -->
+                    <div class="hidden md:flex flex-col items-end pr-3 border-r border-blue-700/60 leading-tight select-none mr-3"
+                         x-data="{
+                             hora: '',
+                             fecha: '',
+                             actualizar() {
+                                 const now = new Date();
+                                 this.hora = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                                 const opcionesFecha = { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' };
+                                 this.fecha = now.toLocaleDateString('es-AR', opcionesFecha).replace('.', '');
+                             },
+                             init() {
+                                 this.actualizar();
+                                 setInterval(() => this.actualizar(), 1000);
+                             }
+                         }">
+                        <span class="text-[10px] text-blue-200 font-bold uppercase tracking-wider font-mono" x-text="fecha"></span>
+                        <span class="text-xs font-mono font-bold tabular-nums text-white" x-text="hora"></span>
+                    </div>
+
                     <p class="text-[10px] uppercase text-blue-300 font-black leading-none mb-1 tracking-tighter">Usuario</p>
                     <p class="text-sm font-bold italic">{{ Auth::user()->name }}</p>
 
@@ -161,6 +184,42 @@ internas: siempre extender el layout.
 Notas de implementación:
 
 - El ancho útil de trabajo es **90% del viewport** (`max-w-[90%]`), no `max-w-7xl` fijo.
+- **Reloj operativo (tiempo real en el cliente):** la barra superior incluye, como primer elemento del
+  contenedor derecho, un reloj en vivo con día/fecha en la línea superior y hora con segundos en la
+  inferior. Es **puramente cliente**: se resuelve con Alpine.js + `setInterval`, **sin polling al
+  servidor** (cero latencia de backend, cero peticiones por segundo, funciona aunque el servidor no
+  responda). Patrón canónico:
+
+  ```html
+  <div class="hidden md:flex flex-col items-end pr-3 border-r border-blue-700/60 leading-tight select-none mr-3"
+       x-data="{
+           hora: '', fecha: '',
+           actualizar() {
+               const now = new Date();
+               this.hora = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+               this.fecha = now.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }).replace('.', '');
+           },
+           init() { this.actualizar(); setInterval(() => this.actualizar(), 1000); }
+       }">
+      <span class="text-[10px] text-blue-200 font-bold uppercase tracking-wider font-mono" x-text="fecha"></span>
+      <span class="text-xs font-mono font-bold tabular-nums text-white" x-text="hora"></span>
+  </div>
+  ```
+
+  Reglas del reloj:
+  1. **Zona horaria y locale `es-AR`** vía `toLocaleTimeString` / `toLocaleDateString` (no `date()` de PHP,
+     no UTC manual): la hora es la del navegador del operador, que es la del mostrador del cajón.
+  2. **`hour12: false`** ⇒ reloj de 24 h (`00:00`–`23:59`), coherente con `format('H:i')` usado en grillas.
+  3. El `.replace('.', '')` elimina el punto abreviado de los días en español (`"mié, 27/09/2026"`,
+     nunca `"mié., 27/09/2026"`).
+  4. `init()` renderiza **de inmediato** y luego refresca cada `1000 ms`: evita el segundo en blanco
+     mientras Alpine hidrata.
+  5. Responsive: `hidden md:flex` ⇒ en móvil el reloj se oculta y el header no se desbuela
+     (el bloque derecho global ya es `hidden sm:flex`).
+  6. `select-none` + `tabular-nums`: los dígitos no saltan de ancho al cambiar de `9` a `10` segundos
+     ni al pasar de `:59` a `:00`.
+  7. Sin `x-cloak`: el estado inicial es cadena vacía y el contenedor se posiciona por clases, no por
+     contenido.
 - El selector de sucursal activa es **global**: vive sólo en el header, hace `POST` a
   `sucursal.update.global` y se envía solo con `onchange`. No duplicar selectores de sucursal en
   cada pantalla (excepto filtros de listado, que son sólo lectura).
@@ -179,6 +238,7 @@ Notas de implementación:
 | Códigos / Identificadores | `font-mono font-bold` (+`text-blue-700` si es link, `text-[11px]`) | Lectura veloz de códigos compuestos (`R00001234T1`, DNI, CBU). |
 | DNI en ficha / legajo | `font-mono font-bold text-blue-900 text-xs tabular-nums` | Identificación unívoca del titular. |
 | Fechas y horas | `font-mono` + `format('d/m/Y')` y hora en línea aparte `format('H:i')` | Evita ambigüedad y mantiene la columna angosta. |
+| **Reloj operativo del header** | `text-[10px] text-blue-200 font-bold uppercase tracking-wider font-mono` (fecha) + `text-xs font-mono font-bold tabular-nums text-white` (hora) | `font-mono` + `tabular-nums` **obligatorios**: el reloj refresca cada segundo y sin ancho fijo los dígitos se desplazan en cada tick (`:59` → `:00`). `leading-tight` + `select-none` para dos líneas compactas. Patrón completo en §2. |
 | Texto de grilla (cuerpo) | `text-xs font-sans` (secundarios en `text-[10px]`/`text-[9px]`; `text-[8px]` sólo en chips) | Máxima densidad sin fatiga visual. |
 | Encabezado de tabla | `bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-300` | Diferenciación de columnas con mínima altura. |
 | Encabezado de panel/sección | `font-bold text-[10px] text-slate-700 uppercase tracking-wider` | Barra de título del panel. |
@@ -849,6 +909,8 @@ Antes de dar por terminada una vista, verificar:
 - [ ] Usa el header compacto de §5.1 con el badge de contexto en el `<h1>`.
 - [ ] Orden: header → ribbon de filtros → grilla/paneles → paginador.
 - [ ] Layouts de dos columnas con `lg:w-[66.6%]` / `lg:w-[33.3%]` (o `70/30` en presentaciones).
+- [ ] **El reloj del layout maestro no se duplica en ninguna vista**: se hereda de `layouts/app.blade.php`
+      (ver §2). No agregar relojes, timers ni `setInterval` sueltos en las pantallas.
 
 **Densidad y espaciado**
 - [ ] Nada de `p-6`, `py-4`, `gap-6`, `mb-8`, `rounded-3xl` en pantallas operativas.
@@ -936,3 +998,17 @@ Archivos de referencia por sección:
 | §12 | `clientes/show.blade.php`, `creditos/create.blade.php` |
 | §13 | `creditos/pagare.blade.php`, `creditos/show.blade.php` |
 | §14 | `auth/*`, `profile/*`, `dashboard.blade.php`, `sistema/usuarios/*`, `sistema/ubicaciones/*`, `sistema/index.blade.php`, `components/*` |
+| §15 | `creditos/index.blade.php`, `.agents/rules/table_sorting.md` |
+
+---
+
+## 15. Regla General de UI: Ordenamiento Interactivo en Tablas de Resultado (Click-to-Sort)
+
+En todas las tablas de resultado y grillas de datos del sistema (Créditos, Clientes, Recibos, Cobranzas, etc.), los encabezados de columnas ordenables **deben permitir cambiar el orden de la lista haciendo clic**, alternando entre **ascendente (`asc`)** y **descendente (`desc`)** con cada clic consecutivo.
+
+### Requisitos Mandatarios:
+1. **Alternancia de Orden (Toggle):** Clic en la columna activa invierte la dirección (`asc` <-> `desc`). Clic en otra columna la selecciona con dirección inicial.
+2. **Preservación de Filtros:** La URL generada en los enlaces `<th>` debe fusionar `request()->query()` para nunca perder los filtros o parámetros de búsqueda vigentes, reseteando `page=1`.
+3. **Indicador Visual:** Flecha destacada `▲` (ascendente) o `▼` (descendente) en la columna activa; icono tenue `⇅` en columnas inactivas con hover de color.
+4. **Sincronización:** Tanto la paginación como la exportación a Excel / CSV y las impresiones deben aplicar exactamente el mismo criterio de ordenamiento seleccionado en pantalla.
+

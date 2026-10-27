@@ -1,165 +1,281 @@
 <x-app-layout>
-    <!-- Header Compacto -->
-    <div class="flex items-center justify-between py-2 border-b border-slate-200 mb-4">
-        
+    <!-- Header Principal -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-slate-200 dark:border-slate-700 mb-6 gap-3">
         <!-- Grupo Izquierdo: Botón Volver + Título -->
         <div class="flex items-center space-x-3">
-            <a href="{{ url()->previous() }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
+            <a href="{{ route('sistema.index') }}" class="bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
             </a>
             <div>
-                <h1 class="text-xl font-bold text-slate-800 tracking-tight flex items-center space-x-2">
-                    <span>Gestión de Presentaciones</span>
-                    <span class="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">Ciclos de Facturación</span>
+                <h1 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center space-x-2">
+                    <span>Cortes y Presentaciones de Créditos</span>
                 </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                    Ciclos comerciales, cálculo de mora y corte independiente para Tierra del Fuego y Chubut.
+                </p>
             </div>
         </div>
 
-        <!-- Si en el futuro querés agregar un botón a la derecha (como Exportar o Crear), lo ponés acá -->
-        
+        <!-- Indicador de Sucursal del Usuario -->
+        <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+            <span class="font-bold text-slate-500 dark:text-slate-400">Tu Terminal:</span>
+            <span class="font-black text-blue-700 dark:text-blue-400">{{ config('app.sucursal_activa')->nombre ?? 'N/A' }}</span>
+            <span class="text-[10px] uppercase font-black px-2 py-0.5 rounded-full {{ Auth::user()->is_admin ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800' }}">
+                {{ Auth::user()->is_admin ? 'Administrador Multisede' : 'Operador Local' }}
+            </span>
+        </div>
     </div>
 
-    <!-- Alertas (Éxito o Error) -->
+    <!-- Alertas -->
     @if (session('error'))
-        <div class="bg-rose-50 border border-rose-300 text-rose-800 px-4 py-3 rounded-md shadow-sm mb-4 flex items-center space-x-2">
-            <span class="font-black text-xs uppercase block">⛔ ERROR:</span>
-            <span class="text-xs font-bold">{{ session('error') }}</span>
+        <div class="bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 px-4 py-3 rounded-2xl shadow-sm mb-6 flex items-center space-x-2 text-xs font-bold">
+            <span class="font-black uppercase">⛔ ERROR:</span>
+            <span>{{ session('error') }}</span>
         </div>
     @endif
     @if (session('success'))
-        <div class="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-md shadow-sm mb-4 flex items-center space-x-2">
-            <span class="font-black text-xs uppercase block">✅ ÉXITO:</span>
-            <span class="text-xs font-bold">{{ session('success') }}</span>
+        <div class="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 px-4 py-3 rounded-2xl shadow-sm mb-6 flex items-center space-x-2 text-xs font-bold">
+            <span class="font-black uppercase">✅ ÉXITO:</span>
+            <span>{{ session('success') }}</span>
         </div>
     @endif
 
-    <div class="flex flex-col lg:flex-row gap-4 items-start">
+    <!-- Tarjetas Interactivas de Jurisdicción (Clic en todo el div para alternar) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <!-- Tarjeta Tierra del Fuego (Ushuaia) -->
+        <a href="{{ Auth::user()->is_admin ? route('sistema.presentaciones.index', ['provincia_id' => 2]) : '#' }}"
+           class="block text-left p-5 rounded-2xl border transition-all duration-200 relative group {{ $idProvincia === 2 
+                ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500 shadow-md ring-2 ring-blue-500/20' 
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-80 hover:opacity-100 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md hover:scale-[1.005] cursor-pointer' }}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-600"></span>
+                    <h3 class="font-black text-sm uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>🏔️</span>
+                        <span>Tierra del Fuego (Ushuaia)</span>
+                    </h3>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    @if($idProvincia === 2)
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                            ✓ Mostrando ciclo
+                        </span>
+                    @else
+                        <span class="text-[10px] font-bold text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            Clic para ver ciclo →
+                        </span>
+                    @endif
+                    <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        Patagonia / BTF
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-baseline justify-between">
+                <div>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Lote / Presentación Vigente:</span>
+                    <span class="text-2xl font-black font-mono text-blue-900 dark:text-blue-300">
+                        # {{ $actualTdf?->numero ?? 'Sin apertura' }}
+                    </span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] font-bold text-slate-500 block">Sedes asociadas:</span>
+                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300">San Martín & Antártida</span>
+                </div>
+            </div>
+        </a>
+
+        <!-- Tarjeta Chubut (Trelew) -->
+        <a href="{{ Auth::user()->is_admin ? route('sistema.presentaciones.index', ['provincia_id' => 1]) : '#' }}"
+           class="block text-left p-5 rounded-2xl border transition-all duration-200 relative group {{ $idProvincia === 1 
+                ? 'bg-amber-50/80 dark:bg-amber-950/40 border-amber-400 dark:border-amber-500 shadow-md ring-2 ring-amber-500/20' 
+                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-80 hover:opacity-100 hover:border-amber-300 dark:hover:border-amber-500 hover:shadow-md hover:scale-[1.005] cursor-pointer' }}">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-600"></span>
+                    <h3 class="font-black text-sm uppercase text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>🌾</span>
+                        <span>Chubut (Trelew)</span>
+                    </h3>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    @if($idProvincia === 1)
+                        <span class="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-600 text-white shadow-xs">
+                            ✓ Mostrando ciclo
+                        </span>
+                    @else
+                        <span class="text-[10px] font-bold text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                            Clic para ver ciclo →
+                        </span>
+                    @endif
+                    <span class="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                        Banco Chubut
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-baseline justify-between">
+                <div>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Lote / Presentación Vigente:</span>
+                    <span class="text-2xl font-black font-mono text-amber-900 dark:text-amber-300">
+                        # {{ $actualChubut?->numero ?? 'Sin apertura' }}
+                    </span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[10px] font-bold text-slate-500 block">Sedes asociadas:</span>
+                    <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Trelew Centro & Camión</span>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Contenido Principal: Listado y Panel de Control -->
+    <div class="flex flex-col lg:flex-row gap-6 items-start">
         
-        <!-- COLUMNA IZQUIERDA: Listado (70%) -->
-        <div class="w-full lg:w-[70%]">
-            <div class="bg-white rounded-md border border-slate-300 shadow-sm overflow-hidden mb-4">
-                <div class="bg-slate-100 border-b border-slate-300 px-3 py-2">
-                    <h2 class="font-bold text-[10px] text-slate-700 uppercase tracking-wider">Historial de Presentaciones</h2>
+        <!-- COLUMNA IZQUIERDA: Listado (68%) -->
+        <div class="w-full lg:w-[68%]">
+            <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-md overflow-hidden mb-6">
+                <div class="bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 px-5 py-3.5 flex items-center justify-between">
+                    <h2 class="font-black text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <span>Historial de Presentaciones — {{ $idProvincia === 2 ? 'Tierra del Fuego' : 'Chubut' }}</span>
+                    </h2>
+                    <span class="text-[11px] font-bold text-slate-400">Total: {{ $presentaciones->total() }} lotes</span>
                 </div>
 
-                <table class="w-full text-left border-collapse font-sans text-xs">
-                    <thead>
-                        <tr class="bg-slate-50 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-300">
-                            <th class="py-1.5 px-3 border-r border-slate-200 w-24 text-center">N° Pres.</th>
-                            <th class="py-1.5 px-3 border-r border-slate-200 text-center">Fecha Inicio</th>
-                            <th class="py-1.5 px-3 border-r border-slate-200 text-center">Fecha Fin</th>
-                            <th class="py-1.5 px-3 border-r border-slate-200 text-right w-24">Int. Crédito</th>
-                            <th class="py-1.5 px-3 border-r border-slate-200 text-right w-24">Int. Mora</th>
-                            <th class="py-1.5 px-3 text-center w-24">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200">
-                        @forelse($presentaciones as $pres)
-                            @php
-                                $estaAbierta = is_null($pres->fecha_fin);
-                                $bgFila = $estaAbierta ? 'bg-blue-50/50 hover:bg-blue-100/50' : 'bg-white hover:bg-slate-50';
-                            @endphp
-                            <tr class="{{ $bgFila }} transition-colors">
-                                <!-- Número -->
-                                <td class="py-1.5 px-3 text-center border-r border-slate-200/60">
-                                    <span class="font-mono font-black text-slate-800 text-[11px]">
-                                        # {{ $pres->numero }}
-                                    </span>
-                                </td>
-
-                                <!-- Fechas -->
-                                <td class="py-1.5 px-3 text-center font-mono border-r border-slate-200/60 text-[11px]">
-                                    <strong class="text-slate-800">{{ \Carbon\Carbon::parse($pres->fecha_inicio)->format('d/m/Y') }}</strong><br>
-                                    <span class="text-[9px] text-slate-500">{{ \Carbon\Carbon::parse($pres->fecha_inicio)->format('H:i') }} hs</span>
-                                </td>
-                                <td class="py-1.5 px-3 text-center font-mono border-r border-slate-200/60 text-[11px]">
-                                    @if($pres->fecha_fin)
-                                        <strong class="text-slate-600">{{ \Carbon\Carbon::parse($pres->fecha_fin)->format('d/m/Y') }}</strong><br>
-                                        <span class="text-[9px] text-slate-400">{{ \Carbon\Carbon::parse($pres->fecha_fin)->format('H:i') }} hs</span>
-                                    @else
-                                        <span class="text-slate-400 italic text-[10px]">- En curso -</span>
-                                    @endif
-                                </td>
-
-                                <!-- Intereses -->
-                                <td class="py-1.5 px-3 text-right font-mono font-bold text-slate-700 border-r border-slate-200/60 tabular-nums">
-                                    {{ $pres->interes_credito * 100 }} %
-                                </td>
-                                <td class="py-1.5 px-3 text-right font-mono font-bold text-red-700 border-r border-slate-200/60 tabular-nums">
-                                    {{ $pres->interes_mora * 100 }} %
-                                </td>
-
-                                <!-- Estado -->
-                                <td class="py-1.5 px-3 text-center">
-                                    @if($estaAbierta)
-                                        <span class="bg-amber-100 text-amber-800 text-[9px] font-black px-2 py-0.5 rounded uppercase border border-amber-200">
-                                            ACTIVA
-                                        </span>
-                                    @else
-                                        <span class="bg-slate-200 text-slate-500 text-[9px] font-black px-2 py-0.5 rounded uppercase border border-slate-300">
-                                            CERRADA
-                                        </span>
-                                    @endif
-                                </td>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50/50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-black uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-700">
+                                <th class="py-2.5 px-4 text-center w-24">N° Lote</th>
+                                <th class="py-2.5 px-4 text-center">Fecha Inicio</th>
+                                <th class="py-2.5 px-4 text-center">Fecha Fin</th>
+                                <th class="py-2.5 px-4 text-right w-24">Int. Crédito</th>
+                                <th class="py-2.5 px-4 text-right w-24">Int. Mora</th>
+                                <th class="py-2.5 px-4 text-center w-24">Estado</th>
                             </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="py-6 text-center text-slate-400 font-medium text-xs italic bg-slate-50">
-                                    No hay presentaciones registradas en el sistema.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-                <!-- Paginador -->
-                <div class="px-2 py-1 bg-slate-50 border-t border-slate-200 text-xs">
-                    {{ $presentaciones->links() }}
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 font-medium">
+                            @forelse($presentaciones as $pres)
+                                @php
+                                    $estaAbierta = is_null($pres->fecha_fin);
+                                    $bgFila = $estaAbierta ? 'bg-blue-50/40 dark:bg-blue-950/20' : 'bg-white dark:bg-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-700/40';
+                                @endphp
+                                <tr class="{{ $bgFila }} transition-colors">
+                                    <!-- Número -->
+                                    <td class="py-3 px-4 text-center">
+                                        <span class="font-mono font-black text-slate-900 dark:text-white text-xs">
+                                            # {{ $pres->numero }}
+                                        </span>
+                                    </td>
+
+                                    <!-- Fechas -->
+                                    <td class="py-3 px-4 text-center font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                                        <strong>{{ \Carbon\Carbon::parse($pres->fecha_inicio)->format('d/m/Y') }}</strong>
+                                        <span class="text-[9px] text-slate-400 block">{{ \Carbon\Carbon::parse($pres->fecha_inicio)->format('H:i') }} hs</span>
+                                    </td>
+                                    <td class="py-3 px-4 text-center font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                                        @if($pres->fecha_fin)
+                                            <strong>{{ \Carbon\Carbon::parse($pres->fecha_fin)->format('d/m/Y') }}</strong>
+                                            <span class="text-[9px] text-slate-400 block">{{ \Carbon\Carbon::parse($pres->fecha_fin)->format('H:i') }} hs</span>
+                                        @else
+                                            <span class="text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase">● En Curso</span>
+                                        @endif
+                                    </td>
+
+                                    <!-- Intereses -->
+                                    <td class="py-3 px-4 text-right font-mono font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+                                        {{ number_format($pres->interes_credito * 100, 1) }} %
+                                    </td>
+                                    <td class="py-3 px-4 text-right font-mono font-bold text-rose-600 dark:text-rose-400 tabular-nums">
+                                        {{ number_format($pres->interes_mora * 100, 1) }} %
+                                    </td>
+
+                                    <!-- Estado -->
+                                    <td class="py-3 px-4 text-center">
+                                        @if($estaAbierta)
+                                            <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-black px-2.5 py-1 rounded-full uppercase border border-emerald-300 dark:border-emerald-800">
+                                                ACTIVA
+                                            </span>
+                                        @else
+                                            <span class="bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                                CERRADA
+                                            </span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="py-10 text-center text-slate-400 dark:text-slate-500 text-xs italic bg-white dark:bg-slate-800">
+                                        No hay presentaciones registradas para esta provincia.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
+
+                <!-- Paginación -->
+                @if($presentaciones->hasPages())
+                    <div class="px-5 py-3 bg-slate-50 dark:bg-slate-800/90 border-t border-slate-200 dark:border-slate-700">
+                        {{ $presentaciones->links() }}
+                    </div>
+                @endif
             </div>
         </div>
 
-        <!-- COLUMNA DERECHA: Panel de Control (30%) -->
-        <div class="w-full lg:w-[30%]">
-            <div class="bg-white rounded-md border border-slate-300 shadow-sm overflow-hidden mb-4 sticky top-4">
-                <div class="bg-blue-950 px-3 py-2">
-                    <h2 class="font-bold text-[10px] text-blue-200 uppercase tracking-wider">Control Operativo</h2>
+        <!-- COLUMNA DERECHA: Panel de Cierre Operativo (32%) -->
+        <div class="w-full lg:w-[32%] sticky top-6">
+            <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-md overflow-hidden">
+                <div class="bg-gradient-to-r {{ $idProvincia === 2 ? 'from-blue-900 to-indigo-900' : 'from-amber-900 to-orange-950' }} px-5 py-4 text-white">
+                    <span class="text-[10px] font-black uppercase tracking-wider block opacity-80">Control de Ciclo Provincial</span>
+                    <h2 class="font-black text-base uppercase tracking-tight">
+                        Corte {{ $idProvincia === 2 ? 'Tierra del Fuego' : 'Chubut' }}
+                    </h2>
                 </div>
                 
-                <div class="p-3">
+                <div class="p-5">
                     @if($actual)
-                        <div class="mb-4 bg-slate-50 p-2.5 rounded border border-slate-200">
-                            <span class="text-[9px] font-bold text-slate-500 uppercase block mb-1">Presentación Vigente:</span>
+                        <div class="mb-5 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <span class="text-[10px] font-black text-slate-400 uppercase block mb-1">Presentación Vigente:</span>
                             <div class="flex justify-between items-center mb-1">
-                                <span class="font-mono font-black text-lg text-blue-900"># {{ $actual->numero }}</span>
-                                <span class="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded border border-amber-300 uppercase">En Curso</span>
+                                <span class="font-mono font-black text-2xl text-blue-950 dark:text-white"># {{ $actual->numero }}</span>
+                                <span class="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300 uppercase">En Curso</span>
                             </div>
-                            <span class="text-[10px] text-slate-600 font-medium">Abierta hace <strong class="text-slate-800">{{ \Carbon\Carbon::parse($actual->fecha_inicio)->diffInDays(now()) }} días</strong>.</span>
+                            <span class="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                                Abierta hace <strong class="text-slate-900 dark:text-white">{{ \Carbon\Carbon::parse($actual->fecha_inicio)->locale('es')->diffForHumans(now(), true) }}</strong>.
+                            </span>
                         </div>
                     @endif
 
-                    <form action="{{ route('sistema.presentaciones.cambiar') }}" method="POST" onsubmit="return confirm('ATENCIÓN: Se cerrará la presentación actual, se aplicarán los intereses a los morosos y se volverán exigibles las nuevas cuotas. ¿Estás absolutamente seguro de continuar?');">
+                    <form action="{{ route('sistema.presentaciones.cambiar') }}" method="POST"
+                          onsubmit="return confirm('ATENCIÓN: Se cerrará la presentación #{{ $actual?->numero }} para {{ $idProvincia === 2 ? 'Tierra del Fuego' : 'Chubut' }}, se aplicará el interés de mora a las cuotas impagas y se volverán exigibles las cuotas del nuevo ciclo en dicha provincia. ¿Deseas confirmar la operación?');">
                         @csrf
-                        <div class="space-y-3 mb-4 border-t border-slate-200 pt-3">
-                            <span class="text-[10px] font-bold text-slate-700 uppercase block leading-tight">Configurar Siguiente Presentación (N° {{ $actual ? $actual->numero + 1 : 1 }}):</span>
+                        <input type="hidden" name="id_provincia" value="{{ $idProvincia }}">
+
+                        <div class="space-y-4 mb-5 border-t border-slate-100 dark:border-slate-700/60 pt-4">
+                            <div>
+                                <span class="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase block leading-tight">
+                                    Abrir Lote Siguiente (N° {{ $actual ? $actual->numero + 1 : 1 }}):
+                                </span>
+                                <p class="text-[11px] text-slate-500 mt-0.5">Afectará únicamente a créditos originados en sucursales de {{ $idProvincia === 2 ? 'TDF' : 'Chubut' }}.</p>
+                            </div>
                             
                             <div>
-                                <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Interés de Crédito (Ej: 0.10 para 10%)</label>
-                                <input type="number" step="0.001" name="interes_credito" value="{{ $actual->interes_credito ?? '0.10' }}" required 
-                                       class="w-full text-xs font-mono font-bold rounded border-slate-300 focus:border-blue-500 py-1.5 px-2 bg-white shadow-sm">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Financiación (Ej: 0.06 para 6%)</label>
+                                <input type="number" step="0.001" name="interes_credito" value="{{ $actual->interes_credito ?? '0.06' }}" required 
+                                       class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-blue-500 py-2 px-3 shadow-sm">
                             </div>
 
                             <div>
-                                <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Interés de Mora (Ej: 0.10 para 10%)</label>
-                                <input type="number" step="0.001" name="interes_mora" value="{{ $actual->interes_mora ?? '0.10' }}" required 
-                                       class="w-full text-xs font-mono font-bold rounded border-slate-300 focus:border-blue-500 py-1.5 px-2 bg-white shadow-sm text-red-800">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Mora por Atraso (Ej: 0.06 para 6%)</label>
+                                <input type="number" step="0.001" name="interes_mora" value="{{ $actual->interes_mora ?? '0.06' }}" required 
+                                       class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 focus:border-blue-500 py-2 px-3 shadow-sm">
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-2 px-3 rounded uppercase transition-all shadow-sm flex items-center justify-center space-x-1">
+                        <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-black text-xs py-3 px-4 rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center space-x-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                            <span>Cerrar Ciclo y Abrir Nuevo</span>
+                            <span>Cerrar Lote y Abrir Siguiente</span>
                         </button>
                     </form>
                 </div>

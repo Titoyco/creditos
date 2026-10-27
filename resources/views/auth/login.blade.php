@@ -11,34 +11,33 @@
 
     <div class="w-full max-w-md">
         <div class="flex flex-col items-center mb-8">
-            <img src="{{ asset('img/logo_letras.png') }}" alt="LaMarina Logo" class="h-24 w-auto mb-4">
-            <!-- <h1 class="text-2xl font-bold text-blue-900 tracking-widest uppercase">EnCoutas</h1> -->
-            <p class="text-gray-600 font-medium">Gestión de Créditos Personales</p>
+            <img src="{{ asset('img/logo_letras.png') }}" alt="LaMarina Logo" class="h-20 w-auto mb-2">
+            <h1 class="text-2xl font-black text-blue-950 uppercase tracking-tight">LA MARINA</h1>
+            <p class="text-blue-700 text-xs font-bold uppercase tracking-widest">Sistema Comercial, Stock y Créditos</p>
         </div>
 
-        <div class="bg-white p-8 rounded-xl shadow-2xl border-t-4 border-blue-700">
-            <h2 class="text-xl font-semibold text-center text-gray-800 mb-6 italic">Iniciar Sesión</h2>
+        <div class="bg-white p-8 rounded-2xl shadow-xl border-t-4 border-blue-700">
+            <h2 class="text-xl font-bold text-center text-slate-800 mb-6 uppercase tracking-tight">Iniciar Sesión</h2>
 
-            <form method="POST" action="{{ route('login') }}">
+            <form method="POST" action="{{ route('login') }}" id="loginForm">
                 @csrf
 
                 <div class="mb-5">
-                    <label for="username" class="block text-xs font-black text-slate-700 uppercase mb-2 ml-1 italic">Nombre de Usuario</label>
+                    <label for="username" class="block text-xs font-black text-slate-700 uppercase mb-2 ml-1">Usuario</label>
                     <input type="text" id="username" name="username" required autofocus 
-                        class="w-full px-4 py-3 rounded-xl border-slate-200 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-sm"
-                        placeholder="Ej: admin">
+                        class="w-full px-4 py-3 rounded-xl border-slate-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-sm font-semibold"
+                        placeholder="Ej: Admin o vendedorush1">
                     @error('username')
                         <p class="text-red-500 text-xs mt-2 font-bold">{{ $message }}</p>
                     @enderror
                 </div>
 
                 <div class="mb-6">
-                    <label for="password" class="block text-sm font-bold text-gray-700 mb-1 italic">Clave de Acceso</label>
+                    <label for="password" class="block text-xs font-black text-slate-700 uppercase mb-2 ml-1">Clave de Acceso</label>
                     
-                    <!-- Campo con botón para revelar contraseña -->
                     <div class="relative flex items-center">
                         <input type="password" id="password" name="password" required 
-                            class="w-full px-4 py-3 pr-10 rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                            class="w-full px-4 py-3 pr-10 rounded-xl border-slate-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-sm font-semibold"
                             placeholder="••••••••">
                         
                         <button type="button" onclick="togglePassword()" class="absolute right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 focus:outline-none" tabindex="-1">
@@ -50,29 +49,81 @@
                     </div>
 
                     @error('password')
-                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                        <p class="text-red-500 text-xs mt-1 font-bold">{{ $message }}</p>
                     @enderror
                 </div>
 
                 <div class="flex items-center justify-between mb-6">
-                    <label class="inline-flex items-center text-sm text-gray-600 italic">
-                        <input type="checkbox" name="remember" class="rounded border-gray-300 text-blue-600 shadow-sm">
-                        <span class="ml-2">Recordarme</span>
+                    <label class="inline-flex items-center text-xs font-semibold text-gray-600">
+                        <input type="checkbox" name="remember" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500">
+                        <span class="ml-2">Recordar sesión</span>
                     </label>
                 </div>
 
-                <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-lg transform hover:-translate-y-1">
+                <button type="submit" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-3.5 px-4 rounded-xl transition duration-200 shadow-lg uppercase tracking-wider text-sm">
                     INGRESAR AL SISTEMA
                 </button>
             </form>
         </div>
 
-        <p class="text-center text-gray-500 text-xs mt-8">
-            &copy; {{ date('Y') }} LaMarina Créditos - Trelew - Chubut - Argentina <br> Desarrollado por <a href="https://www.robertodavies.com.ar" target="_blank" class="text-blue-600 hover:underline">Roberto Davies</a>
+        {{-- Accesos Rápidos para Prueba de Sucursales y Roles --}}
+        <div class="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-2xl shadow-sm">
+            <p class="text-[11px] font-black uppercase text-slate-500 tracking-wider text-center mb-3">
+                Accesos Rápidos de Prueba (Clic para auto-rellenar)
+            </p>
+            <div class="grid grid-cols-1 gap-2">
+                <button type="button" onclick="setCredenciales('Admin', 'admin123')" 
+                    class="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl transition text-left">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                        <span class="text-xs font-black text-amber-950">Superusuario (Admin)</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-amber-800 uppercase bg-amber-200/60 px-2 py-0.5 rounded-md">Todas las Sucursales</span>
+                </button>
+
+                <div class="grid grid-cols-2 gap-2 mt-1">
+                    <button type="button" onclick="setCredenciales('vendedorush1', 'ush123')" 
+                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
+                        <p class="text-[11px] font-black text-slate-800">vendedorush1</p>
+                        <p class="text-[9px] font-bold text-blue-700 truncate">Ush. San Martín</p>
+                    </button>
+
+                    <button type="button" onclick="setCredenciales('vendedorush2', 'ush123')" 
+                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
+                        <p class="text-[11px] font-black text-slate-800">vendedorush2</p>
+                        <p class="text-[9px] font-bold text-blue-700 truncate">Ush. Antártida</p>
+                    </button>
+
+                    <button type="button" onclick="setCredenciales('vendedortw', 'tw123')" 
+                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
+                        <p class="text-[11px] font-black text-slate-800">vendedortw</p>
+                        <p class="text-[9px] font-bold text-blue-700 truncate">Trelew Centro</p>
+                    </button>
+
+                    <button type="button" onclick="setCredenciales('vendedorint', 'int123')" 
+                        class="px-2.5 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition text-left">
+                        <p class="text-[11px] font-black text-slate-800">vendedorint</p>
+                        <p class="text-[9px] font-bold text-blue-700 truncate">Interior / Camión</p>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-center text-gray-400 text-xs mt-6">
+            &copy; {{ date('Y') }} La Marina — Ushuaia & Trelew
         </p>
     </div>
 
     <script>
+        function setCredenciales(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+            // Destacar visualmente el botón de ingreso
+            const btn = document.querySelector('button[type="submit"]');
+            btn.classList.add('ring-4', 'ring-amber-400');
+            setTimeout(() => btn.classList.remove('ring-4', 'ring-amber-400'), 1000);
+        }
+
         function togglePassword() {
             const passwordInput = document.getElementById('password');
             const eyePath = document.getElementById('eye-path');

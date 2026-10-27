@@ -11,6 +11,12 @@ use Illuminate\Http\Request;
 
 class ClienteController extends Controller
 {
+    /**
+     * Default de `clientes.tipo_haber` (esquema: BIGINT NOT NULL DEFAULT 1).
+     * Si el operador deja el campo en blanco se aplica este valor en lugar de fallar.
+     */
+    private const TIPO_HABER_POR_DEFECTO = 1;
+
     public function index(Request $request)
     {
         $query = Cliente::with(['localidad.provincia', 'sucursal', 'autorizados', 'titulares']);
@@ -24,7 +30,10 @@ class ClienteController extends Controller
                     foreach ($palabras as $palabra) {
                         $qTitular->where(function ($subQ) use ($palabra) {
                             $subQ->where('nombre', 'LIKE', "%{$palabra}%")
-                                ->orWhere('dni', 'LIKE', "%{$palabra}%");
+                                ->orWhere('dni', 'LIKE', "%{$palabra}%")
+                                ->orWhere('cuit', 'LIKE', "%{$palabra}%")
+                                ->orWhere('nro_cuenta', 'LIKE', "%{$palabra}%")
+                                ->orWhere('cbu', 'LIKE', "%{$palabra}%");
                         });
                     }
                 })
@@ -32,7 +41,8 @@ class ClienteController extends Controller
                     foreach ($palabras as $palabra) {
                         $qAutorizado->where(function ($subQ) use ($palabra) {
                             $subQ->where('nombre', 'LIKE', "%{$palabra}%")
-                                ->orWhere('dni', 'LIKE', "%{$palabra}%");
+                                ->orWhere('dni', 'LIKE', "%{$palabra}%")
+                                ->orWhere('cuit', 'LIKE', "%{$palabra}%");
                         });
                     }
                 });
@@ -85,15 +95,18 @@ class ClienteController extends Controller
 
     public function create()
     {
-        $sucursales = Sucursal::all();
-        $localidades = Localidad::all();
-        return view('clientes.create', compact('sucursales', 'localidades'));
+        $sucursales = Sucursal::orderBy('nombre')->get();
+        $localidades = Localidad::with('provincia')->orderBy('nombre')->get();
+        $provincias = Provincia::with('localidades')->orderBy('nombre')->get();
+        return view('clientes.create', compact('sucursales', 'localidades', 'provincias'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
             'dni' => 'required|unique:clientes,dni|integer',
+            'cuit' => 'nullable|string|max:20',
+            'nro_cuenta' => 'nullable|string|max:50',
             'nombre' => 'required|string|max:191',
             'id_sucursal' => 'required|exists:sucursales,id',
             'medio_pago_preferido' => 'required|integer|in:0,1',
@@ -105,14 +118,14 @@ class ClienteController extends Controller
                 'size:22',
                 function ($attribute, $value, $fail) {
                     if (!empty($value) && !$this->validarCBU($value)) {
-                        $fail('El número de CBU ingresado no es válido.');
+                        $fail('El número de CBU ingresado no es válido (dígito verificador incorrecto).');
                     }
                 },
             ],
             
-            'tipo_haber' => 'nullable|integer',
+            'tipo_haber' => 'nullable|integer|min:1',
             'limite' => 'required|numeric|min:0',
-            'max_cuotas' => 'required|integer|in:1,2,3,4',
+            'max_cuotas' => 'required|integer|min:1|max:24',
             'direccion' => 'required|string|max:191',
             'id_localidad' => 'required|exists:localidades,id',
             'email' => 'nullable|email|max:191',
@@ -135,13 +148,14 @@ class ClienteController extends Controller
             'obs' => 'nullable|string',
         ], [
             'cbu.required_if' => 'El CBU es obligatorio cuando el medio de pago preferido es Débito en CBU.',
+            'tipo_haber.integer' => 'El Tipo de Haber debe ser un número entero (ID de la categoría).',
+            'tipo_haber.min' => 'El Tipo de Haber debe ser mayor o igual a 1.',
         ]);
 
-        $data = $request->all();
-        
-        // Manejo del checkbox "suspendido"
+        $data = $this->normalizarDatosCliente($validated);
+
+        // Estado de alta: sin suspensión y sin estado bancario.
         $data['suspendido'] = $request->has('suspendido') ? 1 : 0;
-        
         $data['estado_banco'] = null;
         $data['fecha_estado_banco'] = null;
 
@@ -156,6 +170,8 @@ class ClienteController extends Controller
         // Validamos la información (permitiendo que el DNI sea el mismo del cliente actual)
         $validated = $request->validate([
             'dni' => 'required|integer|unique:clientes,dni,' . $cliente->id,
+            'cuit' => 'nullable|string|max:20',
+            'nro_cuenta' => 'nullable|string|max:50',
             'nombre' => 'required|string|max:191',
             'id_sucursal' => 'required|exists:sucursales,id',
             'medio_pago_preferido' => 'required|integer|in:0,1',
@@ -168,14 +184,14 @@ class ClienteController extends Controller
                 'size:22',
                 function ($attribute, $value, $fail) {
                     if (!empty($value) && !$this->validarCBU($value)) {
-                        $fail('El número de CBU ingresado no es válido.');
+                        $fail('El número de CBU ingresado no es válido (dígito verificador incorrecto).');
                     }
                 },
             ],
             
-            'tipo_haber' => 'nullable|integer',
+            'tipo_haber' => 'nullable|integer|min:1',
             'limite' => 'required|numeric|min:0',
-            'max_cuotas' => 'required|integer|in:1,2,3,4', // NOTA: Unifiqué las cuotas permitidas a 1,2,3,4 como en el form
+            'max_cuotas' => 'required|integer|min:1|max:24',
             'direccion' => 'required|string|max:191',
             'id_localidad' => 'required|exists:localidades,id',
             'email' => 'nullable|email|max:191',
@@ -198,9 +214,11 @@ class ClienteController extends Controller
             'obs' => 'nullable|string',
         ], [
             'cbu.required_if' => 'El CBU es obligatorio cuando el medio de pago preferido es Débito en CBU.',
+            'tipo_haber.integer' => 'El Tipo de Haber debe ser un número entero (ID de la categoría).',
+            'tipo_haber.min' => 'El Tipo de Haber debe ser mayor o igual a 1.',
         ]);
 
-        $data = $request->all();
+        $data = $this->normalizarDatosCliente($validated);
 
         // Manejo del checkbox de suspensión (0 o 1 estricto)
         $data['suspendido'] = $request->input('suspendido') == 1 ? 1 : 0;
@@ -211,7 +229,51 @@ class ClienteController extends Controller
         return redirect()->route('clientes.index')
                         ->with('success', 'Legajo de cliente actualizado correctamente.');
     }
-    
+
+
+    /**
+     * Normaliza el payload validado del legajo antes de persistirlo.
+     *
+     * 1) `tipo_haber` es NOT NULL en BD (default 1): si el operador deja el campo en blanco,
+     *    `nullable` deja pasar el vacío y el INSERT mandaría NULL -> viola la restricción.
+     *    Se aplica el default del esquema en lugar de romper con un error 500.
+     * 2) Los campos opcionales llegan como '' (input vacío) y se guardaban como cadena vacía
+     *    en lugar de NULL, ensuciando los reportes y los `LIKE` de búsqueda.
+     * 3) Sólo se persisten campos validados: se evita el mass-assignment de columnas
+     *    del legajo como `saldo` o `estado_banco`, que no forman parte del formulario.
+     */
+    private function normalizarDatosCliente(array $validated): array
+    {
+        // Columnas NOT NULL del esquema `clientes` que deben llevar un valor siempre.
+        $data = [
+            'tipo_haber' => self::TIPO_HABER_POR_DEFECTO,
+            'limite' => 0,
+            'max_cuotas' => 3,
+            'suspendido' => 0,
+        ];
+
+        $data = array_merge($data, $validated);
+
+        // `tipo_haber` vacío -> default del esquema (BD: NOT NULL DEFAULT 1).
+        if (blank($data['tipo_haber'])) {
+            $data['tipo_haber'] = self::TIPO_HABER_POR_DEFECTO;
+        }
+
+        // Campos opcionales: '' -> NULL (nunca cadena vacía en BD).
+        $opcionales = [
+            'cuit', 'nro_cuenta', 'cbu', 'email', 'tel2', 'familiar', 'tipo_familiar', 'direccion_familiar',
+            'id_localidad_familiar', 'email_familiar', 'tel_familiar', 'trabajo',
+            'direccion_trabajo', 'id_localidad_trabajo', 'tel_trabajo', 'obs',
+        ];
+
+        foreach ($opcionales as $campo) {
+            if (array_key_exists($campo, $data) && blank($data[$campo])) {
+                $data[$campo] = null;
+            }
+        }
+
+        return $data;
+    }
 
     private function validarCBU($cbu)
     {
@@ -248,25 +310,27 @@ class ClienteController extends Controller
         return true;
     }
 
-
     public function edit(Cliente $cliente)
     {
-        // Buscamos todas las sucursales y localidades para los menús desplegables del formulario
-        $sucursales = Sucursal::all();
-        $localidades = Localidad::orderBy('nombre')->get();
+        $sucursales = Sucursal::orderBy('nombre')->get();
+        $localidades = Localidad::with('provincia')->orderBy('nombre')->get();
+        $provincias = Provincia::with('localidades')->orderBy('nombre')->get();
 
-        // Retornamos la vista del formulario pasándole el cliente actual
-        return view('clientes.edit', compact('cliente', 'sucursales', 'localidades'));
+        return view('clientes.edit', compact('cliente', 'sucursales', 'localidades', 'provincias'));
     }
-
-    
 
     public function destroy(Cliente $cliente)
     {
-        // Antes de eliminar, verificamos si el cliente tiene créditos históricos
-        if ($cliente->creditos()->exists()) {
+        // 1. Verificar si tiene créditos activos/históricos o saldo pendiente
+        if ($cliente->tieneHistorial()) {
             return redirect()->route('clientes.index')
-                ->with('error', 'No se puede eliminar el cliente porque tiene historial de créditos.');
+                ->with('error', 'No se puede eliminar el cliente porque posee historial financiero/créditos o saldo pendiente.');
+        }
+
+        // 2. Verificar si es titular con firmas autorizadas vinculadas
+        if ($cliente->autorizados()->exists()) {
+            return redirect()->route('clientes.index')
+                ->with('error', 'No se puede eliminar el cliente porque tiene adicionales autorizados vinculados. Desvincúlelos primero.');
         }
 
         $cliente->delete();
@@ -277,8 +341,15 @@ class ClienteController extends Controller
 
     public function estadoCuenta(Cliente $cliente)
     {
-        // Cargar créditos con sus cuotas y sucursales
-        $cliente->load(['creditos.cuotas', 'creditos.sucursal', 'autorizados']);
+        // Cargar créditos con sus cuotas y sucursales, y sus recibos de cobranza
+        $cliente->load([
+            'creditos.cuotas',
+            'creditos.sucursal',
+            'autorizados',
+            'recibos' => function ($q) {
+                $q->with(['sucursal', 'user'])->orderBy('fecha', 'desc')->orderBy('numero_recibo', 'desc');
+            }
+        ]);
 
         // Filtrar solo los créditos activos / abiertos
         $creditosAbiertos   = $cliente->creditos->whereNull('fecha_cancelacion');
@@ -293,6 +364,7 @@ class ClienteController extends Controller
         $totalEntregado   = $cuotasActivas->sum('entrego');       // Total Entregado (Cobrado)
         $totalAPagar      = $cuotasActivas->sum('saldo_actual');    // Total a Pagar
         $totalRestante    = $totalValorBase + $totalIntereses - $totalEntregado - $totalAPagar;  // Total Restante / Saldo Pendiente
+        $recibos          = $cliente->recibos;
 
         return view('clientes.estado-cuenta', compact(
             'cliente',
@@ -302,7 +374,8 @@ class ClienteController extends Controller
             'totalIntereses',
             'totalEntregado',
             'totalAPagar',
-            'totalRestante'
+            'totalRestante',
+            'recibos'
         ));
     }
 
@@ -312,4 +385,44 @@ class ClienteController extends Controller
         return view('clientes.show', compact('cliente'));
     }
 
+    public function storeNovedad(Request $request, Cliente $cliente)
+    {
+        $request->validate([
+            'mensaje' => 'required|string|max:1000',
+        ]);
+
+        $cliente->novedades()->create([
+            'user_id' => auth()->id(),
+            'usuario_nombre' => auth()->user()?->name ?? 'Operador',
+            'mensaje' => trim($request->mensaje),
+            'origen_accion' => 'manual',
+        ]);
+
+        return redirect()->route('clientes.show', $cliente->id)
+            ->with('success', 'Novedad registrada en el legajo correctamente.');
+    }
+
+    /**
+     * Endpoint API JSON para búsqueda rápida de clientes (DNI, nombre, cuenta).
+     */
+    public function buscar(Request $request)
+    {
+        $term = trim($request->get('q', ''));
+        if (strlen($term) < 2) {
+            return response()->json([]);
+        }
+
+        $clientes = Cliente::with('sucursal')
+            ->where(function ($q) use ($term) {
+                $q->where('dni', 'LIKE', "%{$term}%")
+                  ->orWhere('nombre', 'LIKE', "%{$term}%")
+                  ->orWhere('cuit', 'LIKE', "%{$term}%")
+                  ->orWhere('nro_cuenta', 'LIKE', "%{$term}%");
+            })
+            ->orderBy('nombre')
+            ->limit(15)
+            ->get(['id', 'id_sucursal', 'nombre', 'dni', 'nro_cuenta', 'cuit', 'saldo', 'suspendido']);
+
+        return response()->json($clientes);
+    }
 }

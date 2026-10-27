@@ -4,6 +4,19 @@ Alcance verificado: `routes/web.php`, `routes/auth.php` y
 `app/Http/Controllers/{CreditoController, ClienteController, PresentacionController, EstadoBancoController, SucursalController}.php`.
 Marcas: ⚠ = pendiente/inconsistencia verificada; ✅ = corregido en esta revisión (código + especificación).
 
+## 0.0 Nota transversal: zona horaria y reloj del layout
+
+- **Servidor:** `config/app.php` define `'timezone' => 'America/Argentina/Buenos_Aires'` y
+  `locale/fallback_locale = 'es'`. Todas las marcas de tiempo del backend (`now()`, `fecha_credito`,
+  `fecha_cobro`, `fecha_cancelacion`, `created_at`) se persisten en esa zona.
+- **Cliente:** el **reloj operativo del header** (`layouts/app.blade.php`, ver `ui-guidelines.md` §2) se
+  resuelve **íntegramente en el navegador** con Alpine.js + `setInterval` y `toLocaleTimeString('es-AR')`.
+  No hay endpoint, ruta ni polling de reloj: el header no requiere ninguna ruta nueva.
+- Consecuencia práctica: ambos relojes deben coincidir en pantalla. Si algún equipo opera con su
+  navegador en otra zona horaria, el reloj del header discrepa de las fechas registradas por el servidor;
+  ante ese caso, forzar la zona del navegador o cambiar `config('app.timezone')` — **no** el `x-data` del
+  reloj, que refleja deliberadamente la hora local del operador.
+
 ## 0. Correcciones aplicadas en esta revisión (armonización con `models.md` / `ui-guidelines.md`)
 
 Todos los puntos siguientes fueron **corregidos en el código** y reflejados en este documento y en
@@ -23,6 +36,9 @@ métodos inexistentes) y `php -l` sobre cada archivo modificado.
 | 9 | `Cuota::lote_presentacion` sumaba un *Modelo* a un entero (error fatal) y contradecía a `lote_calculado` | `lote_calculado` es el **accesor oficial**; `lote_presentacion` queda deprecado y delega en él (`models.md` §3.4). |
 | 10 | `shadow-2xs` (utilidad de Tailwind v4) en dos vistas | Reemplazado por `shadow-sm` (`ui-guidelines.md` §0/§1.2/§14). |
 | 11 | `resources/views/sistema/index.blade.php:17` enlazaba con `route('presentaciones.index')`, nombre **inexistente** (el real es `sistema.presentaciones.index`) ⇒ error 500 al abrir la tarjeta "Presentaciones" del dashboard de configuración | Corregido a `route('sistema.presentaciones.index')`. Se verificó que ninguna otra vista referencia rutas inexistentes (`clientes.creditos`, `clientes.movimientos`, `creditos.edit/update/destroy`, `creditos.cuotas.*`, `sucursales.cambiar`, `presentaciones.*`). |
+| 12 | Alta de crédito sin validaciones de negocio en legajo ni presentación | Implementadas en `CreditoController@store`: presentación abierta (`fecha_fin IS NULL`), cliente no suspendido (`suspendido == false/0`), tope `cantidad_cuotas <= cliente.max_cuotas`, y disponible de crédito (`deudaAcumulada + importe_original <= cliente.limite_efectivo`) (§2.1, §3.1). |
+| 13 | Tasa de financiación leía `presentacion->tasa_cuotas` (columna inexistente ⇒ 0%) | Corregido a `presentaciones.interes_credito` en `CreditoController@store` (§2.1, §3.1). |
+| 14 | `pagarCuota` sin validación de request, sobrepagos y sin cierre automático de crédito | Validado con `monto` (`min:0.01`, `max:saldo_actual`), `medio` (`string|max:50`), acumulación `entrego += monto`, saldo `saldo_actual = max(0, saldo_actual - monto)` y auto-cierre del crédito (`fecha_cancelacion = now()`) al quedar en saldo 0 (§2.1, §3.1). |
 
 ## 1. Tabla de Rutas Web
 
@@ -67,15 +83,25 @@ métodos inexistentes) y `php -l` sobre cada archivo modificado.
 | ❌ ~~GET~~ | ~~`/creditos/{credito}/cuotas/{cuota}/editar`~~ | ~~`creditos.cuotas.edit`~~ | **RUTA ELIMINADA** (`@editCuota` no existe → 500) | — |
 | ❌ ~~PUT~~ | ~~`/creditos/{credito}/cuotas/{cuota}`~~ | ~~`creditos.cuotas.update`~~ | **RUTA ELIMINADA** (`@updateCuota` no existe → 500) | — |
 | POST | `/creditos/{cuota}/pagar` | `creditos.pagar` | `CreditoController@pagarCuota` | `auth` |
+| POST | `/creditos/cuotas/{cuota}/anular-pago` | `creditos.cuotas.anular-pago` | `CreditoController@anularPago` | `auth` ✅ Compensatoria: reabre cuota y crédito si estaba cancelado, asienta traza en `cliente_novedades` |
+| DELETE | `/creditos/{credito}/anular` | `creditos.anular` | `CreditoController@anularCredito` | `auth` ✅ Compensatoria: elimina crédito y cuotas en cascada (bloqueado si posee pagos), asienta en `cliente_novedades` |
 | GET | `/sistema` | `sistema.index` | closure → `view('sistema.index')` | `auth` |
+| GET | `/sistema/auditoria` | `sistema.auditoria.index` | `AuditoriaController@index` | `auth` ✅ Auditoría transversal con filtros por modelo, evento y fechas |
+| POST | `/sistema/auditoria/{audit}/rollback` | `sistema.auditoria.rollback` | `AuditoriaController@rollback` | `auth` ✅ Reversión de estado en BD con `transitionTo($audit, true)` |
 | RESOURCE | `/sistema/usuarios` | `usuarios.*` | `UserController` (CRUD completo) | `auth` |
 | RESOURCE | `/sistema/permisos` | `permisos.*` | `PermisoController` (CRUD completo) | `auth` |
 | RESOURCE | `/sistema/sucursales` | `sucursales.*` | `SucursalController` | `auth` ⚠ métodos de resource vacíos (respuesta nula) |
 | GET | `/sistema/presentaciones` | `sistema.presentaciones.index` | `PresentacionController@index` | `auth` ✅ *(sustituye a `Route::resource('presentaciones')`, que registraba `create/store/show/edit/update/destroy` sin método en el controlador)* |
 | POST | `/sistema/presentaciones/cambiar` | `sistema.presentaciones.cambiar` | `PresentacionController@cambiar` | `auth` ✅ *(corregido: verbo **POST**, declarada **antes** del listado ⇒ ya no la captura `{presentacion}`; la vista ya enviaba `POST` + `@csrf`)* |
 | ❌ ~~GET~~ | ~~`/sistema/sucursales/{sucursal}/cambiar`~~ | ~~`sucursales.cambiar`~~ | **RUTA ELIMINADA** (`SucursalController@cambiar` no existe → 500). El cambio de sucursal activa es `sucursal.update.global` (§1.1) | — |
-| GET | `/sistema/provincias` | `provincias.index` | `UbicacionController@provincias` | `auth` |
-| GET | `/sistema/localidades` | `localidades.index` | `UbicacionController@localidades` | `auth` |
+| RESOURCE | `/sistema/sucursales` | `sistema.sucursales.*` | `SucursalController` (ABM completo) | `auth` ✅ Nombres con prefijo `sistema.` |
+| GET | `/sistema/ubicaciones` | `sistema.ubicaciones.index` | `UbicacionController@index` | `auth` ✅ Vista consolidada provincias + localidades |
+| POST | `/sistema/ubicaciones/provincias` | `sistema.ubicaciones.provincias.store` | `UbicacionController@storeProvincia` | `auth` |
+| PUT | `/sistema/ubicaciones/provincias/{provincia}` | `sistema.ubicaciones.provincias.update` | `UbicacionController@updateProvincia` | `auth` |
+| DELETE | `/sistema/ubicaciones/provincias/{provincia}` | `sistema.ubicaciones.provincias.destroy` | `UbicacionController@destroyProvincia` | `auth` (bloquea si tiene localidades) |
+| POST | `/sistema/ubicaciones/localidades` | `sistema.ubicaciones.localidades.store` | `UbicacionController@storeLocalidad` | `auth` |
+| PUT | `/sistema/ubicaciones/localidades/{localidad}` | `sistema.ubicaciones.localidades.update` | `UbicacionController@updateLocalidad` | `auth` |
+| DELETE | `/sistema/ubicaciones/localidades/{localidad}` | `sistema.ubicaciones.localidades.destroy` | `UbicacionController@destroyLocalidad` | `auth` (bloquea si tiene clientes) |
 | GET | `/profile` | `profile.edit` | `ProfileController@edit` | `auth` |
 | PATCH | `/profile` | `profile.update` | `ProfileController@update` | `auth` |
 | DELETE | `/profile` | `profile.destroy` | `ProfileController@destroy` | `auth` |
@@ -95,23 +121,30 @@ ruta inexistente. El modelo `DevolucionBancaria` tampoco se usa (clase vacía, s
 
 Sólo se listan los métodos **públicos** realmente presentes en el código (verificado por firma).
 
-### 2.1 `CreditoController` (6 métodos)
+### 2.1 `CreditoController` (8 métodos)
 
 | Método | Parámetros | Validación | Modelos | Retorno |
 |---|---|---|---|---|
-| `index` | `Request` (`cliente_id`, `search`, `sucursal`, `tipo`, `estado`, `has_interes`, `has_entrego`, `has_saldo`) | ninguna | `Credito` (join `clientes`, `with cliente/sucursal/autorizado.cliente`, `withSum` de `valor_base`, `entrego`, `intereses`, `saldo_actual`) + `Sucursal::all()` | `view('creditos.index')` · `paginate(15)→withQueryString()` |
+| `index` | `Request` (`cliente_id`, `search`, `sucursal`, `tipo`, `estado`, `has_interes`, `has_entrego`, `has_saldo`) | ninguna | `Credito` (join `clientes`, `with cliente/sucursal/autorizado.cliente/presentacion`, `withSum` de `valor_base`, `entrego`, `intereses`, `saldo_actual`) + `Sucursal::all()`, subquery `Cuota::joinSub` para `$totalAPagar` y `$totalCreditos` | `view('creditos.index')` con `$totalCreditos`, `$totalAPagar`, `$creditos` · `paginate(15)→withQueryString()` |
 | `show` | `Credito $credito` (route model binding) | ninguna | `Credito` (`load cliente, sucursal, autorizado.cliente, cuotas` ordenadas por `num_cuota`) | `view('creditos.show')` con `$totalValorBase`, `$totalIntereses`, `$totalEntrego`, `$totalSaldo` |
-| `pagarCuota` | `Request $request` (`monto`, `medio`), `Cuota $cuota` | **ninguna** ⚠ | `Cuota::update([entrego, fecha_cobro=now(), medio_pago, saldo_actual = valor_base + intereses − monto])` | `back()->with('success', 'Pago registrado correctamente')` ✅ *(corregido: antes usaba la clave `status`, que `<x-notification-modal />` no muestra)* |
+| `pagarCuota` | `Request $request` (`monto`, `medio`), `Cuota $cuota` | `monto` required\|numeric\|min:0.01\|max:{cuota.saldo_actual} · `medio` required\|string\|max:50 ✅ *(corregido)* | `DB::transaction`: `Cuota::update([entrego += monto, fecha_cobro=now(), medio_pago, saldo_actual = max(0, saldo_actual - monto)])`; si no restan cuotas con `saldo_actual > 0` en el crédito ⇒ `Credito::update([fecha_cancelacion=now()])` | `back()->with('success', 'Pago registrado correctamente')` ✅ *(corregido)* |
+| `anularPago` | `Request $request` (`motivo`), `Cuota $cuota` | `motivo` required\|string\|min:5\|max:255 | `DB::transaction`: restaura `Cuota` (`saldo_actual += entrego`, `entrego = 0`, `fecha_cobro = null`, `medio_pago = null`), reabre `Credito` (`fecha_cancelacion = null`), crea registro en `cliente_novedades` del titular | `back()->with('success', 'Pago anulado y cuota reabierta correctamente.')` ✅ |
+| `anularCredito` | `Request $request` (`motivo`), `Credito $credito` | `motivo` required\|string\|min:5\|max:255 · Valida ausencia de cuotas con `entrego > 0` | `DB::transaction`: crea novedad formal en `cliente_novedades` del titular y ejecuta `$credito->delete()` (eliminando cuotas por cascada de BD) | `redirect()->route('creditos.index')->with('success', ...)` ✅ |
 | `create` | `Request` (`id_cliente` obligatorio de facto, `id_autorizado` opcional = **ID del registro en `cliente_autorizados`**) | **ninguna** (usa `findOrFail`; el autorizado se resuelve con `ClienteAutorizado::with('cliente')->where('id',…)->where('id_titular', cliente.id)->first()` ✅ corregido) | `Cliente` (con `sucursal`, `creditos.cuotas`, `novedades.user`, `autorizados`), `ClienteAutorizado`, `DB::table('presentaciones')->max('id')` | `view('creditos.create')` con `presentacionActual`, `vencimientos` (4 buckets), `limiteTotal`, `limiteDisponible`, `aFavor`, totales |
-| `store` | `Request` | `id_cliente` required\|exists:clientes,id · `id_sucursal` required\|exists:sucursales,id · `id_presentacion` required\|exists:presentaciones,id · `tipo_credito` required\|in:C,D,R · `importe_original` required\|numeric\|min:1 · `cantidad_cuotas` required\|integer\|min:1 · **`id_autorizado` nullable\|integer + `Rule::exists('cliente_autorizados','id')->where('id_titular', id_cliente)`** ✅ *(corregido)* | `SucursalIndice` (`firstOrCreate` por `id_sucursal`+`tipo_credito`, `increment('ultimo_indice')`), `Sucursal`, `Presentacion::findOrFail`, `Credito::create`, `Cuota::create` ×N — todo dentro de `DB::transaction` | `redirect()->route('creditos.index')->with('success')` |
+| `store` | `Request` | `id_cliente` required\|exists:clientes,id · `id_sucursal` required\|exists:sucursales,id · `id_presentacion` required\|exists:presentaciones,id · `tipo_credito` required\|in:C,D,R · `importe_original` required\|numeric\|min:1 · `cantidad_cuotas` required\|integer\|min:1 · `id_autorizado` nullable\|integer + `Rule::exists('cliente_autorizados','id')->where('id_titular', id_cliente)` ✅. **Reglas de negocio previas (BD):** a) `Presentacion::whereNull('fecha_fin')` (lote abierto); b) titular no suspendido (`!$cliente->suspendido`); c) `cantidad_cuotas <= cliente.max_cuotas`; d) cupo disponible `deudaAcumulada + importe_original <= cliente.limite_efectivo` ✅ | `Cliente::findOrFail`, `Presentacion::whereNull('fecha_fin')`, `SucursalIndice` (`firstOrCreate` por `id_sucursal`+`tipo_credito`, `increment('ultimo_indice')`), `Sucursal`, `Credito::create`, `Cuota::create` ×N — todo dentro de `DB::transaction` | `redirect()->route('creditos.index')->with('success')` |
 | `imprimirPagare` | `Credito $credito` | ninguna | `Credito` (`load cliente, sucursal, autorizado.cliente, cuotas`) + `\NumberFormatter('es', SPELLOUT)` | `view('creditos.pagare')` con `totalMonto = cantidad_cuotas × valor_cuota_ref`, `concepto` (`R` ⇒ REFINANCIACION, resto ⇒ COMPRAS), `montoEnLetras` |
 
 **Detalle del alta (cálculo de cuotas — `store`):**
 
+0. **Validaciones de negocio preventivas:**
+   - Presentación activa: se verifica `Presentacion::whereNull('fecha_fin')->find($request->id_presentacion)`. Si está cerrada, arroja `ValidationException` en `id_presentacion`.
+   - Cliente habilitado: se verifica que `cliente.suspendido` sea falso o 0; de lo contrario falla con error *"El cliente se encuentra suspendido para operar créditos"*.
+   - Límite de cuotas: se valida `cantidad_cuotas <= cliente.max_cuotas`.
+   - Límite crediticio: se calcula `deudaAcumulada = sum(saldo_actual)` de cuotas impagas en créditos abiertos del titular. Se comprueba que `(deudaAcumulada + importe_original) <= cliente.limite_efectivo`. Si se excede, falla informando límite, deuda exigible y disponible.
 1. `$indice->increment('ultimo_indice')` ⇒ correlativo por (sucursal, tipo).
 2. `$codigoCredito = $sucursal->codigo_sucursal . $tipo_credito . $nuevoNumeroIndice` (ej. `IC125`) → columna `creditos.credito`.
-3. `$interesPorcentaje = $presentacion->tasa_cuotas ?? 0` → interés directo simple. ⚠ *`tasa_cuotas` **no existe** como columna en `presentaciones` (las reales son `interes_credito`/`interes_mora`), por lo que hoy el interés financiado es 0 — pendiente de migrar (§4.2).*
-   `$valorCuotaRef = round($importe_original * (1 + $interes/100) / $cantidad_cuotas, 2)`.
+3. `$interesPorcentaje = $presentacion->interes_credito ?? 0` ✅ *(corregido: la columna real en `presentaciones` es `interes_credito`, no la inexistente `tasa_cuotas`)* → interés directo simple:
+   `$valorCuotaRef = round($importe_original * (1 + $interesPorcentaje/100) / $cantidad_cuotas, 2)`.
 4. Cabecera `Credito` con `id_autorizado = $request->input('id_autorizado') ?: null` ✅ *(corregido)*: `Credito::autorizado()` es `belongsTo(ClienteAutorizado::class,'id_autorizado')`, por lo que **antes** se guardaba un `clientes.id` en una FK a `cliente_autorizados` (autorizado inexistente/incoherente); ahora la FK recibe sólo el ID validado de la autorización del titular, o `NULL` si el crédito es del propio titular.
 5. Cascada: por cada `i` en `1..cantidad_cuotas` crea `Cuota(num_cuota=i, valor_base=valorCuotaRef, intereses=0, entrego=0, saldo_actual=valorCuotaRef, fecha_ultimo_envio=null, estado_bancario=null)`.
 6. No se persiste `fecha_vencimiento` por cuota (pendiente de diseño). El **lote origen no necesita persistirse aparte**: ya vive en la FK `creditos.id_presentacion` (§3.1); no existe la columna `presentacion_origen`.
@@ -129,8 +162,8 @@ Un crédito del propio titular se guarda con `id_autorizado = NULL`.
 |---|---|---|---|---|
 | `index` | `Request` (`search`, `id_sucursal`, `id_localidad`, `id_provincia`, `suspendido`, `estado_banco`, `has_saldo`) | ninguna | `Cliente` (`with localidad.provincia, sucursal, autorizados, titulares`), `Sucursal`, `Localidad`, `Provincia`, `EstadoBanco` | `view('clientes.index')` · `orderBy('nombre')->paginate(15)->withQueryString()` |
 | `create` | — | ninguna | `Sucursal::all()`, `Localidad::all()` | `view('clientes.create')` |
-| `store` | `Request` | `dni` required\|unique:clientes,dni\|integer · `nombre` required\|max:191 · `id_sucursal` required\|exists · `medio_pago_preferido` required\|in:0,1 · `cbu` required_if:medio_pago_preferido,1 + size:22 + closure `validarCBU` · `tipo_haber` nullable\|integer · `limite` required\|numeric\|min:0 · `max_cuotas` required\|in:1,2,3,4 · `direccion` required\|max:191 · `id_localidad` required\|exists · `email` nullable\|email · `tel1` required · `tel2` nullable · familiar (`familiar`, `tipo_familiar`, `direccion_familiar`, `id_localidad_familiar`, `email_familiar`, `tel_familiar`) · laborales (`trabajo`, `direccion_trabajo`, `id_localidad_trabajo`, `tel_trabajo`) · `obs` — mensaje custom para `cbu.required_if` | `Cliente::create($request->all() + suspendido + estado_banco=null + fecha_estado_banco=null)` | `redirect()->route('clientes.index')->with('success')` |
-| `update` | `Request`, `Cliente $cliente` | idénticas a `store` pero `dni` required\|unique:clientes,dni,**{id}** | `Cliente::update($data)` con `suspendido` normalizado (`== 1 ? 1 : 0`) | `redirect()->route('clientes.index')->with('success')` |
+| `store` | `Request` | `dni` required\|unique:clientes,dni\|integer · `nombre` required\|max:191 · `id_sucursal` required\|exists · `medio_pago_preferido` required\|in:0,1 · `cbu` required_if:medio_pago_preferido,1 + size:22 + closure `validarCBU` · `tipo_haber` nullable\|integer\|min:1 · `limite` required\|numeric\|min:0 · `max_cuotas` required\|in:1,2,3,4 · `direccion` required\|max:191 · `id_localidad` required\|exists · `email` nullable\|email · `tel1` required · `tel2` nullable · familiar (`familiar`, `tipo_familiar`, `direccion_familiar`, `id_localidad_familiar`, `email_familiar`, `tel_familiar`) · laborales (`trabajo`, `direccion_trabajo`, `id_localidad_trabajo`, `tel_trabajo`) · `obs` — mensajes custom para `cbu.required_if`, `tipo_haber.integer` y `tipo_haber.min` | `$data = ClienteController::normalizarDatosCliente($validated)` (privado) + `suspendido` + `estado_banco=null` + `fecha_estado_banco=null` → `Cliente::create($data)` | `redirect()->route('clientes.index')->with('success')` |
+| `update` | `Request`, `Cliente $cliente` | idénticas a `store` pero `dni` required\|unique:clientes,dni,**{id}** | `normalizarDatosCliente($validated)` + `suspendido` normalizado (`== 1 ? 1 : 0`) → `$cliente->update($data)` | `redirect()->route('clientes.index')->with('success')` |
 | `edit` | `Cliente $cliente` | ninguna | `Sucursal::all()`, `Localidad::orderBy('nombre')` | `view('clientes.edit')` |
 | `destroy` | `Cliente $cliente` | regla de negocio: si `$cliente->creditos()->exists()` **no borra** | `Cliente` (`creditos`) | `redirect()->route('clientes.index')->with('error')` o `->with('success')` |
 | `estadoCuenta` | `Cliente $cliente` | ninguna | `Cliente` (`load creditos.cuotas, creditos.sucursal, autorizados`) | `view('clientes.estado-cuenta')` con totales de **créditos abiertos**: `totalValorBase`, `totalIntereses`, `totalEntregado`, `totalAPagar`, `totalRestante = base + intereses − entregado − aPagar` |
@@ -155,13 +188,49 @@ se fuerzan a `null` en el alta y **sólo** se cambian fuera de este controlador 
 `strtoupper(trim())`), `edit`, `update` (misma regla con `unique...,{id}`), `destroy`.
 Modelo único: `EstadoBanco` (`$table = 'estados_banco'`). Vistas referenciadas: `estados_banco.*` (no enrutadas).
 
-### 2.5 `SucursalController` (8 métodos)
+### 2.5 `SucursalController` (9 métodos — ABM completo ✅)
 
-- `updateGlobal(Request)`: valida `id_sucursal` required\|exists, guarda `session(['sucursal_activa_id' => $id])`,
-  `session()->save()`, `return back()`. Es el único método con lógica y su ruta (`POST /cambiar-sucursal`) ahora
-  exige `auth` ✅ *(corregido)*.
-- `index/create/store/show/edit/update/destroy`: **cuerpos vacíos** (stubs de `Route::resource`), retornan `null`.
-- `cambiar`: **no existe**; la ruta `sucursales.cambiar` que lo invocaba fue eliminada ✅.
+| Método | Parámetros | Validación | Modelos | Retorno |
+|---|---|---|---|---|
+| `updateGlobal` | `Request` | `id_sucursal` required\|exists:sucursales,id | — (escribe `session(['sucursal_activa_id' => …])` + `session()->save()`) | `back()` — ruta `POST /cambiar-sucursal` (`sucursal.update.global`) exige `auth` ✅ |
+| `index` | — | ninguna | `Sucursal::withCount(['clientes','creditos'])->orderBy('nombre')->paginate(15)` | `view('sistema.sucursales.index')` con `$sucursales` |
+| `create` | — | ninguna | — | `view('sistema.sucursales.create')` |
+| `store` | `Request` | `nombre` required\|string\|max:100 · `codigo_sucursal` required\|string\|max:10\|unique:sucursales,codigo_sucursal · `direccion` nullable\|string\|max:191 | `Sucursal::create` (con `strtoupper(trim())` sobre el código) | `redirect()->route('sistema.sucursales.index')->with('success')` |
+| `show` | `string $id` | ninguna | — | `redirect()` a `sistema.sucursales.edit` (no hay vista de detalle propia) |
+| `edit` | `Sucursal $sucursale` (route model binding) | ninguna | `Sucursal` | `view('sistema.sucursales.edit')` con `$sucursal` |
+| `update` | `Request`, `Sucursal $sucursale` | `nombre` required\|string\|max:100 · `codigo_sucursal` required\|string\|max:10 + `Rule::unique('sucursales','codigo_sucursal')->ignore($sucursal->id)` · `direccion` nullable\|string\|max:191 | `Sucursal::update` | `redirect()->route('sistema.sucursales.index')->with('success')` |
+| `destroy` | `Sucursal $sucursale` | **regla de negocio**: no elimina si `$sucursal->clientes()->exists()` o `$sucursal->creditos()->exists()` | `Sucursal::delete` | `redirect()->route('sistema.sucursales.index')->with('error', 'No se puede eliminar la sucursal porque tiene registros vinculados.')` o `->with('success')` |
+| `cambiar` | — | — | **no existe**; la ruta `sucursales.cambiar` fue eliminada ✅ | — |
+
+⚠ **Nota de esquema:** la columna `sucursales.direccion` (`varchar(191)`, nullable) fue agregada por la
+migración `2026_09_27_230928_add_direccion_to_sucursales_table`, y `codigo_sucursal` se ensanchó de
+`varchar(1)` a `varchar(10)` (`2026_09_27_231133_alter_codigo_sucursal_in_sucursales_table`) para admitir
+los códigos de hasta 10 caracteres que valida el ABM.
+
+### 2.6 `UbicacionController` (7 métodos — Zonas Geográficas ✅)
+
+Vista única consolidada: panel izquierdo (40%) con el catálogo de provincias y panel derecho (60%) con el
+data-grid de localidades filtrable.
+
+| Método | Parámetros | Validación | Modelos | Retorno |
+|---|---|---|---|---|
+| `index` | `Request` (`search`, `id_provincia`) | ninguna | `Localidad::with('provincia')` con `when(search → LIKE nombre/codigo_postal)` y `when(id_provincia)`, `orderBy('nombre')->paginate(20)->withQueryString()`; `Provincia::withCount('localidades')->orderBy('nombre')->get()` | `view('sistema.ubicaciones.index')` con `$localidades`, `$provincias` |
+| `storeProvincia` | `Request` | `nombre` required\|string\|max:100\|unique:provincias,nombre | `Provincia::create` | `back()->with('success')` |
+| `updateProvincia` | `Request`, `Provincia $provincia` | `nombre` required\|string\|max:100 + `Rule::unique('provincias','nombre')->ignore($provincia->id)` | `Provincia::update` | `back()->with('success')` |
+| `destroyProvincia` | `Provincia $provincia` | **regla de negocio**: no elimina si `$provincia->localidades()->exists()` | `Provincia::delete` | `back()->with('error', 'No se puede eliminar la provincia porque tiene localidades asociadas.')` o `->with('success')` |
+| `storeLocalidad` | `Request` | `id_provincia` required\|exists:provincias,id · `nombre` required\|string\|max:191 · `codigo_postal` nullable\|string\|max:10 | `Localidad::create` (normaliza `nombre` con `ucwords(strtolower(trim()))`) | `back()->with('success')` |
+| `updateLocalidad` | `Request`, `Localidad $localidad` | idéntica a `storeLocalidad` | `Localidad::update` | `back()->with('success')` |
+| `destroyLocalidad` | `Localidad $localidad` | **regla de negocio**: no elimina si tiene clientes en `id_localidad`, `id_localidad_familiar` o `id_localidad_trabajo` | `Localidad::delete` | `back()->with('error', 'No se puede eliminar la localidad porque tiene clientes asociados.')` o `->with('success')` |
+
+⚠ **Rutas eliminadas:** `GET /sistema/provincias` (`provincias.index`) y `GET /sistema/localidades`
+(`localidades.index`) — reemplazadas por la vista consolidada `GET /sistema/ubicaciones`.
+
+### 2.7 `AuditoriaController` (2 métodos)
+
+| Método | Parámetros | Validación | Modelos | Retorno |
+|---|---|---|---|---|
+| `index` | `Request` (`auditable_type`, `event`, `record_id`, `desde`, `hasta`) | `auditable_type` in:... · `event` in:created,updated,deleted · `desde`/`hasta` date | `OwenIt\Auditing\Models\Audit` (with `user`), paginado (20) | `view('sistema.auditoria.index')` con `$audits`, `$auditables`, `$events` |
+| `rollback` | `Audit $audit` | valida `$audit->event === 'updated'` y que `$audit->auditable` exista | Modelo auditable (`Cliente`, `Credito`, `Cuota`, `Presentacion`) | `$auditable->transitionTo($audit, true)` + `save()` → `back()->with('success', ...)` |
 
 ## 3. Flujos Operativos Críticos
 
@@ -170,23 +239,28 @@ Modelo único: `EstadoBanco` (`$table = 'estados_banco'`). Vistas referenciadas:
 **Alta (`POST /creditos` → `CreditoController@store`)** — secuencia real:
 
 1. `validate()`: cliente/sucursal/presentación existentes, `tipo_credito ∈ {C,D,R}`, `importe_original ≥ 1`,
-   `cantidad_cuotas ≥ 1`. **No** se comparan contra el legajo: no se valida `importe_original ≤ cliente.limite`,
-   ni `cantidad_cuotas ≤ cliente.max_cuotas` (1..4), ni el estado `suspendido`, ni la presentación abierta.
-2. `DB::transaction`: correlativo `SucursalIndice` (por `id_sucursal` + `tipo_credito`)
+   `cantidad_cuotas ≥ 1`.
+2. **Validaciones de negocio preventivas (BD):**
+   - Presentación activa: se busca `Presentacion::whereNull('fecha_fin')->find(id_presentacion)`; si ya está cerrada se aborta con error de validación.
+   - Cliente habilitado: se verifica `!$cliente->suspendido`; si está suspendido se retorna el mensaje *"El cliente se encuentra suspendido para operar créditos"*.
+   - Límite de cuotas: se valida `cantidad_cuotas <= cliente.max_cuotas`.
+   - Límite crediticio: se acumula la deuda exigible (`sum(saldo_actual)` de cuotas impagas en créditos abiertos) y se valida que `(deudaAcumulada + importe_original) <= cliente.limite_efectivo`.
+3. `DB::transaction`: correlativo `SucursalIndice` (por `id_sucursal` + `tipo_credito`)
    → `increment('ultimo_indice')` → código `codigo_sucursal . tipo . indice` (ej. `IC125`).
-3. Tasa: `Presentacion::findOrFail($request->id_presentacion)->tasa_cuotas` (interés directo simple) ⚠ *columna inexistente ⇒ interés 0 (§4.2).*
+4. Tasa: `Presentacion::whereNull('fecha_fin')->find(...)->interes_credito` (interés directo simple) ✅ *(corregido: la columna real en `presentaciones` es `interes_credito`, no la inexistente `tasa_cuotas`)*.
    `valor_cuota_ref = round(importe_original × (1 + tasa/100) / cantidad_cuotas, 2)`.
-4. `Credito::create` + una `Cuota` por mes (`num_cuota` 1..N) con `valor_base = saldo_actual = valor_cuota_ref`,
+5. `Credito::create` + una `Cuota` por mes (`num_cuota` 1..N) con `valor_base = saldo_actual = valor_cuota_ref`,
    `intereses = entrego = 0`, `estado_bancario = null`, `fecha_ultimo_envio = null`.
-5. `redirect()->route('creditos.index')->with('success')`.
+6. `redirect()->route('creditos.index')->with('success')`.
 
 ⚠ **Huecos verificados del alta:** no se guarda fecha de vencimiento por cuota (la exigibilidad futura se deriva
 del lote: `presentaciones.numero + cuotas.num_cuota`, ver §3.2/§3.3 — el lote origen ya vive en la FK
 `creditos.id_presentacion`, **no** en una columna `presentacion_origen`); la cuota de referencia no contempla mora
-ni redondeo de la última cuota (todas iguales ⇒ descuadre de centavos); no se valida `cliente.limite`,
-`cliente.max_cuotas` ni `suspendido`.
-✅ **Corregido:** `id_autorizado` ya no recibe un `clientes.id` sino el ID validado de `cliente_autorizados`
-(§2.1, §3.1).
+ni redondeo de la última cuota (todas iguales ⇒ descuadre de centavos).
+✅ **Corregido en esta revisión:**
+- `id_autorizado` recibe el ID validado de `cliente_autorizados` (§2.1, §3.1).
+- Se validan `cliente.limite_efectivo`, `cliente.max_cuotas`, `cliente.suspendido` y presentación activa (`fecha_fin IS NULL`).
+- Tasa de financiación migrada a `presentaciones.interes_credito`.
 
 **Vista previa del alta (`GET /creditos/nuevo?id_cliente=&id_autorizado=` → `create`)**:
 `$presentacionActual = session('presentacion_actual') ?? DB::table('presentaciones')->max('id') ?? 102` ⚠ — nadie
@@ -196,27 +270,51 @@ siempre cae al **max(id)** aunque el resto del sistema numera por `presentacione
 (`presentacionCuota = credito.presentacion.numero + cuota.num_cuota`), descartando las que ya no deben nada
 (`saldoPendiente = max(0, valor_base − entrego)`), y calcula `limiteDisponible = max(0, (cliente.limite ?? 800000) − Σ importe_original de créditos abiertos)`.
 
-**Liquidación / cobro (lo único implementado: `POST /creditos/{cuota}/pagar`)**
+**Liquidación / cobro (`POST /creditos/{cuota}/pagar`)**
 (`CreditoController@pagarCuota`):
 
 ```php
-$cuota->update([
-    'entrego'      => $request->monto,                                   // ⚠ sin validar (negativos/0 permitidos)
-    'fecha_cobro'  => now(),
-    'medio_pago'   => $request->medio,
-    'saldo_actual' => ($cuota->valor_base + $cuota->intereses) - $request->monto,  // ⚠ puede quedar negativo
+$validated = $request->validate([
+    'monto' => ['required', 'numeric', 'min:0.01', 'max:' . $cuota->saldo_actual],
+    'medio' => ['required', 'string', 'max:50'],
 ]);
-return back()->with('success', 'Pago registrado correctamente');  // ✅ clave esperada por <x-notification-modal />
+
+DB::transaction(function () use ($cuota, $monto, $validated) {
+    $cuota->update([
+        'entrego'      => (float) $cuota->entrego + $monto,
+        'fecha_cobro'  => now(),
+        'medio_pago'   => $validated['medio'],
+        'saldo_actual' => max(0, (float) $cuota->saldo_actual - $monto),
+    ]);
+
+    $credito = $cuota->credito;
+    if ($credito && ! $credito->cuotas()->where('saldo_actual', '>', 0)->exists()) {
+        $credito->update(['fecha_cancelacion' => now()]);
+    }
+});
+
+return back()->with('success', 'Pago registrado correctamente');
 ```
 
-Reglas de negocio ausentes: pago parcial acumulativo (sobrescribe `entrego`), imputación a intereses antes que a
-capital, cierre del crédito (`creditos.fecha_cancelacion`) al saldar la última cuota, y registro de movimiento
-(`referencia_pago` nunca se escribe). ✅ El flash ya usa la clave `success`, por lo que el toast global
-(`<x-notification-modal />`, ver `ui-guidelines.md` §9) muestra la confirmación de pago en pantalla.
+✅ **Corregido en esta revisión:** validación de request (`monto` mínimo 0.01 y tope en `saldo_actual`, evitando negativos/cero y sobrepagos), pago acumulativo (`entrego += monto`), saldo no negativo, cierre automático del crédito (`fecha_cancelacion = now()`) al cancelarse la totalidad de sus cuotas, y flash `success` para `<x-notification-modal />`.
 
-**Cancelación:** ningún controlador escribe `fecha_cancelacion`; sólo se lee para separar abiertos/cancelados
-(`creditos.index`, `clientes.estadoCuenta`). Los totales de estado de cuenta se calculan **en memoria**
-(`$creditosAbiertos->flatMap->cuotas`), no en SQL.
+**Cancelación:** `CreditoController@pagarCuota` ahora escribe automáticamente `fecha_cancelacion = now()` cuando un crédito salda su última cuota impaga ✅. En reportes y consultas se lee para separar abiertos/cancelados (`creditos.index`, `clientes.estadoCuenta`). Los totales de estado de cuenta se calculan **en memoria** (`$creditosAbiertos->flatMap->cuotas`), no en SQL.
+
+**Transacciones compensatorias (anulación y reversión):**
+1. **Anulación de Pago (`POST /creditos/cuotas/{cuota}/anular-pago` → `CreditoController@anularPago`):**
+   - Requiere un motivo formal (`min:5`, `max:255`).
+   - Verifica que la cuota tenga `entrego > 0` o `fecha_cobro !== null`.
+   - Dentro de `DB::transaction`:
+     - Repone el monto cobrado al saldo exigible: `saldo_actual += entrego`, resetea `entrego = 0`, `fecha_cobro = null`, `medio_pago = null`.
+     - Si el crédito padre estaba cancelado (`fecha_cancelacion !== null`), lo reabre seteando `fecha_cancelacion = null`.
+     - Registra una novedad crítica en `cliente_novedades` del titular (`tipo = 0`) detallando número de cuota, crédito, monto revertido, operador responsable y motivo.
+2. **Anulación de Crédito (`DELETE /creditos/{credito}/anular` → `CreditoController@anularCredito`):**
+   - Requiere motivo formal (`min:5`, `max:255`).
+   - Valida estrictamente que **ninguna** cuota del crédito tenga pagos registrados (`entrego > 0`); de lo contrario rechaza la operación exigiendo revertir los pagos primero.
+   - En `DB::transaction`: asienta novedad en `cliente_novedades` del titular y ejecuta `$credito->delete()`, eliminando en cascada el plan de cuotas en base de datos.
+3. **Auditoría y Rollback de Estado (`AuditoriaController@rollback`):**
+   - Integrado con `owen-it/laravel-auditing` en los modelos clave (`Cliente`, `Credito`, `Cuota`, `Presentacion`).
+   - Ante eventos `updated`, permite al operador revertir el estado del registro a los valores previos auditados mediante `$audit->auditable->transitionTo($audit, true)` persistido con `$auditable->save()`.
 
 ### 3.2 Generación de lote bancario (P10→P0, tope y ranking de cuotas)
 
@@ -231,7 +329,7 @@ ruta de "lote"/"rendición", no hay `routes/api.php` y no hay exportador. El bot
 |---|---|
 | `Presentacion` = **lote** | `numero` ("Número de lote o presentación, ej. 500, 510"), `fecha_inicio`, `fecha_fin`, **`interes_credito`**, **`interes_mora`** (columnas reales, ya presentes en `$fillable` ✅; `tasa_cuotas`/`tasa_mora` no existen como columnas). Lote abierto ⇔ `fecha_fin IS NULL`. |
 | Lote de una cuota | `Cuota::getLoteCalculadoAttribute()` ⇒ `credito.presentacion.numero + cuota.num_cuota` (⭐ **definición canónica**, usada por `CreditoController@create`). `Cuota::getLotePresentacionAttribute()` ⇒ ✅ **DEPRECADO**: ahora delega en `lote_calculado` (antes sumaba el objeto relación a un entero ⇒ error fatal) y sólo se conserva por compatibilidad. |
-| Código de gestión | `Cuota::getCodigoGestionAttribute()` ⇒ `credito.full_identificador . num_cuota` (ej. `C00001234T1`); `Credito::getFullIdentificadorAttribute()` ⇒ `tipo + pad(credito,8,'0') + sucursal` (ej. `R00001234T`). Se usan como clave de envío/conciliación. |
+| Código de gestión | `Cuota::getCodigoGestionAttribute()` ⇒ `credito.full_identificador . num_cuota` (ej. `C0001234TW1`); `Credito::getFullIdentificadorAttribute()` ⇒ `tipo + pad(credito,7,'0') + sucursal` (ej. `C0001234TW`, `C0001234IN`, `R0001234TW`, `C0001234US`). Se usan como clave de envío/conciliación. |
 | Campos bancarios de la cuota | `banco_envio`, `fecha_ultimo_envio`, `estado_bancario` (comentado "ACE, R10, R08, etc."), `obs_devolucion`, `referencia_pago`. Ninguno se escribe hoy salvo `fecha_ultimo_envio = null` / `estado_bancario = null` en el alta. |
 | Catálogo de estados | Tabla/modelo `EstadoBanco` (`codigo`, `descripcion`), consumida en `clientes.index`; su CRUD (`EstadoBancoController`) está huérfano. No hay FK ni validación `in:` de los códigos usados en `cuotas.estado_bancario`. |
 
@@ -325,23 +423,25 @@ fuerza a `null` y el filtro de `clientes.index` ya sabe leer.
 - **`shadow-2xs` → `shadow-sm`** en `clientes/show.blade.php:226` y `creditos/create.blade.php:214` (Tailwind v3).
 - **Definición de lote unificada** (`Cuota::lote_calculado`; `lote_presentacion` deprecado) y documentada en
   `models.md` §2.1.1/§3.4.
+- **Alta de crédito con controles de límite y validaciones de negocio** (§2.1, §3.1): valida presentación vigente/abierta
+  (`fecha_fin IS NULL`), cliente titular no suspendido (`!$cliente->suspendido`), límite de cuotas
+  (`cantidad_cuotas <= cliente.max_cuotas`) y límite crediticio disponible (`deudaAcumulada + importe_original <= cliente.limite_efectivo`).
+- **Cobro de cuotas consistente y auto-cierre de crédito** (`pagarCuota`, §2.1, §3.1): validación explícita de `monto`
+  (`min:0.01`, `max:saldo_actual`) y `medio` (`string|max:50`), entrega acumulativa (`entrego += monto`), saldo neto
+  con piso en cero (`saldo_actual = max(0, saldo_actual - monto)`) y cierre atómico del crédito (`fecha_cancelacion = now()`)
+  cuando no restan cuotas con saldo exigible.
+- **Tasa de financiación real del lote** (`store`, §2.1, §3.1): migrada de `presentacion->tasa_cuotas` (columna inexistente
+  que resultaba en 0% de interés) a la columna real `presentaciones.interes_credito`.
 
 ### 4.2 Riesgos pendientes priorizados
 
-1. **Alta de crédito sin controles de límite**: no valida `cliente.limite`, `cliente.max_cuotas` (1..4),
-   `suspendido`, ni que la presentación esté abierta (`fecha_fin IS NULL`).
-2. **`pagarCuota` sin validación**: `monto`/`medio` sin reglas ⇒ admite negativos/0 y deja `saldo_actual` negativo;
-   no cierra el crédito (`fecha_cancelacion`) al saldar la última cuota ni escribe `referencia_pago`
-   (pago parcial acumulativo e imputación a intereses antes que a capital, ausentes).
-3. **Interés de financiación en 0**: `store` lee `$presentacion->tasa_cuotas` (columna inexistente ⇒ `?? 0`);
-   debe migrarse a `presentaciones.interes_credito`.
-4. **Sin vencimiento explícito por cuota**: la exigibilidad depende sólo del lote
+1. **Sin vencimiento explícito por cuota**: la exigibilidad depende sólo del lote
    (`presentaciones.numero + cuotas.num_cuota`).
-5. **Autorización**: sólo `auth`; no hay permisos/roles verificados en backend (incluido el cierre de lote, que la
+2. **Autorización**: sólo `auth`; no hay permisos/roles verificados en backend (incluido el cierre de lote, que la
    vista condiciona por permiso pero el servidor no valida).
-6. **Código huérfano**: `EstadoBancoController` sin rutas (con `redirect()->route('estados-banco.index')` inexistente),
+3. **Código huérfano**: `EstadoBancoController` sin rutas (con `redirect()->route('estados-banco.index')` inexistente),
    `DevolucionBancaria` vacío, `resources/views/sistema/presentaciones/cambiar.blade.php` vacío, botón EXPORTAR EXCEL
    decorativo, `SucursalController` con stubs de resource y closure `/login` muerto en `web.php`.
 
 **Sin implementar (y sin andamiaje):** generación de lote bancario P10→P0, tope por presentación, ranking de cuotas
-por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, suspensión preventiva automática y `routes/api.php`.
+por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación estricta de cobranza a intereses antes que capital, suspensión preventiva automática y `routes/api.php`.

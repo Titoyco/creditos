@@ -11,8 +11,8 @@ class UbicacionSeeder extends Seeder
     public function run(): void
     {
         // Provincias
-        $chubut = Provincia::create(['nombre' => 'Chubut']);
-        $tdf = Provincia::create(['nombre' => 'Tierra del Fuego']);
+        $chubut = Provincia::firstOrCreate(['nombre' => 'Chubut']);
+        $tdf = Provincia::firstOrCreate(['nombre' => 'Tierra del Fuego']);
 
         // Localidades Chubut
         $localidadesChubut = [
@@ -23,11 +23,10 @@ class UbicacionSeeder extends Seeder
         ];
 
         foreach ($localidadesChubut as $loc) {
-            Localidad::create([
-                'id_provincia' => $chubut->id,
-                'nombre' => $loc['nombre'],
-                'codigo_postal' => $loc['codigo_postal']
-            ]);
+            Localidad::firstOrCreate(
+                ['id_provincia' => $chubut->id, 'nombre' => $loc['nombre']],
+                ['codigo_postal' => $loc['codigo_postal']]
+            );
         }
 
         // Localidades TDF
@@ -37,11 +36,10 @@ class UbicacionSeeder extends Seeder
         ];
 
         foreach ($localidadesTDF as $loc) {
-            Localidad::create([
-                'id_provincia' => $tdf->id,
-                'nombre' => $loc['nombre'],
-                'codigo_postal' => $loc['codigo_postal']
-            ]);
+            Localidad::firstOrCreate(
+                ['id_provincia' => $tdf->id, 'nombre' => $loc['nombre']],
+                ['codigo_postal' => $loc['codigo_postal']]
+            );
         }
     }
 }

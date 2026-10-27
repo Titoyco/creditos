@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             InitialSetupSeeder::class,
             UbicacionSeeder::class,
             PresentacionSeeder::class,
+            CatalogoStockSeeder::class,
             TestDataSeeder::class,
         ]);
     }

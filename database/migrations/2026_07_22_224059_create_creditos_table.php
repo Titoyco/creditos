@@ -14,7 +14,7 @@ return new class extends Migration
             // Relaciones con claves foráneas
             $table->foreignId('id_cliente')->constrained('clientes')->onDelete('cascade');
             $table->foreignId('id_sucursal')->constrained('sucursales');
-            $table->foreignId('id_autorizado')->constrained('cliente_autorizados')->onDelete('cascade');
+            $table->foreignId('id_autorizado')->nullable()->constrained('cliente_autorizados')->onDelete('cascade');
             $table->foreignId('id_presentacion')->constrained('presentaciones');
             
             // Datos Identificatorios

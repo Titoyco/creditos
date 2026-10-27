@@ -4,62 +4,110 @@ namespace App\Http\Controllers;
 
 use App\Models\Presentacion;
 use App\Models\Credito;
+use App\Models\Sucursal;
+use App\Models\Provincia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
-use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Route;
-
-
-
 
 class PresentacionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // traemos el usuario autenticado
-        $usuarios = User::with('sucursal')->get();
-        // Traemos las presentaciones de la más nueva a la más vieja
-        $presentaciones = Presentacion::orderBy('numero', 'desc')->paginate(15);
-        $actual = Presentacion::orderBy('numero', 'desc')->first();
+        $user = Auth::user();
 
-        return view('sistema.presentaciones.index', compact('presentaciones', 'actual', 'usuarios'));
+        // Determinar la provincia a visualizar y gestionar
+        if ($user->is_admin) {
+            // El administrador puede alternar entre TDF (2) y Chubut (1). Por defecto toma el request o TDF (2)
+            $idProvincia = (int) $request->input('provincia_id', 2);
+            if (!in_array($idProvincia, [1, 2])) {
+                $idProvincia = 2;
+            }
+        } else {
+            // Empleado / Cajero: bloqueado exclusivamente a la provincia de su sucursal
+            $idProvincia = $user->provinciaId();
+            if ($request->has('provincia_id') && (int) $request->input('provincia_id') !== $idProvincia) {
+                abort(403, 'No tienes autorización para gestionar las presentaciones de otra provincia.');
+            }
+        }
+
+        // Listado de presentaciones para la provincia seleccionada
+        $presentaciones = Presentacion::where('id_provincia', $idProvincia)
+            ->with('provincia')
+            ->orderBy('numero', 'desc')
+            ->paginate(15)
+            ->appends(['provincia_id' => $idProvincia]);
+
+        // Presentación activa en la provincia seleccionada
+        $actual = Presentacion::where('id_provincia', $idProvincia)
+            ->whereNull('fecha_fin')
+            ->orderBy('numero', 'desc')
+            ->first();
+
+        // Estados globales de ambas provincias para el dashboard de control
+        $actualTdf = Presentacion::activaParaProvincia(2);
+        $actualChubut = Presentacion::activaParaProvincia(1);
+
+        $provincias = Provincia::whereIn('id', [1, 2])->get();
+        $sucursalesProvincia = Sucursal::where('id_provincia', $idProvincia)->get();
+
+        return view('sistema.presentaciones.index', compact(
+            'presentaciones',
+            'actual',
+            'actualTdf',
+            'actualChubut',
+            'idProvincia',
+            'provincias',
+            'sucursalesProvincia'
+        ));
     }
 
     public function cambiar(Request $request)
     {
+        $user = Auth::user();
+
         $request->validate([
+            'id_provincia'    => 'required|in:1,2',
             'interes_credito' => 'required|numeric|min:0',
             'interes_mora'    => 'required|numeric|min:0',
         ]);
 
-        $presentacionActual = Presentacion::whereNull('fecha_fin')->orderBy('numero', 'desc')->first();
+        $idProvincia = (int) $request->id_provincia;
 
-        if (!$presentacionActual) {
-            return back()->with('error', 'No hay una presentación abierta actualmente.');
+        // Control de permisos por provincia
+        if (!$user->is_admin && $user->provinciaId() !== $idProvincia) {
+            return back()->with('error', 'Acceso denegado: solo puedes gestionar las presentaciones de la provincia asignada a tu sucursal.');
         }
 
-        // 1. Validar regla de los 7 días (días transcurridos desde que se abrió esta presentación)
+        $presentacionActual = Presentacion::where('id_provincia', $idProvincia)
+            ->whereNull('fecha_fin')
+            ->orderBy('numero', 'desc')
+            ->first();
+
+        if (!$presentacionActual) {
+            return back()->with('error', 'No hay una presentación abierta actualmente para esta provincia.');
+        }
+
+        // 1. Validar regla de los 7 días
         $diasTranscurridos = Carbon::parse($presentacionActual->fecha_inicio)->diffInDays(now());
         if ($diasTranscurridos < 7) {
-            return back()->with('error', "No se puede cerrar. Han pasado solo {$diasTranscurridos} días desde la última apertura. (Mínimo 7 días obligatorios).");
+            return back()->with('error', "No se puede cerrar. Han pasado solo {$diasTranscurridos} días desde la última apertura en esta provincia. (Mínimo 7 días obligatorios).");
         }
 
         try {
             DB::beginTransaction();
 
             $ahora = now();
-            // Tasa de mora del lote que se está cerrando (respaldo: la tasa enviada por el formulario).
-            // Cast explícito a float para evitar NULL dentro del DB::raw (generaba SQL inválido).
             $tasaMora = (float) ($presentacionActual->interes_mora ?? $request->interes_mora);
 
-            // 2. Cerrar la presentación actual
+            // 2. Cerrar la presentación actual de la provincia
             $presentacionActual->update(['fecha_fin' => $ahora]);
 
-            // 3. Crear la nueva presentación
+            // 3. Crear la nueva presentación para esta provincia
             $nuevaPresentacion = Presentacion::create([
+                'id_provincia'    => $idProvincia,
                 'numero'          => $presentacionActual->numero + 1,
                 'fecha_inicio'    => $ahora,
                 'fecha_fin'       => null,
@@ -67,34 +115,42 @@ class PresentacionController extends Controller
                 'interes_mora'    => $request->interes_mora,
             ]);
 
-            // 4. Actualizar las cuotas IMPAGAS (saldo_actual > 0)
-            // Se calcula el interés y se suma al campo intereses y al saldo_actual.
-            // Ecuación: saldo_actual = saldo_actual + (saldo_actual * interes_mora)
-            DB::table('cuotas')
-                ->where('saldo_actual', '>', 0)
-                ->update([
-                    'intereses'    => DB::raw("intereses + (saldo_actual * {$tasaMora})"),
-                    'saldo_actual' => DB::raw("saldo_actual + (saldo_actual * {$tasaMora})")
-                ]);
-
-            // 5. Volver exigibles las cuotas del nuevo ciclo (saldo_actual = valor_base)
-            // Lógica: (presentaciones.numero del lote ORIGEN del crédito) + cuota.num_cuota == nuevaPresentacion.numero
-            // ⚠️ El lote origen es la FK relacional 'creditos.id_presentacion'; NO existe columna
-            //    física 'creditos.presentacion_origen'. Por eso se resuelve con INNER JOIN a 'presentaciones'.
             $numeroNuevo = $nuevaPresentacion->numero;
 
+            // Obtener IDs de sucursales de esta provincia
+            $sucursalesIds = Sucursal::where('id_provincia', $idProvincia)->pluck('id')->toArray();
+            if (empty($sucursalesIds)) {
+                $sucursalesIds = ($idProvincia === 2) ? [1, 2] : [3, 4];
+            }
+
+            // 4. Actualizar cuotas IMPAGAS (saldo_actual > 0) ÚNICAMENTE de créditos de esta provincia
+            DB::table('cuotas')
+                ->join('creditos', 'cuotas.id_credito', '=', 'creditos.id')
+                ->whereIn('creditos.id_sucursal', $sucursalesIds)
+                ->where('cuotas.saldo_actual', '>', 0)
+                ->update([
+                    'cuotas.intereses'    => DB::raw("cuotas.intereses + (cuotas.saldo_actual * {$tasaMora})"),
+                    'cuotas.saldo_actual' => DB::raw("cuotas.saldo_actual + (cuotas.saldo_actual * {$tasaMora})")
+                ]);
+
+            // 5. Volver exigibles las cuotas del nuevo ciclo en créditos de esta provincia
             DB::table('cuotas')
                 ->join('creditos', 'cuotas.id_credito', '=', 'creditos.id')
                 ->join('presentaciones', 'creditos.id_presentacion', '=', 'presentaciones.id')
+                ->whereIn('creditos.id_sucursal', $sucursalesIds)
+                ->where('presentaciones.id_provincia', $idProvincia)
                 ->whereRaw('(presentaciones.numero + cuotas.num_cuota) = ?', [$numeroNuevo])
-                ->where('cuotas.saldo_actual', '=', 0) // Que no haya sido adelantada/exigida
+                ->where('cuotas.saldo_actual', '=', 0)
                 ->update([
                     'cuotas.saldo_actual' => DB::raw('cuotas.valor_base')
                 ]);
 
             DB::commit();
 
-            return redirect()->route('sistema.presentaciones.index')->with('success', 'Presentación #'.$numeroNuevo.' abierta. Intereses y saldos actualizados correctamente.');
+            $nombreProv = ($idProvincia === 2) ? 'Tierra del Fuego' : 'Chubut';
+
+            return redirect()->route('sistema.presentaciones.index', ['provincia_id' => $idProvincia])
+                             ->with('success', "Presentación #{$numeroNuevo} para {$nombreProv} abierta con éxito. Intereses y saldos actualizados.");
 
         } catch (\Exception $e) {
             DB::rollBack();

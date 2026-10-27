@@ -15,6 +15,8 @@ Cambios de coherencia aplicados (código + especificaciones), ya verificados:
 | FK de firma autorizada | `creditos.id_autorizado` → **`cliente_autorizados.id`**; `NULL` = crédito del titular. | §2.1, §2.1.1, §2.3 |
 | Consulta de cierre de lote | INNER JOIN `creditos.id_presentacion` → `presentaciones` (nunca `creditos.presentacion_origen`). | `routes-and-controllers.md` §3.3 |
 | Tasas de presentación | Columnas reales `interes_credito` / `interes_mora` (en `$fillable`); `tasa_cuotas` / `tasa_mora` **no existen** como columnas. | `routes-and-controllers.md` §3.3 |
+| Reglas de negocio en alta | Validación en BD de presentación abierta (`fecha_fin IS NULL`), cliente no suspendido, tope `cantidad_cuotas <= cliente.max_cuotas` y disponible `(deuda + importe) <= cliente.limite_efectivo`. Tasa tomada de `interes_credito`. | `routes-and-controllers.md` §2.1, §3.1 |
+| Cobranza y cancelación | `pagarCuota` valida `monto` (min 0.01 y max saldo) y `medio`; actualiza `entrego += monto`, `saldo_actual = max(0, saldo_actual - monto)` y asigna `creditos.fecha_cancelacion = now()` al quedar saldo 0. | `routes-and-controllers.md` §2.1, §3.1 |
 
 ---
 
@@ -166,9 +168,8 @@ protected $fillable = [
 - **`presentacion()`**: `BelongsTo` con `Presentacion::class` (FK: `id_presentacion`). **Lote de ORIGEN del crédito** — fuente de verdad del lote inicial (§2.1.1); sustituye a la inexistente columna `presentacion_origen`.
 - **`cuotas()`**: `HasMany` con `Cuota::class` (FK en cuotas: `id_credito`). Cuotas que componen el crédito.
 
-### 2.4 Accesores y Métodos de Conveniencia
-
-- **`getFullIdentificadorAttribute()`**: Genera el identificador único compuesto del crédito bajo el formato `{tipo_credito}{numero_a_8_digitos}{codigo_sucursal}` (Ej: `R00001234T`).
+- **`getFullIdentificadorAttribute()`**: Genera el identificador único compuesto del crédito bajo el formato oficial `{tipo_credito}{numero_a_7_digitos}{codigo_sucursal}` (Ej: `C0001234TW`, `C0001234IN`, `R0001234TW`, `D0001234TW`, `C0001234US`).
+- **`getCuotaProgresoAttribute()`**: Calcula la cuota en curso ("cuota que va") respecto al total pactado bajo el formato `"X / Y"` (Ej: `"2 / 4"`, `"4 / 4"`), según la diferencia entre la presentación activa de la provincia y la presentación de origen del crédito: `min(cantidad_cuotas, max(0, pres_activa - pres_origen))`.
 
 ---
 
@@ -234,7 +235,7 @@ protected $fillable = [
   *Modelo* a un entero (error fatal de PHP). Se conserva únicamente como alias que **delega en `lote_calculado`**
   para no romper vistas antiguas. **Todo código nuevo debe usar `lote_calculado`**; no usar `lote_presentacion`
   ni introducir columnas del tipo `presentacion_origen` en consultas.
-- **`getCodigoGestionAttribute()`**: Genera el código único de seguimiento concatenando el identificador compuesto del crédito (`full_identificador`) y el número de cuota (Ej: `R00001234T1`).
+- **`getCodigoGestionAttribute()`**: Genera el código único de seguimiento concatenando el identificador compuesto del crédito (`full_identificador`) y el número de cuota (Ej: `R0001234TW1` o `C0001234TW1`).
 
 ---
 
@@ -272,6 +273,14 @@ protected $fillable = [
 
 ## 5. Notas de integridad referencial (armonizadas con `routes-and-controllers.md`)
 
+0. **`clientes.tipo_haber` es `BIGINT NOT NULL DEFAULT 1`.** Es la única columna `NOT NULL` del legajo que
+   **no** tiene un campo `required` en el formulario (queda como input numérico opcional). Por eso el alta
+   se rompe con `SQLSTATE[23000] … Column 'tipo_haber' cannot be null` si el operador lo deja vacío:
+   `nullable` deja pasar el vacío, se persiste `NULL` explícito y eso **anula el default del esquema**.
+   Regla vigente: `ClienteController::normalizarDatosCliente()` aplica `TIPO_HABER_POR_DEFECTO = 1` cuando el
+   campo viene vacío (alta y edición), y `clientes/form.blade.php` precarga `1` + `min="1"` para que el
+   operador ni siquiera pueda enviarlo vacío. Reglas Deploy: cualquier columna `NOT NULL` sin default
+   utilizable debe tener default en la capa de aplicación, nunca confiar en que el `INSERT` omita la clave.
 1. `creditos.id_autorizado` → **`cliente_autorizados.id`** (⚠ **no** `clientes.id`). `NULL` = crédito del titular.
 2. `creditos.id_presentacion` → `presentaciones.id`: **lote de origen**; no existe `creditos.presentacion_origen`.
 3. Lote exigible de una cuota = `presentaciones.numero + cuotas.num_cuota` ⇒ `Cuota::lote_calculado` (accesor oficial).
@@ -279,4 +288,33 @@ protected $fillable = [
    `tasa_cuotas` / `tasa_mora` **no existen** como columnas de la tabla.
 5. `Cliente::autorizados()` expone `pivot->id` (= `cliente_autorizados.id`), que es el valor que debe viajar en
    `id_autorizado` al dar de alta un crédito adicional (`clientes.index` → `creditos.create`).
+6. El límite crediticio disponible de un cliente se calcula contra sus cuotas con `saldo_actual > 0` pertenecientes
+   a créditos abiertos (`fecha_cancelacion IS NULL`). La evaluación toma `cliente.limite_efectivo` (que prioriza `limite_aut`).
+7. La cancelación de un crédito (`fecha_cancelacion = now()`) se ejecuta automáticamente en la cobranza (`pagarCuota`)
+   en el instante en que no restan cuotas con `saldo_actual > 0`.
+8. **Auditoría y reversiones compensatorias:**
+   - Los modelos `Cliente`, `Credito`, `Cuota` y `Presentacion` implementan la interfaz `OwenIt\Auditing\Contracts\Auditable` con el trait `OwenIt\Auditing\Auditable`.
+   - La anulación de cobros (`anularPago`) restituye el capital adeudado en `cuotas.saldo_actual = saldo_actual + entrego`, borra `entrego`, `fecha_cobro` y `medio_pago`, y reactiva el crédito fijando `fecha_cancelacion = NULL`.
+9. **Catálogos del sistema (`sistema.sucursales.*` / `sistema.ubicaciones.*`):**
+   - `sucursales` = `id`, `nombre` (varchar 191), `codigo_sucursal` (**varchar 10, UNIQUE** — ensanchado desde
+     `varchar(1)` por `2026_09_27_231133_alter_codigo_sucursal_in_sucursales_table`) y **`direccion`**
+     (varchar 191, nullable — agregada por `2026_09_27_230928_add_direccion_to_sucursales_table`).
+     `Sucursal::$fillable = ['nombre', 'codigo_sucursal', 'direccion']`.
+   - Relaciones nuevas en `Sucursal`: `indices()`, **`clientes()`** (FK `clientes.id_sucursal`) y
+     **`creditos()`** (FK `creditos.id_sucursal`), usadas por `SucursalController@destroy` para bloquear el
+     borrado de sucursales con registros vinculados.
+   - `Localidad` suma las relaciones inversas **`clientes()`** (FK `clientes.id_localidad`),
+     **`clientesFamiliar()`** (FK `clientes.id_localidad_familiar`) y **`clientesTrabajo()`**
+     (FK `clientes.id_localidad_trabajo`), que `UbicacionController@destroyLocalidad` evalúa en conjunto
+     antes de eliminar.
+   - `Sucursal`, `Localidad` y `Provincia` implementan `OwenIt\Auditing\Contracts\Auditable` (con el trait
+     `Auditable`), por lo que los ABM quedan trazado en la tabla `audits` y son reversibles desde
+     `sistema.auditoria.rollback`.
+   - `Provincia::$fillable = ['nombre']` con restricción **UNIQUE** en BD, replicada en el ABM como
+     `unique:provincias,nombre` (+ `Rule::unique(...)->ignore($id)` en la edición).
+   - `Localidad::$fillable = ['id_provincia', 'nombre', 'codigo_postal']`; `codigo_postal` es **nullable**
+     y se normaliza el `nombre` con `ucwords(strtolower(trim()))` en altas y ediciones.
+
+   - La anulación de créditos (`anularCredito`) exige que el crédito no posea cuotas con amortización (`entrego == 0`); tras asentar auditoría y novedad en legajo, destruye el crédito y sus cuotas en cascada.
+
 

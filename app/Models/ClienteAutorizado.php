@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ClienteAutorizado extends Model
 {
     protected $table = 'cliente_autorizados';
+    protected $guarded = [];
 
     /**
      * Cliente Titular al que pertenece la autorización.

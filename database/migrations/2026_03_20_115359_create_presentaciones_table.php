@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('presentaciones', function (Blueprint $table) {
             $table->id();
-            $table->integer('numero')->unique(); // El ID del lote (Ej: 500, 510, 600)
+            $table->integer('numero'); // El ID del lote (Ej: 500, 510, 600)
             $table->date('fecha_inicio');
             $table->date('fecha_fin')->nullable();
             

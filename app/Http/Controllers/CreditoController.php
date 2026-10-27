@@ -12,6 +12,7 @@ use App\Models\Cliente;
 use App\Models\ClienteAutorizado;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CreditoController extends Controller
 {
@@ -19,24 +20,71 @@ class CreditoController extends Controller
     {
         $query = Credito::select('creditos.*')
             ->join('clientes', 'clientes.id', '=', 'creditos.id_cliente')
-            ->with(['cliente', 'sucursal', 'autorizado.cliente'])
+            ->with(['cliente.sucursal', 'sucursal', 'autorizado.cliente', 'presentacion'])
             ->withSum('cuotas as total_valor_base', 'valor_base')
             ->withSum('cuotas as total_entrego', 'entrego')
             ->withSum('cuotas as total_intereses', 'intereses')
             ->withSum('cuotas as total_saldo_actual', 'saldo_actual');
 
+        // Determinar sucursal activa y su provincia
+        $sucursalActiva = config('app.sucursal_activa') ?? Sucursal::first();
+        $provinciaActivaId = $sucursalActiva?->id_provincia ?? ($sucursalActiva?->isTdf() ? 2 : 1);
+        $provinciaActivaNombre = ($provinciaActivaId === 2) ? 'Tierra del Fuego' : 'Chubut';
+
+        $filtroSucursal = $request->get('sucursal');
+
         // 1. FILTRO ESTRICTO POR CLIENTE ID (Si se pasa por URL)
         if ($request->filled('cliente_id')) {
             $query->where('creditos.id_cliente', $request->cliente_id);
+        } else {
+            // 2. Manejo de Filtro por Sucursal / Provincia
+            if ($filtroSucursal === 'all') {
+                // "en caso de seleccionar en sucursales todas se quiete el filtro de provincia"
+                // No se aplica ningún filtro de sucursal ni de provincia.
+            } elseif ($filtroSucursal && str_starts_with($filtroSucursal, 'provincia_')) {
+                // Filtro explícito por provincia (ej: provincia_1 o provincia_2)
+                $provId = (int) str_replace('provincia_', '', $filtroSucursal);
+                $sucursalesProv = Sucursal::where('id_provincia', $provId)->pluck('id')->toArray();
+                if (empty($sucursalesProv)) {
+                    $sucursalesProv = ($provId === 2) ? [1, 2] : [3, 4];
+                }
+                $query->whereIn('clientes.id_sucursal', $sucursalesProv);
+            } elseif ($filtroSucursal && is_numeric($filtroSucursal)) {
+                // "Además se debe poder seguir separando los créditos por sucursal."
+                $sucId = (int) $filtroSucursal;
+                $sucursalSeleccionada = Sucursal::find($sucId);
+                $provIdSuc = $sucursalSeleccionada?->id_provincia ?? (in_array($sucId, [1, 2]) ? 2 : 1);
+                $sucursalesProv = Sucursal::where('id_provincia', $provIdSuc)->pluck('id')->toArray();
+
+                $query->where(function ($q) use ($sucId, $sucursalesProv) {
+                    $q->where('clientes.id_sucursal', $sucId)
+                      ->orWhere(function ($subQ) use ($sucId, $sucursalesProv) {
+                          $subQ->where('creditos.id_sucursal', $sucId)
+                               ->whereIn('clientes.id_sucursal', $sucursalesProv);
+                      });
+                });
+            } else {
+                // "al ingresar se muestren los creditos de los clientes de la provincia de la sucursal activa"
+                $sucursalesProv = Sucursal::where('id_provincia', $provinciaActivaId)->pluck('id')->toArray();
+                if (empty($sucursalesProv)) {
+                    $sucursalesProv = ($provinciaActivaId === 2) ? [1, 2] : [3, 4];
+                }
+                $query->whereIn('clientes.id_sucursal', $sucursalesProv);
+            }
         }
 
-        // 2. Filtro por Búsqueda General (agrupado para no romper el cliente_id)
+        // 3. Filtro por Búsqueda General (agrupado para no romper el cliente_id)
         if ($request->filled('search')) {
             $search = trim($request->search);
+            // Extrae número correlativo si buscan por código compuesto (ej: C0001234TW -> 1234)
+            $numericSearch = ltrim(preg_replace('/[^0-9]/', '', $search), '0');
 
-            $query->where(function ($q) use ($search) {
-                $q->where('creditos.credito', 'LIKE', "%{$search}%")
-                ->orWhereHas('cliente', function ($qCliente) use ($search) {
+            $query->where(function ($q) use ($search, $numericSearch) {
+                $q->where('creditos.credito', 'LIKE', "%{$search}%");
+                if (!empty($numericSearch)) {
+                    $q->orWhere('creditos.credito', $numericSearch);
+                }
+                $q->orWhereHas('cliente', function ($qCliente) use ($search) {
                     $qCliente->where('nombre', 'LIKE', "%{$search}%")
                             ->orWhere('dni', 'LIKE', "%{$search}%");
                 })
@@ -45,11 +93,6 @@ class CreditoController extends Controller
                         ->orWhere('dni', 'LIKE', "%{$search}%");
                 });
             });
-        }
-
-        // 3. Filtro por Sucursal
-        if ($request->filled('sucursal') && $request->sucursal !== 'all') {
-            $query->where('creditos.id_sucursal', $request->sucursal);
         }
 
         // 4. Filtro por Tipo de Crédito (C, D, R)
@@ -93,13 +136,129 @@ class CreditoController extends Controller
 
         // ====================================================================
         
-        $creditos = $query->orderBy('creditos.fecha_credito', 'desc')
-                        ->paginate(15)
-                        ->withQueryString();
+        // ====================================================================
+        // 7. ORDENAMIENTO DE LA LISTA (Click-to-sort interactivo)
+        // ====================================================================
+        $sortableColumns = [
+            'credito'     => 'creditos.credito',
+            'id'          => 'creditos.credito',
+            'fecha'       => 'creditos.fecha_credito',
+            'cliente'     => 'clientes.nombre',
+            'cuota'       => 'creditos.cantidad_cuotas',
+            'valor_cuota' => 'creditos.valor_cuota_ref',
+            'total'       => 'total_valor_base',
+            'intereses'   => 'total_intereses',
+            'entrego'     => 'total_entrego',
+            'a_pagar'     => 'total_saldo_actual',
+            'saldo'       => 'total_saldo_actual',
+        ];
+
+        $sort = $request->get('sort', 'fecha');
+        $direction = strtolower($request->get('direction', 'desc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'fecha';
+        }
+
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        $orderByCol = $sortableColumns[$sort];
+        $query->orderBy($orderByCol, $direction);
+        if ($orderByCol !== 'creditos.id') {
+            $query->orderBy('creditos.id', 'desc');
+        }
+
+        // ====================================================================
+        // 8. EXPORTACIÓN A EXCEL / CSV (si se solicita)
+        // ====================================================================
+        if ($request->get('export') === 'excel') {
+            $exportQuery = clone $query;
+            $filename = 'cartera_creditos_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                // UTF-8 BOM para que Excel en Windows abra directamente con caracteres y acentos correctos
+                fputs($handle, "\xEF\xBB\xBF");
+
+                // Encabezados separados por punto y coma (estándar para Excel en español)
+                fputcsv($handle, [
+                    'ID Gestion',
+                    'Fecha',
+                    'Cliente',
+                    'DNI',
+                    'Sucursal',
+                    'Cuota',
+                    'Valor Cuota',
+                    'Total',
+                    'Intereses',
+                    'Entrego',
+                    'A Pagar',
+                    'Estado'
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $credito) {
+                        $esCancelado = !is_null($credito->fecha_cancelacion);
+                        fputcsv($handle, [
+                            $credito->full_identificador,
+                            $credito->fecha_credito ? \Carbon\Carbon::parse($credito->fecha_credito)->format('d/m/Y') : '-',
+                            $credito->cliente?->nombre ?? '-',
+                            $credito->cliente?->dni ?? '-',
+                            $credito->cliente?->sucursal?->nombre ?? ($credito->sucursal?->nombre ?? '-'),
+                            $credito->cuota_progreso,
+                            number_format((float)$credito->valor_cuota, 2, ',', ''),
+                            number_format((float)($credito->total_valor_base ?? 0), 2, ',', ''),
+                            number_format((float)($credito->total_intereses ?? 0), 2, ',', ''),
+                            number_format((float)($credito->total_entrego ?? 0), 2, ',', ''),
+                            number_format((float)($credito->total_saldo_actual ?? 0), 2, ',', ''),
+                            $esCancelado ? 'Cancelado' : 'Abierto',
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
+        // ====================================================================
+        // 9. TOTALES GENERALES DE LA CONSULTA (Previo a la paginación)
+        // ====================================================================
+        $totalesSubQuery = (clone $query);
+        $totalesSubQuery->getQuery()->columns = ['creditos.id'];
+        $totalesSubQuery->getQuery()->orders = null;
+        $totalesSubQuery->getQuery()->offset = null;
+        $totalesSubQuery->getQuery()->limit = null;
+
+        $totalAPagar = (float) Cuota::joinSub(
+            $totalesSubQuery,
+            'filtered_creditos',
+            'filtered_creditos.id',
+            '=',
+            'cuotas.id_credito'
+        )->sum('cuotas.saldo_actual');
+
+        $creditos = $query->paginate(15)->withQueryString();
+
+        $totalCreditos = $creditos->total();
 
         $sucursales = Sucursal::all();
 
-        return view('creditos.index', compact('creditos', 'sucursales'));
+        return view('creditos.index', compact(
+            'creditos', 
+            'sucursales', 
+            'provinciaActivaId', 
+            'provinciaActivaNombre', 
+            'filtroSucursal',
+            'totalCreditos',
+            'totalAPagar',
+            'sort',
+            'direction'
+        ));
     }
 
     public function show(Credito $credito)
@@ -131,16 +290,105 @@ class CreditoController extends Controller
 
     public function pagarCuota(Request $request, Cuota $cuota)
     {
-        // Lógica para registrar un pago manual
-        $cuota->update([
-            'entrego' => $request->monto,
-            'fecha_cobro' => now(),
-            'medio_pago' => $request->medio,
-            'saldo_actual' => ($cuota->valor_base + $cuota->intereses) - $request->monto
+        // Validación explícita del cobro: rechaza montos negativos, en cero y sobrepagos
+        // que dejarían el saldo exigible en negativo.
+        $validated = $request->validate([
+            'monto' => ['required', 'numeric', 'min:0.01', 'max:' . $cuota->saldo_actual],
+            'medio' => ['required', 'string', 'max:50'],
         ]);
+
+        $monto = (float) $validated['monto'];
+
+        // Actualización consistente + cierre automático del crédito (atómico).
+        DB::transaction(function () use ($cuota, $monto, $validated) {
+            // 1. Acumulamos la entrega (pago parcial acumulativo) y descontamos el saldo exigible.
+            $cuota->update([
+                'entrego'      => (float) $cuota->entrego + $monto,
+                'fecha_cobro'  => now(),
+                'medio_pago'   => $validated['medio'],
+                'saldo_actual' => max(0, (float) $cuota->saldo_actual - $monto),
+            ]);
+
+            // 2. Si el crédito ya no tiene cuotas con saldo exigible, queda cancelado.
+            $credito = $cuota->credito;
+            if ($credito && ! $credito->cuotas()->where('saldo_actual', '>', 0)->exists()) {
+                $credito->update(['fecha_cancelacion' => now()]);
+            }
+        });
 
         // Nombre de la variable de sesión 'success' alineado a <x-notification-modal /> (specs/ui-guidelines.md §9).
         return back()->with('success', 'Pago registrado correctamente');
+    }
+
+    /**
+     * Transacción compensatoria: Anulación de un pago registrado erróneamente.
+     */
+    public function anularPago(Request $request, Cuota $cuota)
+    {
+        $request->validate([
+            'motivo' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        // Validar que la cuota tenga cobros registrados
+        if ((float) $cuota->entrego <= 0 && $cuota->fecha_cobro === null) {
+            return back()->with('error', 'La cuota no registra pagos para anular.');
+        }
+
+        DB::transaction(function () use ($request, $cuota) {
+            $montoRevertido = (float) $cuota->entrego;
+
+            // Reabrir la cuota restaurando el saldo exigible
+            $cuota->update([
+                'saldo_actual' => (float) $cuota->saldo_actual + $montoRevertido,
+                'entrego'      => 0,
+                'fecha_cobro'  => null,
+                'medio_pago'   => null,
+            ]);
+
+            // Si el crédito estaba cerrado por cancelación total, reabrirlo
+            $credito = $cuota->credito;
+            if ($credito && $credito->fecha_cancelacion !== null) {
+                $credito->update(['fecha_cancelacion' => null]);
+            }
+
+            // Asentar en el historial humano de novedades del titular ('cliente_novedades')
+            $credito?->cliente?->novedades()->create([
+                'user_id' => auth()->id(),
+                'tipo'    => 0, // Gestión crítica / Reclamo
+                'mensaje' => "ANULACIÓN DE PAGO: Cuota #{$cuota->num_cuota} (Crédito {$credito->full_identificador}) por $" . number_format($montoRevertido, 2, ',', '.') . ". Motivo: " . $request->motivo,
+            ]);
+        });
+
+        return back()->with('success', 'Pago anulado y cuota reabierta correctamente.');
+    }
+
+    /**
+     * Transacción compensatoria: Anulación y eliminación de un crédito.
+     */
+    public function anularCredito(Request $request, Credito $credito)
+    {
+        $request->validate([
+            'motivo' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        // Validar que NINGUNA cuota del crédito tenga pagos registrados
+        if ($credito->cuotas()->where('entrego', '>', 0)->exists()) {
+            return back()->with('error', 'No se puede anular el crédito porque posee cuotas con pagos registrados. Debe anular los pagos primero.');
+        }
+
+        DB::transaction(function () use ($request, $credito) {
+            // Registrar en 'cliente_novedades' antes de anular/eliminar
+            $credito->cliente?->novedades()->create([
+                'user_id' => auth()->id(),
+                'tipo'    => 0, // Gestión crítica / Reclamo
+                'mensaje' => "ANULACIÓN DE CRÉDITO: Se anuló el crédito {$credito->full_identificador} (Importe: $" . number_format($credito->importe_original, 2, ',', '.') . "). Motivo: " . $request->motivo,
+            ]);
+
+            // Eliminar el crédito (las cuotas se eliminan en cascada por FK on delete cascade)
+            $credito->delete();
+        });
+
+        return redirect()->route('creditos.index')->with('success', 'Crédito anulado y eliminado del padrón correctamente.');
     }
 
     public function create(Request $request)
@@ -167,10 +415,10 @@ class CreditoController extends Controller
                     ->first();
             }
 
-            // 1. Obtención de la Presentación Activa (Sesión -> Máximo ID de DB -> Fallback a 102)
-            $presentacionActual = session('presentacion_actual') 
-                ?? DB::table('presentaciones')->max('id') 
-                ?? 102;
+            // 1. Obtención de la Presentación Activa según la jurisdicción de la sucursal activa
+            $sucursalId = session('sucursal_activa_id') ?? Auth::user()->id_sucursal ?? 1;
+            $presentacionActivaModel = Presentacion::activaParaSucursal($sucursalId);
+            $presentacionActual = (int) ($presentacionActivaModel?->numero ?? (in_array((int)$sucursalId, [1, 2]) ? 103 : 1));
 
             // 2. Obtener Créditos Activos y sus Cuotas Pendientes de Pago
             $creditosActivos = $cliente->creditos->whereNull('fecha_cancelacion');
@@ -272,6 +520,17 @@ class CreditoController extends Controller
 
     public function store(Request $request)
     {
+        // Si no vienen sucursal, presentación o tipo_credito, se resuelven por la sucursal activa y su jurisdicción
+        $sucursalId = $request->input('id_sucursal') ?? session('sucursal_activa_id') ?? Auth::user()->id_sucursal ?? 1;
+        $presentacionModel = Presentacion::activaParaSucursal($sucursalId);
+
+        $request->merge([
+            'id_sucursal' => $sucursalId,
+            'id_presentacion' => $request->input('id_presentacion') ?? $presentacionModel?->id,
+            'tipo_credito' => $request->input('tipo_credito') ?? 'C',
+            'cantidad_cuotas' => $request->input('cantidad_cuotas') ?? $request->input('cuotas') ?? 1,
+        ]);
+
         $request->validate([
             'id_cliente' => 'required|exists:clientes,id',
             'id_sucursal' => 'required|exists:sucursales,id',
@@ -289,8 +548,60 @@ class CreditoController extends Controller
             ],
         ]);
 
+        // ====================================================================
+        // REGLAS DE NEGOCIO DEL ALTA (resueltas y validadas contra la BD
+        // ANTES de crear el crédito; cualquier fallo devuelve error de validación)
+        // ====================================================================
+
+        // 0. Resolución del cliente titular (fuente de límites y habilitación).
+        $cliente = Cliente::findOrFail($request->id_cliente);
+
+        // a) Presentación ABIERTA: sólo se opera contra un lote vigente (fecha_fin IS NULL).
+        $presentacion = Presentacion::whereNull('fecha_fin')->find($request->id_presentacion);
+        if (! $presentacion) {
+            throw ValidationException::withMessages([
+                'id_presentacion' => 'La presentación seleccionada no está vigente: el lote ya fue cerrado.',
+            ]);
+        }
+
+        // b) Cliente HABILITADO: el titular no puede estar suspendido para operar.
+        if (! empty($cliente->suspendido)) {
+            throw ValidationException::withMessages([
+                'id_cliente' => 'El cliente se encuentra suspendido para operar créditos',
+            ]);
+        }
+
+        // c) LÍMITE DE CUOTAS: el tope es del legajo del cliente (clientes.max_cuotas).
+        //    La autorización (cliente_autorizados) sólo aporta `limite_aut`, no un tope de cuotas.
+        $maxCuotas = $cliente->max_cuotas;
+        if ($maxCuotas !== null && (int) $request->cantidad_cuotas > (int) $maxCuotas) {
+            throw ValidationException::withMessages([
+                'cantidad_cuotas' => "La cantidad de cuotas ({$request->cantidad_cuotas}) supera el máximo permitido para el cliente ({$maxCuotas}).",
+            ]);
+        }
+
+        // d) LÍMITE CREDITICIO DISPONIBLE: deuda exigible (saldo_actual de cuotas impagas
+        //    en créditos abiertos) + importe solicitado no debe superar el límite efectivo
+        //    (cliente.limite_efectivo, que contempla `limite_aut` de la autorización).
+        $deudaAcumulada = (float) Cuota::whereHas('credito', function ($q) use ($cliente) {
+            $q->where('id_cliente', $cliente->id)
+              ->whereNull('fecha_cancelacion');
+        })->where('saldo_actual', '>', 0)->sum('saldo_actual');
+
+        $limiteEfectivo = (float) ($cliente->limite_efectivo ?? $cliente->limite ?? 0);
+        $disponible = max(0, $limiteEfectivo - $deudaAcumulada);
+
+        if (($deudaAcumulada + (float) $request->importe_original) > $limiteEfectivo) {
+            throw ValidationException::withMessages([
+                'importe_original' => 'El importe solicitado supera el límite crediticio del cliente. '
+                    . 'Límite: $' . number_format($limiteEfectivo, 2)
+                    . ' | Deuda exigible: $' . number_format($deudaAcumulada, 2)
+                    . ' | Disponible actual: $' . number_format($disponible, 2) . '.',
+            ]);
+        }
+
         // Ejecutamos una transacción de base de datos para asegurar consistencia absoluta
-        DB::transaction(function () use ($request) {
+        DB::transaction(function () use ($request, $presentacion) {
             
             // 1. Obtener y actualizar el correlativo único de la sucursal
             $indice = SucursalIndice::firstOrCreate(
@@ -301,16 +612,15 @@ class CreditoController extends Controller
             $indice->increment('ultimo_indice');
             $nuevoNumeroIndice = $indice->ultimo_indice;
 
-            // 2. Formatear el código de crédito para el campo 'credito' (ej: "IC125")
-            $sucursal = Sucursal::find($request->id_sucursal);
-            $codigoCredito = $sucursal->codigo_sucursal . $request->tipo_credito . $nuevoNumeroIndice;
+            // 2. Correlativo numérico puro para el campo 'credito' (ej: "125")
+            $codigoCredito = (string) $nuevoNumeroIndice;
 
-            // 3. Traer la presentación para aplicar tasas de interés
-            $presentacion = Presentacion::findOrFail($request->id_presentacion);
-            
-            // Cálculo de cuota de referencia (Asumiendo Interés Directo Simple para este borrador)
-            $interesPorcentaje = $presentacion->tasa_cuotas ?? 0; // % ej: 15.00
-            $montoConInteres = $request->importe_original * (1 + ($interesPorcentaje / 100));
+            // 3. La presentación (lote) ya fue resuelta y validada como ABIERTA antes de la transacción.
+            // Cálculo de cuota de referencia (Interés Directo Simple).
+            // Tasa real: `presentaciones.interes_credito` (la columna `tasa_cuotas` NO existe).
+            $interesRaw = (float) ($presentacion->interes_credito ?? 0);
+            $factorInteres = ($interesRaw > 0 && $interesRaw < 1) ? $interesRaw : ($interesRaw / 100);
+            $montoConInteres = $request->importe_original * (1 + $factorInteres);
             $valorCuotaRef = round($montoConInteres / $request->cantidad_cuotas, 2);
 
             // 4. Crear la cabecera del Crédito

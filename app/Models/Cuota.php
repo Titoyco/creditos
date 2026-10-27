@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
-class Cuota extends Model
+class Cuota extends Model implements Auditable
 {
+    use \OwenIt\Auditing\Auditable;
+
     protected $table = 'cuotas';
 
     protected $fillable = [
@@ -61,4 +64,20 @@ class Cuota extends Model
         return $this->credito->full_identificador . $this->num_cuota;
     }
 
+    /**
+     * Vencimiento de la cuota.
+     * Si no existe columna física, se calcula en base a la fecha del crédito + número de cuotas (meses).
+     */
+    public function getFechaVencimientoAttribute($value)
+    {
+        if ($value !== null) {
+            return \Carbon\Carbon::parse($value);
+        }
+
+        if ($this->relationLoaded('credito') && $this->credito && $this->credito->fecha_credito) {
+            return \Carbon\Carbon::parse($this->credito->fecha_credito)->addMonths((int)$this->num_cuota);
+        }
+
+        return null;
+    }
 }
