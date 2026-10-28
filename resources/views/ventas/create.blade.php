@@ -229,15 +229,23 @@
                              class="absolute left-2.5 right-2.5 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800"
                              x-cloak>
                             <template x-for="prod in sugerenciasProductos" :key="prod.id">
-                                <button type="button" @click="agregarItem(prod); sugerenciasProductos = []; barcodeQuery = ''; focusBarcode();"
+                                <button type="button" @click="intentarAgregarProducto(prod); sugerenciasProductos = []; barcodeQuery = ''; focusBarcode();"
                                         class="w-full text-left p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-800 transition flex items-center justify-between">
                                     <div>
                                         <span class="font-bold text-slate-800 dark:text-white text-xs block" x-text="prod.descripcion"></span>
                                         <span class="text-[10px] font-mono text-slate-400" x-text="'Cód: ' + prod.codigo + ' | EAN: ' + (prod.codigo_barra || '-')"></span>
                                     </div>
-                                    <div class="text-right">
+                                    <div class="text-right flex flex-col items-end">
                                         <span class="text-xs font-mono font-black text-indigo-700 dark:text-indigo-400 block" x-text="'$ ' + formatDinero(prod.precio_venta)"></span>
-                                        <span class="text-[9px] font-bold" :class="prod.stock > 0 ? 'text-emerald-600' : 'text-slate-400'" x-text="'Stock: ' + prod.stock"></span>
+                                        <template x-if="prod.controla_stock">
+                                            <span class="text-[10px] font-black px-1.5 py-0.5 rounded tracking-tight mt-0.5 inline-block"
+                                                  :class="prod.stock > 0 ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800' : 'bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800'"
+                                                  x-text="prod.stock > 0 ? 'Stock: ' + prod.stock : '⚠️ SIN STOCK (0)'">
+                                            </span>
+                                        </template>
+                                        <template x-if="!prod.controla_stock">
+                                            <span class="text-[9px] font-bold text-slate-400">Sin límite</span>
+                                        </template>
                                     </div>
                                 </button>
                             </template>
@@ -826,6 +834,114 @@
             </div>
         </div>
 
+        <!-- =================================================================== -->
+        <!-- MODAL 4: CORRECCIÓN POR RECUENTO FÍSICO / SIN STOCK                 -->
+        <!-- =================================================================== -->
+        <div x-show="modalRecuento" 
+             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
+             x-cloak>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border-2 border-amber-500/80 dark:border-amber-500/60 space-y-4"
+                 @click.away="modalRecuento = false; focusBarcode();">
+                
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold text-base shrink-0 border border-amber-300 dark:border-amber-700">
+                            ⚠️
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                Artículo sin Stock Disponible
+                            </h3>
+                            <span class="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider block">
+                                Sucursal: {{ $sucursalActiva->nombre ?? 'Trelew' }}
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" @click="modalRecuento = false; focusBarcode();" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                </div>
+
+                <!-- Detalle del Producto -->
+                <div class="bg-slate-50 dark:bg-slate-900/70 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="font-bold text-slate-900 dark:text-white block text-sm" x-text="productoSinStock?.descripcion"></span>
+                            <span class="font-mono text-[10px] text-slate-500" x-text="'Cód: ' + (productoSinStock?.codigo || '-') + ' | EAN: ' + (productoSinStock?.codigo_barra || '-')"></span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-mono font-black text-indigo-700 dark:text-indigo-400 text-sm block" x-text="'$ ' + formatDinero(productoSinStock?.precio_venta)"></span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-200/70 dark:border-slate-800">
+                        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">Stock actual en sistema:</span>
+                        <span class="text-xs font-mono font-black px-2 py-0.5 rounded"
+                              :class="(productoSinStock?.stock || 0) <= 0 ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-800' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'"
+                              x-text="(productoSinStock?.stock || 0) + ' unidades'">
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Explicación operativa -->
+                <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                    <p class="font-bold">
+                        ¿Desea registrar una corrección de stock por recuento físico en mostrador?
+                    </p>
+                    <p class="text-[11px] text-amber-800 dark:text-amber-300 leading-tight">
+                        Al autorizar el recuento, se registrará el ingreso por ajuste físico de la cantidad indicada para habilitar la venta y que, al emitir la factura, el stock se descuente y vuelva a quedar en cero (evitando generar stock negativo).
+                    </p>
+                </div>
+
+                <!-- Input Cantidad a ingresar por recuento -->
+                <div class="space-y-3 bg-white dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1">
+                            Cantidad a ingresar por recuento físico:
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="if (recuentoCantidad > 1) recuentoCantidad--"
+                                    class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 font-black text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition">
+                                -
+                            </button>
+                            <input type="number" min="0.01" step="1" 
+                                   x-model.number="recuentoCantidad"
+                                   @keydown.enter.prevent="confirmarRecuento()"
+                                   class="w-24 text-center font-mono font-black text-base py-1.5 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                            <button type="button" @click="recuentoCantidad++"
+                                    class="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 font-black text-slate-700 dark:text-slate-200 hover:bg-slate-200 transition">
+                                +
+                            </button>
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold ml-2">
+                                unidad(es) físicas encontradas
+                            </span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                            Motivo de la corrección:
+                        </label>
+                        <input type="text" x-model="recuentoMotivo" 
+                               class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                               placeholder="Recuento físico previo a facturación en mostrador">
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="modalRecuento = false; focusBarcode();"
+                            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl transition uppercase">
+                        Cancelar (No Cargar)
+                    </button>
+                    <button type="button" @click="confirmarRecuento()"
+                            :disabled="procesandoRecuento"
+                            class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs py-2 px-5 rounded-xl shadow-md transition uppercase flex items-center gap-1.5">
+                        <span x-show="!procesandoRecuento">✓ Autorizar Recuento y Cargar (+<span x-text="recuentoCantidad"></span>)</span>
+                        <span x-show="procesandoRecuento">Procesando ajuste...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Script de Reactividad Alpine.js del POS -->
@@ -846,6 +962,11 @@
                 modalCredito: false,
                 modalCobro: false,
                 modalExito: false,
+                modalRecuento: false,
+                productoSinStock: null,
+                recuentoCantidad: 1,
+                recuentoMotivo: 'Recuento físico previo a facturación en mostrador',
+                procesandoRecuento: false,
                 pagaCon: 0,
                 procesando: false,
                 ventaExitosa: {
@@ -865,6 +986,7 @@
                         if (e.key === 'Escape') {
                             this.modalCredito = false;
                             this.modalCobro = false;
+                            this.modalRecuento = false;
                             this.focusBarcode();
                         }
                     });
@@ -918,12 +1040,12 @@
                         let data = await res.json();
 
                         if (data.exact && data.producto) {
-                            this.agregarItem(data.producto);
+                            this.intentarAgregarProducto(data.producto);
                             this.barcodeQuery = '';
                             this.sugerenciasProductos = [];
                             this.focusBarcode();
                         } else if (data.productos && data.productos.length === 1) {
-                            this.agregarItem(data.productos[0]);
+                            this.intentarAgregarProducto(data.productos[0]);
                             this.barcodeQuery = '';
                             this.sugerenciasProductos = [];
                             this.focusBarcode();
@@ -954,11 +1076,111 @@
                     }
                 },
 
-                agregarItem(prod) {
-                    // Si ya existe en el carrito, incrementa cantidad
+                intentarAgregarProducto(prod, cantidadDeseada = 1) {
+                    if (!prod) return false;
+                    let exist = this.items.find(it => it.id_producto === prod.id);
+                    let cantActual = exist ? exist.cantidad : 0;
+                    let cantFinal = cantActual + cantidadDeseada;
+
+                    // Si controla stock y la cantidad supera el stock disponible en la sucursal
+                    if (prod.controla_stock && cantFinal > (Number(prod.stock) || 0)) {
+                        let faltante = Math.max(1, cantFinal - Math.max(0, Number(prod.stock) || 0));
+                        this.abrirModalRecuento(prod, cantFinal, faltante);
+                        return false;
+                    }
+
+                    this.agregarItem(prod, cantidadDeseada);
+                    return true;
+                },
+
+                abrirModalRecuento(prod, cantDeseada, faltante) {
+                    this.productoSinStock = {
+                        id: prod.id,
+                        codigo: prod.codigo,
+                        codigo_barra: prod.codigo_barra,
+                        descripcion: prod.descripcion,
+                        precio_venta: prod.precio_venta,
+                        controla_stock: prod.controla_stock,
+                        stock: Number(prod.stock) || 0,
+                        cantDeseada: cantDeseada
+                    };
+                    this.recuentoCantidad = Math.max(1, Math.round(faltante));
+                    this.recuentoMotivo = 'Recuento físico previo a facturación en mostrador';
+                    this.modalRecuento = true;
+                },
+
+                async confirmarRecuento() {
+                    if (!this.productoSinStock || this.procesandoRecuento) return;
+
+                    let cantAjuste = parseFloat(this.recuentoCantidad);
+                    if (isNaN(cantAjuste) || cantAjuste <= 0) {
+                        alert('Por favor ingrese una cantidad válida mayor a cero.');
+                        return;
+                    }
+
+                    this.procesandoRecuento = true;
+
+                    try {
+                        let res = await fetch(`{{ route('ventas.ajuste-recuento-rapido') }}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({
+                                id_producto: this.productoSinStock.id,
+                                id_sucursal: {{ $sucursalActiva->id ?? 1 }},
+                                cantidad: cantAjuste,
+                                motivo: this.recuentoMotivo || 'Recuento físico previo a facturación en mostrador'
+                            })
+                        });
+
+                        let data = await res.json();
+
+                        if (!res.ok || !data.success) {
+                            alert(data.error || data.message || 'Error al registrar el recuento.');
+                            this.procesandoRecuento = false;
+                            return;
+                        }
+
+                        // Actualizar datos de stock del producto retornado
+                        let prodActualizado = data.producto;
+
+                        // Actualizar stock en lista de sugerencias si está abierta
+                        let enSugerencias = this.sugerenciasProductos.find(p => p.id === prodActualizado.id);
+                        if (enSugerencias) {
+                            enSugerencias.stock = prodActualizado.stock;
+                        }
+
+                        // Cantidad requerida a agregar a la factura
+                        let cantAAgregar = 1;
+                        if (this.productoSinStock.cantDeseada) {
+                            let yaEnCarrito = this.items.find(it => it.id_producto === prodActualizado.id)?.cantidad || 0;
+                            cantAAgregar = Math.max(1, this.productoSinStock.cantDeseada - yaEnCarrito);
+                        }
+
+                        this.agregarItem(prodActualizado, cantAAgregar);
+
+                        this.modalRecuento = false;
+                        this.productoSinStock = null;
+                        this.barcodeQuery = '';
+                        this.sugerenciasProductos = [];
+                        this.focusBarcode();
+
+                    } catch (e) {
+                        console.error('Error al registrar recuento:', e);
+                        alert('Error de conexión al registrar el recuento físico.');
+                    } finally {
+                        this.procesandoRecuento = false;
+                    }
+                },
+
+                agregarItem(prod, cantidad = 1) {
                     let exist = this.items.find(it => it.id_producto === prod.id);
                     if (exist) {
-                        exist.cantidad += 1;
+                        exist.cantidad += cantidad;
+                        exist.stock = prod.stock;
                     } else {
                         this.items.push({
                             id_producto: prod.id,
@@ -966,7 +1188,7 @@
                             codigo: prod.codigo,
                             codigo_barra: prod.codigo_barra,
                             descripcion: prod.descripcion,
-                            cantidad: 1,
+                            cantidad: cantidad,
                             precio_unitario: Number(prod.precio_venta) || 0,
                             controla_stock: prod.controla_stock,
                             stock: prod.stock
@@ -999,21 +1221,30 @@
 
                 cambiarCantidad(index, delta) {
                     if (!this.items[index]) return;
-                    let nueva = this.items[index].cantidad + delta;
-                    if (nueva > 0) {
-                        this.items[index].cantidad = nueva;
-                    } else {
+                    let item = this.items[index];
+                    let nueva = item.cantidad + delta;
+                    if (nueva <= 0) {
                         this.quitarItem(index);
+                        return;
                     }
+                    if (delta > 0 && item.controla_stock && nueva > (Number(item.stock) || 0)) {
+                        let faltante = nueva - Math.max(0, Number(item.stock) || 0);
+                        this.abrirModalRecuento(item, nueva, faltante);
+                        return;
+                    }
+                    item.cantidad = nueva;
                 },
 
                 validarItem(index) {
                     if (!this.items[index]) return;
-                    if (this.items[index].cantidad <= 0) {
-                        this.items[index].cantidad = 1;
-                    }
-                    if (this.items[index].precio_unitario < 0) {
-                        this.items[index].precio_unitario = 0;
+                    let item = this.items[index];
+                    if (item.cantidad <= 0) item.cantidad = 1;
+                    if (item.precio_unitario < 0) item.precio_unitario = 0;
+                    if (item.controla_stock && item.cantidad > (Number(item.stock) || 0)) {
+                        let solicitada = item.cantidad;
+                        let faltante = solicitada - Math.max(0, Number(item.stock) || 0);
+                        item.cantidad = Math.max(1, Math.min(solicitada - 1, Number(item.stock) || 0));
+                        this.abrirModalRecuento(item, solicitada, faltante);
                     }
                 },
 

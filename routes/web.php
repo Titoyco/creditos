@@ -179,6 +179,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/crear', [\App\Http\Controllers\VentaController::class, 'create'])->name('ventas.create');
     Route::post('/ventas', [\App\Http\Controllers\VentaController::class, 'store'])->name('ventas.store');
     Route::get('/ventas/buscar-producto', [\App\Http\Controllers\VentaController::class, 'buscarProducto'])->name('ventas.buscar-producto');
+    Route::post('/ventas/ajuste-recuento-rapido', [\App\Http\Controllers\VentaController::class, 'ajusteRecuentoRapido'])->name('ventas.ajuste-recuento-rapido');
     Route::get('/ventas/clientes/{cliente}/info-credito', [\App\Http\Controllers\VentaController::class, 'infoCreditoCliente'])->name('ventas.cliente-info-credito');
     Route::get('/ventas/{venta}', [\App\Http\Controllers\VentaController::class, 'show'])->name('ventas.show');
     Route::get('/ventas/{venta}/imprimir', [\App\Http\Controllers\VentaController::class, 'imprimir'])->name('ventas.imprimir');
