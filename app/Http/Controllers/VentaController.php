@@ -301,6 +301,83 @@ class VentaController extends Controller
     }
 
     /**
+     * API JSON: Corrección rápida de stock por recuento físico en mostrador previo a facturación.
+     */
+    public function ajusteRecuentoRapido(Request $request)
+    {
+        $validated = $request->validate([
+            'id_producto' => 'required|exists:productos,id',
+            'id_sucursal' => 'nullable|exists:sucursales,id',
+            'cantidad'    => 'required|numeric|min:0.01',
+            'motivo'      => 'nullable|string|max:255',
+        ]);
+
+        $sucursalId = (int) ($validated['id_sucursal'] ?? config('app.sucursal_activa.id') ?? auth()->user()->id_sucursal ?? 1);
+        $sucursal = Sucursal::findOrFail($sucursalId);
+        $producto = Producto::findOrFail($validated['id_producto']);
+
+        if (!$producto->controla_stock) {
+            return response()->json([
+                'success'     => true,
+                'message'     => 'El artículo no controla stock.',
+                'nuevo_stock' => 9999,
+                'producto'    => [
+                    'id'             => $producto->id,
+                    'codigo'         => $producto->codigo,
+                    'codigo_barra'   => $producto->codigo_barra,
+                    'descripcion'    => $producto->descripcion,
+                    'precio_venta'   => (float) $producto->precio_venta,
+                    'controla_stock' => false,
+                    'stock'          => 9999,
+                ],
+            ]);
+        }
+
+        $cantidad = (float) $validated['cantidad'];
+        $motivo = $validated['motivo'] ?? 'Recuento físico previo a facturación en mostrador';
+
+        try {
+            // Asentar corrección atómica de stock en la sucursal activa con auditoría
+            $producto->ajustarStock(
+                $sucursalId,
+                'correccion',
+                $cantidad,
+                $motivo,
+                auth()->id(),
+                'RECUENTO-POS',
+                "Recuento físico de mostrador en {$sucursal->nombre} previo a venta."
+            );
+
+            // Obtener stock actualizado
+            $stockRow = ProductoStock::where('producto_id', $producto->id)
+                ->where('sucursal_id', $sucursalId)
+                ->first();
+
+            $nuevoStock = (float) ($stockRow?->stock ?? 0);
+
+            return response()->json([
+                'success'     => true,
+                'message'     => "Se ingresaron {$cantidad} unidades por recuento físico en {$sucursal->nombre}.",
+                'nuevo_stock' => $nuevoStock,
+                'producto'    => [
+                    'id'             => $producto->id,
+                    'codigo'         => $producto->codigo,
+                    'codigo_barra'   => $producto->codigo_barra,
+                    'descripcion'    => $producto->descripcion,
+                    'precio_venta'   => (float) $producto->precio_venta,
+                    'controla_stock' => true,
+                    'stock'          => $nuevoStock,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Error al registrar el recuento físico: ' . $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
      * API JSON: Consulta y validación de estado crediticio del cliente + simulación de cuotas (1 a 4).
      */
     public function infoCreditoCliente(Request $request, Cliente $cliente)
@@ -442,166 +519,176 @@ class VentaController extends Controller
         $totalFinal = round($subtotal + $recargoFinanciacion, 2);
 
         // Transacción completa y atómica
-        $venta = DB::transaction(function () use (
-            $sucursal,
-            $user,
-            $cliente,
-            $validated,
-            $medioPago,
-            $subtotal,
-            $recargoFinanciacion,
-            $totalFinal,
-            $cuotasNum,
-            $valorCuotaRef
-        ) {
-            // 1. Siguiente número correlativo de comprobante por sucursal
-            $numeroFactura = $sucursal->siguienteNumeroComprobante();
-            $comprobanteFormateado = $sucursal->formatearComprobante($numeroFactura);
+        try {
+            $venta = DB::transaction(function () use (
+                $sucursal,
+                $user,
+                $cliente,
+                $validated,
+                $medioPago,
+                $subtotal,
+                $recargoFinanciacion,
+                $totalFinal,
+                $cuotasNum,
+                $valorCuotaRef
+            ) {
+                // 1. Siguiente número correlativo de comprobante por sucursal
+                $numeroFactura = $sucursal->siguienteNumeroComprobante();
+                $comprobanteFormateado = $sucursal->formatearComprobante($numeroFactura);
 
-            // 2. Si es Crédito Personal, dar de alta el Crédito y las Cuotas
-            $idCredito = null;
-            if ($medioPago === 'credito_personal' && $cliente) {
-                $presentacion = Presentacion::activaParaSucursal($sucursal->id);
+                // 2. Si es Crédito Personal, dar de alta el Crédito y las Cuotas
+                $idCredito = null;
+                if ($medioPago === 'credito_personal' && $cliente) {
+                    $presentacion = Presentacion::activaParaSucursal($sucursal->id);
 
-                // Incremento de correlativo en sucursal_indices
-                $indice = SucursalIndice::firstOrCreate(
-                    ['id_sucursal' => $sucursal->id, 'tipo_credito' => 'C'],
-                    ['ultimo_indice' => 0]
-                );
-                $indice->increment('ultimo_indice');
-                $nuevoNumeroIndice = (string) $indice->ultimo_indice;
+                    // Incremento de correlativo en sucursal_indices
+                    $indice = SucursalIndice::firstOrCreate(
+                        ['id_sucursal' => $sucursal->id, 'tipo_credito' => 'C'],
+                        ['ultimo_indice' => 0]
+                    );
+                    $indice->increment('ultimo_indice');
+                    $nuevoNumeroIndice = (string) $indice->ultimo_indice;
 
-                // Alta cabecera de crédito
-                $credito = Credito::create([
-                    'id_cliente'       => $cliente->id,
-                    'id_sucursal'      => $sucursal->id,
-                    'id_autorizado'    => null,
-                    'id_presentacion'  => $presentacion->id,
-                    'credito'          => $nuevoNumeroIndice,
-                    'tipo_credito'     => 'C',
-                    'importe_original' => $subtotal,
-                    'cantidad_cuotas'  => $cuotasNum,
-                    'valor_cuota_ref'  => $valorCuotaRef,
-                    'fecha_credito'    => now()->toDateString(),
-                ]);
+                    // Alta cabecera de crédito
+                    $credito = Credito::create([
+                        'id_cliente'       => $cliente->id,
+                        'id_sucursal'      => $sucursal->id,
+                        'id_autorizado'    => null,
+                        'id_presentacion'  => $presentacion->id,
+                        'credito'          => $nuevoNumeroIndice,
+                        'tipo_credito'     => 'C',
+                        'importe_original' => $subtotal,
+                        'cantidad_cuotas'  => $cuotasNum,
+                        'valor_cuota_ref'  => $valorCuotaRef,
+                        'fecha_credito'    => now()->toDateString(),
+                    ]);
 
-                // Cascada de cuotas (1 a N)
-                for ($i = 1; $i <= $cuotasNum; $i++) {
-                    Cuota::create([
-                        'id_credito'         => $credito->id,
-                        'num_cuota'          => $i,
-                        'valor_base'         => $valorCuotaRef,
-                        'intereses'          => 0,
-                        'entrego'            => 0,
-                        'saldo_actual'       => $valorCuotaRef,
-                        'fecha_ultimo_envio' => null,
-                        'estado_bancario'    => null,
+                    // Cascada de cuotas (1 a N)
+                    for ($i = 1; $i <= $cuotasNum; $i++) {
+                        Cuota::create([
+                            'id_credito'         => $credito->id,
+                            'num_cuota'          => $i,
+                            'valor_base'         => $valorCuotaRef,
+                            'intereses'          => 0,
+                            'entrego'            => 0,
+                            'saldo_actual'       => $valorCuotaRef,
+                            'fecha_ultimo_envio' => null,
+                            'estado_bancario'    => null,
+                        ]);
+                    }
+
+                    $idCredito = $credito->id;
+
+                    // Novedad en legajo del cliente
+                    $cliente->novedades()->create([
+                        'user_id'        => $user?->id,
+                        'usuario_nombre' => $user?->name ?? 'Operador',
+                        'mensaje'        => "COMPRA A CRÉDITO: Factura {$comprobanteFormateado} por $" . number_format($totalFinal, 2, ',', '.') . " en {$cuotasNum} cuotas de $" . number_format($valorCuotaRef, 2, ',', '.') . " (Lote {$presentacion->numero}).",
+                        'origen_accion'  => 'pos_venta',
                     ]);
                 }
 
-                $idCredito = $credito->id;
+                // 3. Crear cabecera de Venta
+                $clienteNombre = $cliente?->nombre ?? ($validated['cliente_nombre'] ?? 'CONSUMIDOR FINAL');
+                $clienteDoc = $cliente?->dni ?? ($validated['cliente_documento'] ?? null);
 
-                // Novedad en legajo del cliente
-                $cliente->novedades()->create([
-                    'user_id'        => $user?->id,
-                    'usuario_nombre' => $user?->name ?? 'Operador',
-                    'mensaje'        => "COMPRA A CRÉDITO: Factura {$comprobanteFormateado} por $" . number_format($totalFinal, 2, ',', '.') . " en {$cuotasNum} cuotas de $" . number_format($valorCuotaRef, 2, ',', '.') . " (Lote {$presentacion->numero}).",
-                    'origen_accion'  => 'pos_venta',
+                $venta = Venta::create([
+                    'id_sucursal'         => $sucursal->id,
+                    'id_usuario'          => $user?->id ?? 1,
+                    'id_cliente'          => $cliente?->id,
+                    'cliente_nombre'      => $clienteNombre,
+                    'cliente_documento'   => $clienteDoc,
+                    'punto_venta'         => $sucursal->id,
+                    'numero_factura'      => $numeroFactura,
+                    'comprobante'         => $comprobanteFormateado,
+                    'tipo_comprobante'    => 'FACTURA_B',
+                    'fecha'               => now(),
+                    'medio_pago'          => $medioPago,
+                    'subtotal'            => $subtotal,
+                    'recargo'             => $recargoFinanciacion,
+                    'descuento'           => 0,
+                    'total'               => $totalFinal,
+                    'id_credito'          => $idCredito,
+                    'cuotas_credito'      => $medioPago === 'credito_personal' ? $cuotasNum : null,
+                    'valor_cuota_credito' => $medioPago === 'credito_personal' ? $valorCuotaRef : null,
+                    'estado'              => 'completada',
+                    'observaciones'       => $validated['observaciones'] ?? null,
                 ]);
-            }
 
-            // 3. Crear cabecera de Venta
-            $clienteNombre = $cliente?->nombre ?? ($validated['cliente_nombre'] ?? 'CONSUMIDOR FINAL');
-            $clienteDoc = $cliente?->dni ?? ($validated['cliente_documento'] ?? null);
+                // 4. Crear renglones de detalle (VentaItem) y movimiento de stock en la sucursal activa
+                foreach ($validated['items'] as $itemData) {
+                    $cant = (float) $itemData['cantidad'];
+                    $unitario = (float) $itemData['precio_unitario'];
+                    $itemSubtotal = round($cant * $unitario, 2);
+                    $prodId = $itemData['id_producto'] ?? null;
+                    $descuentaStock = false;
 
-            $venta = Venta::create([
-                'id_sucursal'         => $sucursal->id,
-                'id_usuario'          => $user?->id ?? 1,
-                'id_cliente'          => $cliente?->id,
-                'cliente_nombre'      => $clienteNombre,
-                'cliente_documento'   => $clienteDoc,
-                'punto_venta'         => $sucursal->id,
-                'numero_factura'      => $numeroFactura,
-                'comprobante'         => $comprobanteFormateado,
-                'tipo_comprobante'    => 'FACTURA_B',
-                'fecha'               => now(),
-                'medio_pago'          => $medioPago,
-                'subtotal'            => $subtotal,
-                'recargo'             => $recargoFinanciacion,
-                'descuento'           => 0,
-                'total'               => $totalFinal,
-                'id_credito'          => $idCredito,
-                'cuotas_credito'      => $medioPago === 'credito_personal' ? $cuotasNum : null,
-                'valor_cuota_credito' => $medioPago === 'credito_personal' ? $valorCuotaRef : null,
-                'estado'              => 'completada',
-                'observaciones'       => $validated['observaciones'] ?? null,
-            ]);
+                    if ($prodId) {
+                        $producto = Producto::find($prodId);
+                        if ($producto && $producto->controla_stock) {
+                            // Descuento en productos_stock de la sucursal activa
+                            $stockRow = ProductoStock::firstOrCreate(
+                                ['producto_id' => $producto->id, 'sucursal_id' => $sucursal->id],
+                                ['stock' => 0, 'precio_venta' => $producto->precio_venta]
+                            );
 
-            // 4. Crear renglones de detalle (VentaItem) y movimiento de stock en Ushuaia
-            $esUshuaia = $sucursal->isTdf();
+                            $stockAnterior = (float) $stockRow->stock;
 
-            foreach ($validated['items'] as $itemData) {
-                $cant = (float) $itemData['cantidad'];
-                $unitario = (float) $itemData['precio_unitario'];
-                $itemSubtotal = round($cant * $unitario, 2);
-                $prodId = $itemData['id_producto'] ?? null;
-                $descuentaStock = false;
+                            // Guardia estricta: evitar generar stock negativo
+                            if ($stockAnterior < $cant) {
+                                throw new \Exception("Stock insuficiente para el artículo '{$producto->descripcion}' en {$sucursal->nombre}. Stock disponible: {$stockAnterior}, solicitado: {$cant}. Realice la corrección por recuento físico antes de facturar.");
+                            }
 
-                if ($esUshuaia && $prodId) {
-                    $producto = Producto::find($prodId);
-                    if ($producto && $producto->controla_stock) {
-                        $descuentaStock = true;
+                            $descuentaStock = true;
+                            $stockNuevo = round($stockAnterior - $cant, 2);
+                            $stockRow->update(['stock' => $stockNuevo]);
 
-                        // Descuento en productos_stock de la sucursal activa
-                        $stockRow = ProductoStock::firstOrCreate(
-                            ['producto_id' => $producto->id, 'sucursal_id' => $sucursal->id],
-                            ['stock' => 0, 'precio_venta' => $producto->precio_venta]
-                        );
+                            // Asentar en productos_movimientos (auditoría de inventario)
+                            ProductoMovimiento::create([
+                                'producto_id'      => $producto->id,
+                                'sucursal_id'      => $sucursal->id,
+                                'tipo'             => 'venta',
+                                'cantidad'         => -$cant,
+                                'stock_anterior'   => $stockAnterior,
+                                'stock_nuevo'      => $stockNuevo,
+                                'precio_costo'     => $producto->precio_costo ?? 0,
+                                'precio_venta'     => $unitario,
+                                'usuario_id'       => $user?->id,
+                                'comprobante'      => $comprobanteFormateado,
+                                'motivo'           => "Venta Factura {$comprobanteFormateado}",
+                                'referencia_type'  => Venta::class,
+                                'referencia_id'    => $venta->id,
+                            ]);
 
-                        $stockAnterior = (float) $stockRow->stock;
-                        $stockNuevo = round($stockAnterior - $cant, 2);
-                        $stockRow->update(['stock' => $stockNuevo]);
-
-                        // Asentar en productos_movimientos (auditoría de inventario)
-                        ProductoMovimiento::create([
-                            'producto_id'      => $producto->id,
-                            'sucursal_id'      => $sucursal->id,
-                            'tipo'             => 'venta',
-                            'cantidad'         => -$cant,
-                            'stock_anterior'   => $stockAnterior,
-                            'stock_nuevo'      => $stockNuevo,
-                            'precio_costo'     => $producto->precio_costo ?? 0,
-                            'precio_venta'     => $unitario,
-                            'usuario_id'       => $user?->id,
-                            'comprobante'      => $comprobanteFormateado,
-                            'motivo'           => "Venta Factura {$comprobanteFormateado}",
-                            'referencia_type'  => Venta::class,
-                            'referencia_id'    => $venta->id,
-                        ]);
-
-                        // Estadísticas de rotación en producto
-                        $producto->fecha_ultima_venta = now();
-                        $producto->total_ventas_unidades = (float) $producto->total_ventas_unidades + $cant;
-                        $producto->total_ventas_operaciones = (int) $producto->total_ventas_operaciones + 1;
-                        $producto->save();
+                            // Estadísticas de rotación en producto
+                            $producto->fecha_ultima_venta = now();
+                            $producto->total_ventas_unidades = (float) $producto->total_ventas_unidades + $cant;
+                            $producto->total_ventas_operaciones = (int) $producto->total_ventas_operaciones + 1;
+                            $producto->save();
+                        }
                     }
+
+                    // Guardar ítem de la factura
+                    VentaItem::create([
+                        'id_venta'        => $venta->id,
+                        'id_producto'     => $prodId,
+                        'codigo_producto' => $itemData['codigo_producto'] ?? null,
+                        'descripcion'     => $itemData['descripcion'],
+                        'cantidad'        => $cant,
+                        'precio_unitario' => $unitario,
+                        'subtotal'        => $itemSubtotal,
+                        'descuenta_stock' => $descuentaStock,
+                    ]);
                 }
 
-                // Guardar ítem de la factura
-                VentaItem::create([
-                    'id_venta'        => $venta->id,
-                    'id_producto'     => $prodId,
-                    'codigo_producto' => $itemData['codigo_producto'] ?? null,
-                    'descripcion'     => $itemData['descripcion'],
-                    'cantidad'        => $cant,
-                    'precio_unitario' => $unitario,
-                    'subtotal'        => $itemSubtotal,
-                    'descuenta_stock' => $descuentaStock,
-                ]);
+                return $venta;
+            });
+        } catch (\Throwable $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => $e->getMessage()], 422);
             }
-
-            return $venta;
-        });
+            return back()->with('error', $e->getMessage())->withInput();
+        }
 
         if ($request->wantsJson()) {
             return response()->json([
