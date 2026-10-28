@@ -195,6 +195,87 @@
             </form>
         </div>
 
+        <!-- RESUMEN DE TOTALES POR MEDIO DE PAGO (FILTRO ACTUAL) -->
+        @if(isset($totalesFiltro) && $totalesFiltro->total_facturado > 0)
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-2xs space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                    <h3 class="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-2">
+                        <span>📊 Totales Consolidados por Medio de Pago (Período / Filtro Seleccionado)</span>
+                    </h3>
+                    <div class="text-xs text-slate-500">
+                        Total Facturado: <strong class="font-mono text-indigo-700 dark:text-indigo-400 font-black">${{ number_format($totalesFiltro->total_facturado, 2, ',', '.') }}</strong>
+                        ({{ number_format($totalesFiltro->cant_ventas, 0, ',', '.') }} ventas)
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    <!-- Efectivo -->
+                    <div class="p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-50/50 dark:bg-emerald-950/20">
+                        <div class="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">💵 Efectivo</div>
+                        <div class="text-sm font-black font-mono text-emerald-900 dark:text-emerald-200 mt-1">
+                            ${{ number_format($totalesFiltro->total_efectivo, 2, ',', '.') }}
+                        </div>
+                        <div class="text-[10px] text-emerald-700 dark:text-emerald-400">
+                            {{ $totalesFiltro->total_facturado > 0 ? round(($totalesFiltro->total_efectivo / $totalesFiltro->total_facturado) * 100, 1) : 0 }}%
+                        </div>
+                    </div>
+
+                    <!-- Débito -->
+                    <div class="p-2.5 rounded-xl border border-sky-200 dark:border-sky-800/80 bg-sky-50/50 dark:bg-sky-950/20">
+                        <div class="text-[10px] font-bold text-sky-800 dark:text-sky-300 uppercase">💳 Tarjeta Débito</div>
+                        <div class="text-sm font-black font-mono text-sky-900 dark:text-sky-200 mt-1">
+                            ${{ number_format($totalesFiltro->total_debito, 2, ',', '.') }}
+                        </div>
+                        <div class="text-[10px] text-sky-700 dark:text-sky-400">
+                            {{ $totalesFiltro->total_facturado > 0 ? round(($totalesFiltro->total_debito / $totalesFiltro->total_facturado) * 100, 1) : 0 }}%
+                        </div>
+                    </div>
+
+                    <!-- Crédito -->
+                    <div class="p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/50 dark:bg-indigo-950/20">
+                        <div class="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase">💳 Tarjeta Crédito</div>
+                        <div class="text-sm font-black font-mono text-indigo-900 dark:text-indigo-200 mt-1">
+                            ${{ number_format($totalesFiltro->total_credito, 2, ',', '.') }}
+                        </div>
+                        <div class="text-[10px] text-indigo-700 dark:text-indigo-400">
+                            {{ $totalesFiltro->total_facturado > 0 ? round(($totalesFiltro->total_credito / $totalesFiltro->total_facturado) * 100, 1) : 0 }}%
+                        </div>
+                    </div>
+
+                    <!-- Crédito Personal -->
+                    <div class="p-2.5 rounded-xl border border-amber-200 dark:border-amber-800/80 bg-amber-50/50 dark:bg-amber-950/20">
+                        <div class="text-[10px] font-bold text-amber-800 dark:text-amber-300 uppercase">📑 Crédito / Cta Cte</div>
+                        <div class="text-sm font-black font-mono text-amber-900 dark:text-amber-200 mt-1">
+                            ${{ number_format($totalesFiltro->total_credito_personal, 2, ',', '.') }}
+                        </div>
+                        <div class="text-[10px] text-amber-700 dark:text-amber-400">
+                            {{ $totalesFiltro->total_facturado > 0 ? round(($totalesFiltro->total_credito_personal / $totalesFiltro->total_facturado) * 100, 1) : 0 }}%
+                        </div>
+                    </div>
+
+                    <!-- Transferencia / MP -->
+                    <div class="p-2.5 rounded-xl border border-teal-200 dark:border-teal-800/80 bg-teal-50/50 dark:bg-teal-950/20">
+                        <div class="text-[10px] font-bold text-teal-800 dark:text-teal-300 uppercase">📱 Transf / MP</div>
+                        <div class="text-sm font-black font-mono text-teal-900 dark:text-teal-200 mt-1">
+                            ${{ number_format($totalesFiltro->total_transferencia, 2, ',', '.') }}
+                        </div>
+                        <div class="text-[10px] text-teal-700 dark:text-teal-400">
+                            {{ $totalesFiltro->total_facturado > 0 ? round(($totalesFiltro->total_transferencia / $totalesFiltro->total_facturado) * 100, 1) : 0 }}%
+                        </div>
+                    </div>
+
+                    <!-- Ingresos / Retiros de Caja -->
+                    <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40">
+                        <div class="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">💸 Movs. Dinero</div>
+                        <div class="text-xs font-mono font-bold mt-1 flex flex-col gap-0.5">
+                            <span class="text-emerald-700 dark:text-emerald-400" title="Total Ingresos Manuales">+${{ number_format($totalesFiltro->total_ingresos, 0, ',', '.') }}</span>
+                            <span class="text-rose-700 dark:text-rose-400" title="Total Egresos Manuales">-${{ number_format($totalesFiltro->total_retiros, 0, ',', '.') }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <!-- TABLA DE HISTORIAL DE CAJAS -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
@@ -203,12 +284,11 @@
                         <tr>
                             <th class="py-3 px-3"># Turno</th>
                             <th class="py-3 px-3">Sucursal</th>
-                            <th class="py-3 px-3">Apertura</th>
-                            <th class="py-3 px-3">Cierre</th>
-                            <th class="py-3 px-3 text-right">Fondo Inicial</th>
-                            <th class="py-3 px-3 text-right">Efectivo Teórico</th>
-                            <th class="py-3 px-3 text-right">Efectivo Contado</th>
-                            <th class="py-3 px-3 text-right">Fallo / Dif.</th>
+                            <th class="py-3 px-3">Fecha</th>
+                            <th class="py-3 px-3 text-right">Fondo Apertura</th>
+                            <th class="py-3 px-3 text-right">Efectivo Cierre</th>
+                            <th class="py-3 px-3 text-right">Fallo / Dif</th>
+                            <th class="py-3 px-3">Totales por Medio de Pago</th>
                             <th class="py-3 px-3 text-right">Total Facturado</th>
                             <th class="py-3 px-3 text-center">Estado</th>
                             <th class="py-3 px-3 text-center">Acciones</th>
@@ -218,38 +298,26 @@
                         @forelse($cajas as $caja)
                             <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition">
                                 <td class="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white">
-                                    #{{ $caja->id }}
+                                    <a href="{{ route('cajas.show', $caja->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                                        #{{ $caja->id }}
+                                    </a>
                                 </td>
                                 <td class="py-3 px-3 font-medium text-slate-700 dark:text-slate-300">
                                     {{ $caja->sucursal?->nombre ?? 'N/A' }}
                                 </td>
                                 <td class="py-3 px-3">
                                     <div class="font-bold text-slate-900 dark:text-white">
-                                        {{ $caja->fecha_apertura->format('d/m/Y H:i') }}
+                                        {{ $caja->fecha_apertura->format('d/m/Y') }}
                                     </div>
                                     <div class="text-[10px] text-slate-500">
-                                        {{ $caja->usuarioApertura?->name ?? 'Usuario' }}
+                                        {{ $caja->fecha_apertura->format('H:i') }} - {{ $caja->fecha_cierre ? $caja->fecha_cierre->format('H:i') : 'En curso' }}
                                     </div>
-                                </td>
-                                <td class="py-3 px-3">
-                                    @if($caja->fecha_cierre)
-                                        <div class="font-bold text-slate-900 dark:text-white">
-                                            {{ $caja->fecha_cierre->format('d/m/Y H:i') }}
-                                        </div>
-                                        <div class="text-[10px] text-slate-500">
-                                            {{ $caja->usuarioCierre?->name ?? 'Usuario' }}
-                                        </div>
-                                    @else
-                                        <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded uppercase">
-                                            En Curso
-                                        </span>
-                                    @endif
                                 </td>
                                 <td class="py-3 px-3 text-right font-mono">
                                     ${{ number_format($caja->monto_inicial_efectivo, 2, ',', '.') }}
                                 </td>
                                 <td class="py-3 px-3 text-right font-mono font-bold text-slate-700 dark:text-slate-300">
-                                    ${{ number_format($caja->monto_final_efectivo_sistema, 2, ',', '.') }}
+                                    ${{ number_format($caja->monto_final_efectivo_real ?: $caja->monto_final_efectivo_sistema, 2, ',', '.') }}
                                     @if(($caja->total_ingresos_efectivo ?? 0) > 0 || ($caja->total_retiros_efectivo ?? 0) > 0)
                                         <div class="text-[9px] font-normal flex items-center justify-end gap-1">
                                             @if(($caja->total_ingresos_efectivo ?? 0) > 0)
@@ -259,13 +327,6 @@
                                                 <span class="text-rose-600 dark:text-rose-400 font-semibold" title="Total Retiros / Gastos Manuales">-${{ number_format($caja->total_retiros_efectivo, 0, ',', '.') }}</span>
                                             @endif
                                         </div>
-                                    @endif
-                                </td>
-                                <td class="py-3 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
-                                    @if($caja->fecha_cierre)
-                                        ${{ number_format($caja->monto_final_efectivo_real, 2, ',', '.') }}
-                                    @else
-                                        <span class="text-slate-400 italic">Pendiente</span>
                                     @endif
                                 </td>
                                 <td class="py-3 px-3 text-right font-mono font-bold">
@@ -288,6 +349,40 @@
                                         <span class="text-slate-400">-</span>
                                     @endif
                                 </td>
+                                <td class="py-3 px-3">
+                                    <div class="flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+                                        @if(($caja->total_efectivo ?? 0) > 0)
+                                            <span class="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded" title="Efectivo ({{ $caja->cant_ventas_efectivo }} ventas)">
+                                                💵 ${{ number_format($caja->total_efectivo, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                        @if(($caja->total_tarjeta_debito ?? 0) > 0)
+                                            <span class="bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 px-1.5 py-0.5 rounded" title="Tarjeta Débito ({{ $caja->cant_ventas_tarjeta_debito }} ventas)">
+                                                💳 Déb: ${{ number_format($caja->total_tarjeta_debito, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                        @if(($caja->total_tarjeta_credito ?? 0) > 0)
+                                            <span class="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0.5 rounded" title="Tarjeta Crédito ({{ $caja->cant_ventas_tarjeta_credito }} ventas)">
+                                                💳 Créd: ${{ number_format($caja->total_tarjeta_credito, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                        @if(($caja->total_credito_personal ?? 0) > 0)
+                                            <span class="bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded" title="Crédito Personal / Cta Cte ({{ $caja->cant_ventas_credito_personal }} ventas)">
+                                                📑 CtaCte: ${{ number_format($caja->total_credito_personal, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                        @if(($caja->total_transferencia ?? 0) > 0)
+                                            <span class="bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.5 rounded" title="Transferencia / Mercado Pago ({{ $caja->cant_ventas_transferencia }} ventas)">
+                                                📱 Transf: ${{ number_format($caja->total_transferencia, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                        @if(($caja->total_otros ?? 0) > 0)
+                                            <span class="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded" title="Otros Medios">
+                                                📦 Otros: ${{ number_format($caja->total_otros, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </td>
                                 <td class="py-3 px-3 text-right font-mono font-black text-indigo-700 dark:text-indigo-400">
                                     ${{ number_format($caja->total_ventas, 2, ',', '.') }}
                                     <div class="text-[10px] text-slate-500 font-normal">
@@ -307,6 +402,12 @@
                                 </td>
                                 <td class="py-3 px-3 text-center">
                                     <div class="flex items-center justify-center gap-1.5">
+                                        <a href="{{ route('cajas.show', $caja->id) }}" 
+                                           class="bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-[10px] py-1 px-2 rounded-lg transition flex items-center gap-1"
+                                           title="Ver Detalle Completo de la Jornada">
+                                            👁️ Detalle
+                                        </a>
+
                                         @if($caja->estado === 'abierta')
                                             <a href="{{ route('cajas.cerrar', $caja->id) }}" 
                                                class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-[10px] py-1 px-2.5 rounded-lg transition uppercase">
@@ -316,12 +417,12 @@
                                             <a href="{{ route('cajas.comprobante', ['caja' => $caja->id, 'formato' => 'ticket']) }}" target="_blank"
                                                class="bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-[10px] py-1 px-2 rounded-lg transition"
                                                title="Ticket Cierre Z (80mm)">
-                                                🖨️ Ticket
+                                                🖨️
                                             </a>
                                             <a href="{{ route('cajas.comprobante', ['caja' => $caja->id, 'formato' => 'a4']) }}" target="_blank"
-                                               class="bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-[10px] py-1 px-2 rounded-lg transition"
+                                               class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px] py-1 px-2 rounded-lg transition"
                                                title="Comprobante Cierre Z A4">
-                                                📄 A4
+                                                📄
                                             </a>
                                         @endif
                                     </div>

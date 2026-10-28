@@ -442,4 +442,41 @@ class CajaControlTest extends TestCase
         $responseTicket->assertSee('2.000,00');
         $responseTicket->assertSee('1.500,00');
     }
+
+    public function test_caja_show_visualiza_totales_por_medio_y_movimientos_del_dia()
+    {
+        $caja = CajaSesion::create([
+            'id_sucursal' => $this->sucursal->id,
+            'id_usuario_apertura' => $this->user->id,
+            'fecha_apertura' => now(),
+            'monto_inicial_efectivo' => 2000.00,
+            'total_efectivo' => 1500.00,
+            'total_tarjeta_debito' => 3000.00,
+            'total_general' => 4500.00,
+            'cant_ventas_efectivo' => 1,
+            'cant_ventas_tarjeta_debito' => 1,
+            'cant_ventas_total' => 2,
+            'estado' => 'cerrada',
+            'monto_final_efectivo_esperado' => 3500.00,
+            'monto_final_efectivo_real' => 3500.00,
+            'diferencia_efectivo' => 0.00,
+        ]);
+
+        $caja->movimientos()->create([
+            'id_usuario' => $this->user->id,
+            'tipo' => 'retiro',
+            'monto' => 500.00,
+            'motivo' => 'Bolsas de compras',
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('cajas.show', $caja->id));
+
+        $response->assertStatus(200);
+        $response->assertSee('Detalle de Caja #' . $caja->id);
+        $response->assertSee('Bolsas de compras');
+        $response->assertSee('1.500,00'); // Efectivo
+        $response->assertSee('3.000,00'); // Débito
+        $response->assertSee('4.500,00'); // Total general
+    }
 }
+

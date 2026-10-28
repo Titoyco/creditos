@@ -354,12 +354,13 @@ class ImportarCajasMdbCommand extends Command
 
             // 5. Vincular ventas de MySQL a cada sesión de caja
             $this->info("\n--- VINCULANDO VENTAS A CADA SESIÓN DE CAJA ---");
-            $affectedVentas = DB::update("
-                UPDATE ventas v
-                INNER JOIN cajas_sesiones c ON DATE(v.fecha) = DATE(c.fecha_apertura) AND v.id_sucursal = c.id_sucursal
-                SET v.id_caja_sesion = c.id
-                WHERE v.id_sucursal = {$idSucursal}
-            ");
+            $stmtVentas = DB::getPdo()->prepare("UPDATE ventas SET id_caja_sesion = ? WHERE id_sucursal = ? AND fecha >= ? AND fecha <= ?");
+            DB::beginTransaction();
+            foreach ($cajasMap as $dia => $cajaId) {
+                $stmtVentas->execute([$cajaId, $idSucursal, "$dia 00:00:00", "$dia 23:59:59"]);
+            }
+            DB::commit();
+            $affectedVentas = DB::table('ventas')->where('id_sucursal', $idSucursal)->whereNotNull('id_caja_sesion')->count();
             $this->info("✓ {$affectedVentas} ventas vinculadas a sus respectivas sesiones de caja.");
 
             DB::statement('SET FOREIGN_KEY_CHECKS = 1;');

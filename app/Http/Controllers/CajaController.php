@@ -52,7 +52,19 @@ class CajaController extends Controller
             $direction = 'desc';
         }
 
-        $query->orderBy($sort, $direction);
+        // Totales agregados de la consulta filtrada (por medio de pago, ventas e ingresos/egresos)
+        $totalesFiltro = (clone $query)->selectRaw('
+            COALESCE(SUM(total_general), 0) as total_facturado,
+            COALESCE(SUM(total_efectivo), 0) as total_efectivo,
+            COALESCE(SUM(total_tarjeta_debito), 0) as total_debito,
+            COALESCE(SUM(total_tarjeta_credito), 0) as total_credito,
+            COALESCE(SUM(total_credito_personal), 0) as total_credito_personal,
+            COALESCE(SUM(total_transferencia), 0) as total_transferencia,
+            COALESCE(SUM(total_otros), 0) as total_otros,
+            COALESCE(SUM(total_ingresos_efectivo), 0) as total_ingresos,
+            COALESCE(SUM(total_retiros_efectivo), 0) as total_retiros,
+            COALESCE(SUM(cant_ventas_total), 0) as cant_ventas
+        ')->first();
 
         $cajas = $query->paginate(20)->withQueryString();
 
@@ -72,6 +84,7 @@ class CajaController extends Controller
             'totalesActiva',
             'totalesCajaActiva',
             'requiereCierreAnterior',
+            'totalesFiltro',
             'sort',
             'direction'
         ));
@@ -263,6 +276,25 @@ class CajaController extends Controller
 
         return redirect()->route('cajas.comprobante', ['caja' => $caja->id, 'formato' => 'ticket'])
             ->with('success', "Cierre Z de la sesión #{$caja->id} registrado correctamente.");
+    }
+
+    /**
+     * Vista de detalle de una sesión de caja específica: totales por medio de pago,
+     * desglose de efectivo (apertura, ingresos, egresos, cierre) y listado de movimientos y ventas.
+     */
+    public function show(CajaSesion $caja)
+    {
+        $caja->load(['sucursal.provincia', 'usuarioApertura', 'usuarioCierre', 'movimientos.usuario']);
+        
+        $ventas = $caja->ventas()
+            ->with(['cliente', 'usuario'])
+            ->orderBy('id', 'desc')
+            ->paginate(50);
+
+        $totales = $caja->calcularTotales();
+        $movimientos = $caja->movimientos()->orderBy('id', 'desc')->get();
+
+        return view('cajas.show', compact('caja', 'totales', 'ventas', 'movimientos'));
     }
 
     /**

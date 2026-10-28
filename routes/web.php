@@ -200,6 +200,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/abrir', [\App\Http\Controllers\CajaController::class, 'abrir'])->name('cajas.abrir');
         Route::post('/cerrar-anterior-y-abrir', [\App\Http\Controllers\CajaController::class, 'cerrarAnteriorYAbrir'])->name('cajas.cerrar-anterior-y-abrir');
         Route::get('/reportes/historico-medios', [\App\Http\Controllers\CajaController::class, 'historicoMedios'])->name('cajas.historico-medios');
+        Route::get('/{caja}', [\App\Http\Controllers\CajaController::class, 'show'])->name('cajas.show');
         Route::get('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrarForm'])->name('cajas.cerrar');
         Route::post('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrar'])->name('cajas.cerrar.store');
         Route::get('/{caja}/comprobante', [\App\Http\Controllers\CajaController::class, 'comprobante'])->name('cajas.comprobante');

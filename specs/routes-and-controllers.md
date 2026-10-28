@@ -489,11 +489,17 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
 | POST | `/cajas/abrir` | `cajas.abrir` | `CajaController@abrir` | `auth` | Apertura de caja e ingreso del fondo inicial en efectivo |
 | POST | `/cajas/cerrar-anterior-y-abrir` | `cajas.cerrar-anterior-y-abrir` | `CajaController@cerrarAnteriorYAbrir` | `auth` | Arqueo automático de caja olvidada y apertura de la nueva |
 | GET | `/cajas/reportes/historico-medios` | `cajas.historico-medios` | `CajaController@historicoMedios` | `auth` | Reporte consolidado histórico por medios de pago |
+| GET | `/cajas/{caja}` | `cajas.show` | `CajaController@show` | `auth` | Detalle integral de una jornada: medios de pago, arqueo, movimientos y ventas |
 | GET | `/cajas/{caja}/cerrar` | `cajas.cerrar` | `CajaController@cerrarForm` | `auth` | Pantalla de Arqueo Físico y Cierre Z |
 | POST | `/cajas/{caja}/cerrar` | `cajas.cerrar.store` | `CajaController@cerrar` | `auth` | Confirmación de Cierre Z y cálculo de fallo de caja |
 | GET | `/cajas/{caja}/comprobante` | `cajas.comprobante` | `CajaController@comprobante` | `auth` | Comprobante imprimible de Cierre Z (Ticket 80mm y A4) |
 | POST | `/cajas/{caja}/movimientos` | `cajas.movimientos.store` | `CajaController@storeMovimiento` | `auth` | Registro de ingreso o retiro manual con motivo obligatorio |
 | GET | `/cajas/{caja}/movimientos` | `cajas.movimientos.json` | `CajaController@movimientosJson` | `auth` | Historial JSON de movimientos de la sesión activa |
+
+### 6.1.1 Comandos de Consola y Migración de Datos Históricos
+- `php artisan app:import-cajas-mdb`: Lee tablas `CAJA`, `MOVIMIENTO` y `MOVIMIENTO_PAGO` desde `db.mdb` (Access COM/OLEDB), genera las sesiones de caja con apertura, cierre, desglose de medios de pago, e inserta movimientos de caja.
+- `php artisan app:export-cajas-sql`: Exporta las tablas `cajas_sesiones` y `cajas_movimientos` a `database/data/cajas_historicas.sql` (1.8 MB) para su despliegue en servidores Linux que no cuentan con drivers de MS Access.
+- `php artisan app:import-cajas-sql`: Ejecuta el volcado SQL en el servidor de producción y vincula 137.000+ ventas existentes con sus respectivas sesiones de caja de forma indexada en ~10 segundos.
 
 ### 6.2 Flujo Operativo y Fórmulas de Arqueo
 1. **Apertura de Turno:**
