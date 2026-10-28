@@ -16,6 +16,7 @@ class Venta extends Model implements Auditable
     protected $fillable = [
         'id_operacion',
         'id_sucursal',
+        'id_caja_sesion',
         'id_usuario',
         'id_cliente',
         'cliente_nombre',
@@ -56,6 +57,11 @@ class Venta extends Model implements Auditable
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class, 'id_sucursal');
+    }
+
+    public function cajaSesion(): BelongsTo
+    {
+        return $this->belongsTo(CajaSesion::class, 'id_caja_sesion');
     }
 
     public function usuario(): BelongsTo

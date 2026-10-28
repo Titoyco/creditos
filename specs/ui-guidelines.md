@@ -1012,3 +1012,49 @@ En todas las tablas de resultado y grillas de datos del sistema (Créditos, Clie
 3. **Indicador Visual:** Flecha destacada `▲` (ascendente) o `▼` (descendente) en la columna activa; icono tenue `⇅` en columnas inactivas con hover de color.
 4. **Sincronización:** Tanto la paginación como la exportación a Excel / CSV y las impresiones deben aplicar exactamente el mismo criterio de ordenamiento seleccionado en pantalla.
 
+
+---
+
+## 17. Componentes de UI: Control de Caja, Turnos y Cierres Z
+
+### 17.1 Banner de Estado de Caja en el Facturador (POS)
+Ubicado en la cabecera de `resources/views/ventas/create.blade.php`:
+- **🟢 Caja Abierta en Curso:** Muestra el número de turno, sucursal, fondo inicial, total facturado en efectivo y los badges dinámicos de `Ingresos (+)` y `Retiros (-)`.
+- **⚠️ Caja de Jornada Anterior Pendiente:** Fondo ámbar (`bg-amber-50 border-amber-300 dark:bg-amber-950/60`), bloquea la facturación y ofrece el botón directo para realizar el Cierre Z pendiente o el cierre-apertura simultáneo.
+- **🔒 Caja Cerrada:** Fondo grisáceo, bloquea la carga de artículos y presenta el botón `[🟢 Abrir Caja]` para iniciar el turno con el fondo en efectivo.
+
+### 17.2 Modal de Movimiento Manual de Efectivo (Ingreso / Retiro)
+Componente Alpine.js accesible tanto desde el POS como desde el panel de cajas:
+- **Pestañas de Selección:**
+  - `💸 Retiro / Gasto`: Resalta en tonos rojizos (`bg-rose-600`), pensado para pago de fletes, insumos o egresos.
+  - `💰 Ingreso Extra`: Resalta en tonos esmeralda (`bg-emerald-600`), para cobranzas manuales o sencillo adicional.
+- **Campo Motivo Obligatorio:** Input de texto con validación requerida. No permite registrar movimientos anónimos.
+- **Historial en Vivo:** Muestra la lista de movimientos registrados en la sesión actual con usuario, hora y comprobante.
+
+### 17.3 Pantalla de Arqueo y Cierre Z (`cajas/cerrar.blade.php`)
+- **Desglose Teórico del Sistema:** Muestra el cálculo transparente:
+  $$\text{Fondo Inicial} + \text{Ventas Efectivo} + \text{Ingresos} - \text{Retiros} = \text{Efectivo Teórico}$$
+- **Ingreso de Efectivo Contado:** Campo de alta visibilidad para que el cajero digite el dinero físico presente en el cajón.
+- **Cálculo de Diferencia / Fallo:** Con reactividad Alpine.js, calcula en tiempo real si existe sobrante (color celeste/azul) o faltante (color rojo/rosa) antes de confirmar.
+
+### 17.4 Impresión Fiscal de Cierre Z (Ticket 80mm y A4)
+La vista `cajas/comprobante.blade.php` soporta impresión dual mediante directivas CSS `@page`:
+- **Ticket Térmico (80mm):** `@page { size: 80mm auto; margin: 2mm; }`, tipografía monoespaciada de alta densidad, divisores discontinuos, listado de movimientos justificados y arqueo final.
+- **Formato A4:** `@page { size: A4 portrait; margin: 15mm; }`, diseño institucional para archivo contable o presentación administrativa.
+
+---
+
+## 18. Componentes de UI: Facturador POS y Control de Stock
+
+### 18.1 Alerta Interactiva de Falta de Stock
+- Cuando un artículo tiene stock en cero o insuficiente, el buscador y el agregado al carrito alertan al operador mediante un diálogo modal o banner preventivo.
+- Permite invocar la ventana de **Ajuste Rápido por Recuento Físico**: el operador ingresa la cantidad que ve físicamente en el local y el sistema la ajusta en el acto, permitiendo facturar sin generar saldos negativos.
+
+---
+
+## 19. Componentes de UI: Copias de Seguridad (Backup y Restauración)
+
+### 19.1 Panel de Copias de Seguridad (`sistema/backup/index.blade.php`)
+- **Listado de Respaldos:** Grilla con nombre de archivo, tamaño en MB, fecha y hora de creación, botón de descarga directa en `.zip` y botón de restauración.
+- **Botón `[💾 Crear Copia de Seguridad Ahora]`:** Genera el dump completo de la BD de forma inmediata.
+- **Modal de Confirmación de Restauración:** Diálogo de máxima advertencia que aclara que el sistema creará automáticamente un auto-backup preventivo antes de reemplazar la base de datos, solicitando confirmación explícita del administrador.

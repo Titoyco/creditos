@@ -51,6 +51,14 @@ class VentaStockRecuentoTest extends TestCase
             ['producto_id' => $this->producto->id, 'sucursal_id' => $this->sucursalTrelew->id],
             ['stock' => 0, 'precio_venta' => 10000]
         );
+
+        \App\Models\CajaSesion::create([
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'id_usuario_apertura' => $this->user->id,
+            'fecha_apertura' => now(),
+            'monto_inicial_efectivo' => 5000,
+            'estado' => 'abierta',
+        ]);
     }
 
     public function test_buscar_producto_retorna_stock_cero_en_trelew()

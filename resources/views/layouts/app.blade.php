@@ -65,6 +65,25 @@
                                 </span>
                             </div>
                         </div>
+
+                    {{-- Accesos Rápidos Principales --}}
+                    <div class="hidden lg:flex items-center gap-1.5 ml-3">
+                        <a href="{{ route('ventas.create') }}" 
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('ventas.create') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
+                            <span>🛒 POS</span>
+                        </a>
+                        <a href="{{ route('cajas.index') }}" 
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('cajas.*') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
+                            <span>💵 Cajas</span>
+                        </a>
+                        <a href="{{ route('clientes.index') }}" 
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('clientes.*') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
+                            <span>👥 Clientes</span>
+                        </a>
+                        <a href="{{ route('productos.index') }}" 
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('productos.*') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
+                            <span>📦 Stock</span>
+                        </a>
                     </div>
 
                     {{-- Panel Operativo Derecho --}}

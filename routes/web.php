@@ -192,6 +192,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/recibos/{recibo}', [\App\Http\Controllers\ReciboController::class, 'show'])->name('recibos.show');
     Route::get('/recibos/{recibo}/imprimir', [\App\Http\Controllers\ReciboController::class, 'imprimir'])->name('recibos.imprimir');
     Route::post('/recibos/{recibo}/anular', [\App\Http\Controllers\ReciboController::class, 'anular'])->name('recibos.anular');
+
+    // --- MÓDULO CONTROL DE CAJA / TURNOS & CIERRE Z ---
+    Route::prefix('cajas')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CajaController::class, 'index'])->name('cajas.index');
+        Route::get('/estado-actual', [\App\Http\Controllers\CajaController::class, 'estadoActual'])->name('cajas.estado-actual');
+        Route::post('/abrir', [\App\Http\Controllers\CajaController::class, 'abrir'])->name('cajas.abrir');
+        Route::post('/cerrar-anterior-y-abrir', [\App\Http\Controllers\CajaController::class, 'cerrarAnteriorYAbrir'])->name('cajas.cerrar-anterior-y-abrir');
+        Route::get('/reportes/historico-medios', [\App\Http\Controllers\CajaController::class, 'historicoMedios'])->name('cajas.historico-medios');
+        Route::get('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrarForm'])->name('cajas.cerrar');
+        Route::post('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrar'])->name('cajas.cerrar.store');
+        Route::get('/{caja}/comprobante', [\App\Http\Controllers\CajaController::class, 'comprobante'])->name('cajas.comprobante');
+        Route::post('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'storeMovimiento'])->name('cajas.movimientos.store');
+        Route::get('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'movimientosJson'])->name('cajas.movimientos.json');
+    });
 });
 
 require __DIR__.'/auth.php';

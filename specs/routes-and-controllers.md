@@ -445,3 +445,117 @@ fuerza a `null` y el filtro de `clientes.index` ya sabe leer.
 
 **Sin implementar (y sin andamiaje):** generación de lote bancario P10→P0, tope por presentación, ranking de cuotas
 por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación estricta de cobranza a intereses antes que capital, suspensión preventiva automática y `routes/api.php`.
+
+
+---
+
+## 5. Módulo Ventas / Facturación (POS) & Control de Stock
+
+### 5.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/ventas` | `ventas.index` | `VentaController@index` | `auth` | Listado histórico de ventas con KPIs y filtros |
+| GET | `/ventas/crear` | `ventas.create` | `VentaController@create` | `auth` | Terminal de Facturación / Punto de Venta (POS) |
+| POST | `/ventas` | `ventas.store` | `VentaController@store` | `auth` | Emisión atómica de factura y descuento de stock |
+| GET | `/ventas/buscar-producto` | `ventas.buscar-producto` | `VentaController@buscarProducto` | `auth` | Búsqueda por código, barra o descripción con stock local |
+| POST | `/ventas/ajuste-recuento-rapido` | `ventas.ajuste-recuento-rapido` | `VentaController@ajusteRecuentoRapido` | `auth` | Regularización inmediata de stock físico en mostrador |
+| GET | `/ventas/clientes/{cliente}/info-credito` | `ventas.cliente-info-credito` | `VentaController@infoCreditoCliente` | `auth` | Consulta de disponible, cuotas y mora del cliente |
+| GET | `/ventas/{venta}` | `ventas.show` | `VentaController@show` | `auth` | Detalle de comprobante emitido |
+| GET | `/ventas/{venta}/imprimir` | `ventas.imprimir` | `VentaController@imprimir` | `auth` | Impresión de ticket térmico 80mm o factura A4 |
+| POST | `/ventas/{venta}/anular` | `ventas.anular` | `VentaController@anular` | `auth` | Anulación de venta, restitución de stock y anulación de crédito |
+
+### 5.2 Reglas de Negocio en Facturación (POS)
+1. **Obligatoriedad de Caja Abierta:** Antes de procesar cualquier venta, `VentaController@store` valida que exista una sesión de caja abierta para la sucursal activa (`CajaSesion::activaParaSucursal($sucursalId)`). Si no hay caja abierta o quedó una caja de jornada anterior sin cerrar, la venta se bloquea retornando HTTP 422 con flag `requiere_apertura = true`.
+2. **Prevención de Stock Negativo:**
+   - Todo producto con `controla_stock = true` es verificado contra `productos_stock` de la sucursal emisora.
+   - Si el stock disponible es menor a la cantidad solicitada, el sistema no emite la factura y alerta al operador.
+   - **Corrección Interactiva por Recuento Físico:** El modal del facturador permite ingresar la cantidad real contada en góndola/mostrador mediante `ventas.ajuste-recuento-rapido`. Esto registra un `StockMovimiento` de tipo `recuento_fisico` y habilita la facturación en el instante.
+3. **Facturación con Crédito Personal:**
+   - Si el medio de pago es `credito_personal`, se exige cliente registrado.
+   - Se valida que el cliente no esté suspendido ni exceda su límite de crédito disponible ni su cuota máxima.
+   - Crea automáticamente el registro en `creditos` y sus `cuotas` correspondientes asociadas al número de factura.
+
+---
+
+## 6. Módulo Control de Cajas, Turnos, Arqueos y Cierre Z
+
+### 6.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/cajas` | `cajas.index` | `CajaController@index` | `auth` | Panel principal de control de turnos y Cierres Z |
+| GET | `/cajas/estado-actual` | `cajas.estado-actual` | `CajaController@estadoActual` | `auth` | Endpoint JSON con el estado de la caja de la sucursal activa |
+| POST | `/cajas/abrir` | `cajas.abrir` | `CajaController@abrir` | `auth` | Apertura de caja e ingreso del fondo inicial en efectivo |
+| POST | `/cajas/cerrar-anterior-y-abrir` | `cajas.cerrar-anterior-y-abrir` | `CajaController@cerrarAnteriorYAbrir` | `auth` | Arqueo automático de caja olvidada y apertura de la nueva |
+| GET | `/cajas/reportes/historico-medios` | `cajas.historico-medios` | `CajaController@historicoMedios` | `auth` | Reporte consolidado histórico por medios de pago |
+| GET | `/cajas/{caja}/cerrar` | `cajas.cerrar` | `CajaController@cerrarForm` | `auth` | Pantalla de Arqueo Físico y Cierre Z |
+| POST | `/cajas/{caja}/cerrar` | `cajas.cerrar.store` | `CajaController@cerrar` | `auth` | Confirmación de Cierre Z y cálculo de fallo de caja |
+| GET | `/cajas/{caja}/comprobante` | `cajas.comprobante` | `CajaController@comprobante` | `auth` | Comprobante imprimible de Cierre Z (Ticket 80mm y A4) |
+| POST | `/cajas/{caja}/movimientos` | `cajas.movimientos.store` | `CajaController@storeMovimiento` | `auth` | Registro de ingreso o retiro manual con motivo obligatorio |
+| GET | `/cajas/{caja}/movimientos` | `cajas.movimientos.json` | `CajaController@movimientosJson` | `auth` | Historial JSON de movimientos de la sesión activa |
+
+### 6.2 Flujo Operativo y Fórmulas de Arqueo
+1. **Apertura de Turno:**
+   - Al comenzar el día, el operador registra el `monto_inicial_efectivo` (fondo de cambio).
+   - Queda registrada la fecha, hora y el usuario que abrió la caja (`id_usuario_apertura`).
+2. **Control de Jornada Anterior Pendiente:**
+   - Si quedó una caja abierta de días previos (`!$caja->esDeHoy()`), el sistema bloquea el facturador obligando a efectuar el arqueo y cierre de la jornada anterior antes de permitir ventas nuevas.
+3. **Movimientos Manuales Justificados (Ingresos y Retiros):**
+   - **Retiros / Egresos:** Para pagos menores, compras de insumos, fletes o retiro de valores. Requiere obligatoriamente `motivo` justificado y `monto > 0`.
+   - **Ingresos:** Para aporte adicional de sencillo o cobros pendientes manuales.
+   - Ambos flujos se auditan con usuario, fecha, comprobante opcional y motivo visible en el Cierre Z.
+4. **Fórmula de Efectivo Teórico Esperado:**
+   $$\text{Efectivo Teórico} = \text{Fondo Inicial} + \text{Ventas Efectivo} + \text{Ingresos Manuales} - \text{Retiros Manuales}$$
+5. **Cierre Z y Fallo de Caja:**
+   - El cajero cuenta el dinero físico billete por billete (`monto_final_efectivo_real`).
+   - El sistema calcula:
+     $$\text{Diferencia} = \text{Efectivo Real Contado} - \text{Efectivo Teórico Esperado}$$
+   - Si $\text{Diferencia} > 0 \rightarrow$ Sobrante de Caja.
+   - Si $\text{Diferencia} < 0 \rightarrow$ Faltante de Caja (Fallo de Caja).
+6. **Comprobante Oficial de Cierre Z:**
+   - Emite documento imprimible en formato ticket térmico de 80mm y en hoja A4.
+   - Incluye membrete fiscal de la sucursal, rango horario, operador de apertura y cierre, primer y último ticket de la jornada, totalizadores discriminados por medio de pago, detalle de movimientos manuales con motivo, y arqueo final.
+
+---
+
+## 7. Módulo Copias de Seguridad (Backup y Restauración)
+
+### 7.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Permiso Requerido |
+|---|---|---|---|---|---|
+| GET | `/sistema/backup` | `sistema.backup.index` | `BackupController@index` | `auth` | Cualquier usuario logueado |
+| POST | `/sistema/backup` | `sistema.backup.create` | `BackupController@create` | `auth` | Cualquier usuario logueado |
+| GET | `/sistema/backup/{filename}/download` | `sistema.backup.download` | `BackupController@download` | `auth` | Cualquier usuario logueado |
+| POST | `/sistema/backup/restore` | `sistema.backup.restore` | `BackupController@restore` | `auth` | **Exclusivo Admin / Superuser** |
+
+### 7.2 Protocolo de Seguridad en Copias de Seguridad
+- **Generación de Respaldo:** `BackupService` genera un volcado SQL íntegro de la base de datos MySQL (estructura y datos completos), empaquetado y comprimido en formato `.zip` dentro de `storage/app/backups`.
+- **Restauración Protegida con Auto-Backup Preventivo:**
+  - Solo los usuarios administradores o el `superuser` tienen autorización para restaurar.
+  - Antes de ejecutar cualquier sobreescritura de la base de datos, el sistema genera automáticamente un respaldo preventivo de emergencia (`pre_restore_backup_*.zip`).
+  - Si la restauración falla o se interrumpe, la base de datos puede reponerse inmediatamente desde el archivo preventivo generado.
+
+---
+
+## 8. Seguridad Transversal, Autenticación y Despliegue en Servidor
+
+### 8.1 Blindaje de Acceso y Login Seguro
+- Se removió por completo de la vista de login (`auth/login.blade.php`) cualquier lista desplegable, sugerencia o selector de usuarios y contraseñas.
+- El ingreso al sistema exige credenciales auténticas (`username` y contraseña Bcrypt).
+- Todas las vistas y APIs del sistema (`/sistema/*`, `/ventas/*`, `/cajas/*`, `/recibos/*`, `/clientes/*`, `/creditos/*`) se encuentran bajo middleware `auth`.
+
+### 8.2 Aislamiento de Superusuario (`superuser`)
+- Se configuró la cuenta especial de rescate `superuser`.
+- La lista de administración de usuarios filtra y oculta automáticamente al `superuser` para evitar que usuarios comunes detecten su existencia o modifiquen su perfil.
+- Solo el `superuser` y administradores acreditados pueden ejecutar restauraciones de bases de datos.
+
+### 8.3 Forzado de HTTPS en Producción
+- En `app/Providers/AppServiceProvider.php`, se configuró la directiva de seguridad:
+  ```php
+  if (config('app.env') === 'production' || str_contains(config('app.url'), 'https://')) {
+      URL::forceScheme('https');
+  }
+  ```
+- Garantiza que todas las URLs, formularios `@csrf`, scripts y hojas de estilo se sirvan con protocolo seguro HTTPS en el servidor de producción (`https://app.tiendaslamarina.com.ar`).

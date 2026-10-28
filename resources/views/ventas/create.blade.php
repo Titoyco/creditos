@@ -45,6 +45,120 @@
         </div>
 
         <!-- =================================================================== -->
+        <!-- BANNER DE CONTROL DE CAJA / ESTADO DEL TURNO                        -->
+        <!-- =================================================================== -->
+        @if($requiereCierreAnterior && $cajaActiva)
+            <div class="mb-3 p-3.5 bg-amber-50 dark:bg-amber-950/70 border-2 border-amber-500 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-lg font-black shrink-0 shadow-sm animate-pulse">
+                        ⚠️
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase tracking-wider text-amber-950 dark:text-amber-200">
+                                Cierre de Jornada Anterior Pendiente (Caja #{{ $cajaActiva->id }})
+                            </span>
+                            <span class="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 font-bold px-2 py-0.5 rounded-full">
+                                Apertura: {{ $cajaActiva->fecha_apertura->format('d/m/Y H:i') }} hs
+                            </span>
+                        </div>
+                        <p class="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                            La caja de la jornada anterior no fue cerrada. Debe ingresar el arqueo de efectivo físico (revisión de fallo de caja) e iniciar el turno de hoy antes de realizar la primera venta.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
+                    <button type="button" @click="modalCierreAnterior = true"
+                            class="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-2 px-4 rounded-xl shadow transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span>⚠️ Arqueo Anterior y Abrir Hoy</span>
+                    </button>
+                    <a href="{{ route('cajas.index') }}" 
+                       class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 font-bold text-xs py-2 px-3 rounded-xl transition hover:bg-slate-50">
+                        <span>📋 Historial Cajas</span>
+                    </a>
+                </div>
+            </div>
+        @elseif($cajaActiva && $cajaActiva->esDeHoy())
+            <div class="mb-3 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-2xs">
+                <div class="flex items-center gap-3">
+                    <span class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm font-black shrink-0 shadow-sm">
+                        ✓
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase tracking-wider text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                                <span>Caja Abierta (Turno #{{ $cajaActiva->id }})</span>
+                            </span>
+                            <span class="text-[10px] bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 font-bold px-2 py-0.5 rounded-full">
+                                Hoy {{ $cajaActiva->fecha_apertura->format('H:i') }} hs
+                            </span>
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                                • Operador: <strong>{{ $cajaActiva->usuarioApertura?->name ?? 'Usuario' }}</strong>
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                            <span>Fondo Inicial: <strong class="text-slate-900 dark:text-white font-mono">${{ number_format($cajaActiva->monto_inicial_efectivo, 2, ',', '.') }}</strong></span>
+                            <span>•</span>
+                            <span>Ingresos (+): <strong class="text-emerald-700 dark:text-emerald-400 font-mono">+$<span x-text="formatDinero(totalIngresosCaja)">{{ number_format($totalesCajaActiva['total_ingresos'] ?? 0, 2, ',', '.') }}</span></strong></span>
+                            <span>•</span>
+                            <span>Retiros (-): <strong class="text-rose-700 dark:text-rose-400 font-mono">-$<span x-text="formatDinero(totalRetirosCaja)">{{ number_format($totalesCajaActiva['total_retiros'] ?? 0, 2, ',', '.') }}</span></strong></span>
+                            <span>•</span>
+                            <span>Efectivo en Caja: <strong class="text-emerald-700 dark:text-emerald-400 font-mono text-sm">$<span x-text="formatDinero(efectivoEsperadoCaja)">{{ number_format($totalesCajaActiva['efectivo_esperado'] ?? 0, 2, ',', '.') }}</span></strong></span>
+                            <span>•</span>
+                            <span>Total Facturado: <strong class="text-indigo-700 dark:text-indigo-400 font-mono">${{ number_format($totalesCajaActiva['total_general'] ?? 0, 2, ',', '.') }}</strong> ({{ $totalesCajaActiva['ventas_count'] ?? 0 }} ventas)</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
+                    <button type="button" @click="abrirModalMovimiento()" 
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-black text-xs py-2 px-3.5 rounded-xl shadow transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span>💸 Ingreso / Retiro</span>
+                    </button>
+                    <a href="{{ route('cajas.cerrar', $cajaActiva->id) }}" 
+                       class="bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white font-black text-xs py-2 px-3.5 rounded-xl shadow transition uppercase flex items-center gap-1.5">
+                        <span>🔒 Cierre Z</span>
+                    </a>
+                    <a href="{{ route('cajas.index') }}" 
+                       class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 font-bold text-xs py-2 px-3 rounded-xl transition hover:bg-slate-50">
+                        <span>📋 Control Cajas</span>
+                    </a>
+                </div>
+            </div>
+        @else
+            <div class="mb-3 p-3.5 bg-rose-50 dark:bg-rose-950/60 border-2 border-rose-400 dark:border-rose-700 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center text-lg font-black shrink-0 shadow-sm animate-pulse">
+                        🔒
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black uppercase tracking-wider text-rose-950 dark:text-rose-200">
+                                Caja No Iniciada — Apertura Obligatoria
+                            </span>
+                            <span class="text-[10px] bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200 font-bold px-2 py-0.5 rounded-full uppercase">
+                                Facturación Bloqueada
+                            </span>
+                        </div>
+                        <p class="text-xs text-rose-800 dark:text-rose-300 mt-0.5">
+                            Al inicio de la jornada se debe abrir la caja ingresando el dinero en efectivo disponible para habilitar la facturación de mostrador.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
+                    <button type="button" @click="modalAbrirCaja = true"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2 px-4 rounded-xl shadow transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span>🟢 Abrir Caja de Hoy</span>
+                    </button>
+                    <a href="{{ route('cajas.index') }}" 
+                       class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 font-bold text-xs py-2 px-3 rounded-xl transition hover:bg-slate-50">
+                        <span>📋 Historial Cajas</span>
+                    </a>
+                </div>
+            </div>
+        @endif
+
+        <!-- =================================================================== -->
         <!-- CUADRÍCULA VERTICAL EN 2 COLUMNAS (50% IZQUIERDA / 50% DERECHA)     -->
         <!-- =================================================================== -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -942,6 +1056,320 @@
             </div>
         </div>
 
+        <!-- =================================================================== -->
+        <!-- MODAL 5: APERTURA DE CAJA AL INICIO DE LA JORNADA                   -->
+        <!-- =================================================================== -->
+        <div x-show="modalAbrirCaja" 
+             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
+             x-cloak>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-emerald-500/80 space-y-4"
+                 @click.away="modalAbrirCaja = false">
+                
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-black text-base shrink-0 border border-emerald-300 dark:border-emerald-700">
+                            🟢
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                Apertura de Caja (Inicio de Jornada)
+                            </h3>
+                            <span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-wider block">
+                                Sucursal: {{ $sucursalActiva->nombre ?? 'Sucursal' }}
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" @click="modalAbrirCaja = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                </div>
+
+                <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
+                    <p class="font-bold">
+                        Ingrese el monto de dinero en efectivo con el que se inicia la caja.
+                    </p>
+                    <p class="text-[11px] text-emerald-800 dark:text-emerald-300 leading-tight">
+                        Este monto corresponde al cambio o fondo de caja disponible en el cajón físico al abrir la sucursal.
+                    </p>
+                </div>
+
+                <div class="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1">
+                            Monto Inicial en Efectivo ($ ARS):
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm">$</span>
+                            <input type="number" step="0.01" min="0" 
+                                   x-model.number="montoApertura"
+                                   @keydown.enter.prevent="enviarAperturaCaja()"
+                                   class="w-full pl-8 pr-3 font-mono font-black text-lg py-2 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right focus:ring-2 focus:ring-emerald-500"
+                                   placeholder="0.00" autofocus>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                            Observaciones de Apertura (Opcional):
+                        </label>
+                        <input type="text" x-model="obsApertura" 
+                               class="w-full text-xs py-2 px-3 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                               placeholder="Ej: Cambio inicial de mostrador...">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="modalAbrirCaja = false"
+                            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl transition uppercase">
+                        Cancelar
+                    </button>
+                    <button type="button" @click="enviarAperturaCaja()"
+                            :disabled="procesandoApertura"
+                            class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs py-2 px-5 rounded-xl shadow-md transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span x-show="!procesandoApertura">✓ Confirmar Apertura de Caja</span>
+                        <span x-show="procesandoApertura">Abriendo caja...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- MODAL 6: CIERRE DE JORNADA ANTERIOR + APERTURA DE HOY              -->
+        <!-- =================================================================== -->
+        <div x-show="modalCierreAnterior" 
+             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
+             x-cloak>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border-2 border-amber-500 space-y-4"
+                 @click.away="modalCierreAnterior = false">
+                
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 flex items-center justify-center font-black text-base shrink-0 border border-amber-300 dark:border-amber-700">
+                            ⚠️
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                Arqueo Jornada Anterior y Apertura de Hoy
+                            </h3>
+                            <span class="text-[10px] text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider block">
+                                Cierre pendiente de Caja #<span x-text="cajaAnteriorId"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" @click="modalCierreAnterior = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                </div>
+
+                <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                    <p class="font-bold">
+                        La caja anterior no fue cerrada al terminar el día.
+                    </p>
+                    <p class="text-[11px] text-amber-800 dark:text-amber-300 leading-tight">
+                        Ingrese el dinero en efectivo que había en el cajón para asentar el Cierre Z y la revisión de fallo de caja de la jornada anterior, y el fondo inicial para hoy.
+                    </p>
+                </div>
+
+                <div class="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                    <!-- Efectivo Esperado del Sistema -->
+                    <div class="flex items-center justify-between p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span class="font-bold text-slate-700 dark:text-slate-300">Efectivo Teórico Esperado (Caja Anterior):</span>
+                        <span class="font-mono font-black text-slate-900 dark:text-white text-sm" x-text="'$ ' + formatDinero(efectivoEsperadoAnterior)"></span>
+                    </div>
+
+                    <!-- Input Efectivo Real Contado -->
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1">
+                            Efectivo Real Contado en el Cajón (Cierre Anterior):
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm">$</span>
+                            <input type="number" step="0.01" min="0" 
+                                   x-model.number="contadoAnterior"
+                                   class="w-full pl-8 pr-3 font-mono font-black text-base py-2 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right focus:ring-2 focus:ring-amber-500"
+                                   placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <!-- Fallo de caja en vivo -->
+                    <div class="p-2.5 rounded-lg border flex items-center justify-between text-xs"
+                         :class="{
+                             'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300': (contadoAnterior - efectivoEsperadoAnterior) === 0,
+                             'bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-300': (contadoAnterior - efectivoEsperadoAnterior) > 0,
+                             'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300': (contadoAnterior - efectivoEsperadoAnterior) < 0
+                         }">
+                        <span class="font-bold">
+                            <span x-show="(contadoAnterior - efectivoEsperadoAnterior) === 0">✓ Arqueo Exacto (Sin diferencias)</span>
+                            <span x-show="(contadoAnterior - efectivoEsperadoAnterior) > 0">▲ Sobrante de Caja:</span>
+                            <span x-show="(contadoAnterior - efectivoEsperadoAnterior) < 0">▼ Faltante de Caja (Fallo):</span>
+                        </span>
+                        <span class="font-mono font-black text-sm" 
+                              x-text="'$ ' + formatDinero(Math.abs(contadoAnterior - efectivoEsperadoAnterior))">
+                        </span>
+                    </div>
+
+                    <!-- Fondo Inicial para la Caja de Hoy -->
+                    <div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <label class="block text-[11px] font-black uppercase text-emerald-700 dark:text-emerald-400 mb-1">
+                            Fondo Inicial en Efectivo para la Caja de HOY ($ ARS):
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm">$</span>
+                            <input type="number" step="0.01" min="0" 
+                                   x-model.number="fondoHoyAnterior"
+                                   class="w-full pl-8 pr-3 font-mono font-black text-base py-2 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right focus:ring-2 focus:ring-emerald-500"
+                                   placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                            Observaciones / Justificación de Cierre:
+                        </label>
+                        <input type="text" x-model="obsCierreAnterior" 
+                               class="w-full text-xs py-2 px-3 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                               placeholder="Ej: Cierre automático al inicio de la siguiente jornada...">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="modalCierreAnterior = false"
+                            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl transition uppercase">
+                        Cancelar
+                    </button>
+                    <button type="button" @click="enviarCierreAnteriorYAbrir()"
+                            :disabled="procesandoCierreAnterior"
+                            class="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-black text-xs py-2 px-5 rounded-xl shadow-md transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span x-show="!procesandoCierreAnterior">✓ Asentar Cierre Z y Abrir Hoy</span>
+                        <span x-show="procesandoCierreAnterior">Procesando cierre y apertura...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
+        <!-- MODAL 7: INGRESO O RETIRO MANUAL DE EFECTIVO (MOVIMIENTO DE CAJA)   -->
+        <!-- =================================================================== -->
+        <div x-show="modalMovimientoCaja" 
+             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4"
+             x-cloak>
+            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4"
+                 @click.away="modalMovimientoCaja = false">
+                
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 flex items-center justify-center font-black text-base shrink-0 border border-blue-300 dark:border-blue-700">
+                            💸
+                        </span>
+                        <div>
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                Movimiento Manual de Efectivo
+                            </h3>
+                            <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                                Turno de Caja #{{ $cajaActiva->id ?? '' }} • {{ $sucursalActiva->nombre ?? 'Sucursal' }}
+                            </span>
+                        </div>
+                    </div>
+                    <button type="button" @click="modalMovimientoCaja = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                </div>
+
+                <!-- Selector de Tipo: Ingreso (+) vs Retiro (-) -->
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl">
+                    <button type="button" 
+                            @click="movimientoTipo = 'retiro'"
+                            :class="movimientoTipo === 'retiro' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'"
+                            class="py-2 px-3 rounded-lg font-black text-xs uppercase transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>📤 Retiro de Efectivo (-)</span>
+                    </button>
+                    <button type="button" 
+                            @click="movimientoTipo = 'ingreso'"
+                            :class="movimientoTipo === 'ingreso' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'"
+                            class="py-2 px-3 rounded-lg font-black text-xs uppercase transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>📥 Ingreso de Efectivo (+)</span>
+                    </button>
+                </div>
+
+                <!-- Explicación -->
+                <div class="p-2.5 rounded-xl border text-xs"
+                     :class="movimientoTipo === 'retiro' ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900 text-rose-900 dark:text-rose-200' : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900 text-emerald-900 dark:text-emerald-200'">
+                    <span x-show="movimientoTipo === 'retiro'" class="font-bold">
+                        ⚠️ Retiro / Salida: Para pagar compras, fletes, adelantos o gastos menores. Se restará del efectivo esperado al cierre.
+                    </span>
+                    <span x-show="movimientoTipo === 'ingreso'" class="font-bold">
+                        ✓ Ingreso / Entrada: Para cobrar un pendiente manual, inyección de cambio o corrección positiva. Se sumará al efectivo esperado.
+                    </span>
+                </div>
+
+                <div class="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1">
+                            Monto en Efectivo ($ ARS):
+                        </label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm">$</span>
+                            <input type="number" step="0.01" min="0.01" 
+                                   x-model.number="movimientoMonto"
+                                   class="w-full pl-8 pr-3 font-mono font-black text-lg py-2 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right focus:ring-2 focus:ring-blue-500"
+                                   placeholder="0.00" autofocus>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1">
+                            Motivo / Justificación del Movimiento (Obligatorio):
+                        </label>
+                        <input type="text" x-model="movimientoMotivo" required
+                               class="w-full text-xs py-2 px-3 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                               :placeholder="movimientoTipo === 'retiro' ? 'Ej: Pago de flete mercadería / Compra de insumos...' : 'Ej: Cobro de saldo pendiente / Aporte de cambio...'">
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 mb-1">
+                            Nro Comprobante / Recibo Adjunto (Opcional):
+                        </label>
+                        <input type="text" x-model="movimientoComprobante" 
+                               class="w-full text-xs py-1.5 px-3 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                               placeholder="Ej: Ticket #1234 / Factura B-0012">
+                    </div>
+                </div>
+
+                <!-- Historial reciente de movimientos en el turno actual -->
+                <template x-if="movimientosCaja && movimientosCaja.length > 0">
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-black uppercase text-slate-500 tracking-wider">Movimientos Registrados en este Turno:</span>
+                        <div class="max-h-28 overflow-y-auto space-y-1 pr-1">
+                            <template x-for="m in movimientosCaja" :key="m.id">
+                                <div class="p-2 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-between text-[11px]">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black px-1.5 py-0.5 rounded text-[9px] uppercase"
+                                              :class="m.tipo === 'ingreso' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'"
+                                              x-text="m.tipo === 'ingreso' ? '+ INGRESO' : '- RETIRO'">
+                                        </span>
+                                        <span class="font-bold text-slate-800 dark:text-slate-200" x-text="m.motivo"></span>
+                                        <span x-show="m.comprobante" class="text-slate-400 text-[10px]" x-text="'(' + m.comprobante + ')'"></span>
+                                    </div>
+                                    <span class="font-mono font-black"
+                                          :class="m.tipo === 'ingreso' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'"
+                                          x-text="(m.tipo === 'ingreso' ? '+$ ' : '-$ ') + formatDinero(m.monto)">
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" @click="modalMovimientoCaja = false"
+                            class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-xl transition uppercase">
+                        Cerrar
+                    </button>
+                    <button type="button" @click="enviarMovimientoCaja()"
+                            :disabled="procesandoMovimiento"
+                            :class="movimientoTipo === 'retiro' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'"
+                            class="text-white font-black text-xs py-2 px-5 rounded-xl shadow-md transition uppercase flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                        <span x-show="!procesandoMovimiento" x-text="movimientoTipo === 'retiro' ? '✓ Asentar Retiro de Dinero' : '✓ Asentar Ingreso de Dinero'"></span>
+                        <span x-show="procesandoMovimiento">Registrando...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Script de Reactividad Alpine.js del POS -->
@@ -967,6 +1395,34 @@
                 recuentoCantidad: 1,
                 recuentoMotivo: 'Recuento físico previo a facturación en mostrador',
                 procesandoRecuento: false,
+
+                // Control de Caja / Turnos
+                cajaEstado: '{{ $cajaActiva ? ($requiereCierreAnterior ? 'cierre_anterior' : 'abierta') : 'cerrada' }}',
+                cajaId: {{ $cajaActiva->id ?? 'null' }},
+                modalAbrirCaja: false,
+                montoApertura: 0,
+                obsApertura: '',
+                procesandoApertura: false,
+                modalCierreAnterior: false,
+                cajaAnteriorId: {{ $cajaActiva->id ?? 'null' }},
+                efectivoEsperadoAnterior: {{ (float)($totalesCajaActiva['efectivo_esperado'] ?? 0) }},
+                contadoAnterior: 0,
+                fondoHoyAnterior: 0,
+                obsCierreAnterior: '',
+                procesandoCierreAnterior: false,
+
+                // Movimientos manuales de caja (Ingreso / Retiro)
+                modalMovimientoCaja: false,
+                movimientoTipo: 'retiro',
+                movimientoMonto: '',
+                movimientoMotivo: '',
+                movimientoComprobante: '',
+                procesandoMovimiento: false,
+                movimientosCaja: [],
+                efectivoEsperadoCaja: {{ (float)($totalesCajaActiva['efectivo_esperado'] ?? 0) }},
+                totalIngresosCaja: {{ (float)($totalesCajaActiva['total_ingresos'] ?? 0) }},
+                totalRetirosCaja: {{ (float)($totalesCajaActiva['total_retiros'] ?? 0) }},
+
                 pagaCon: 0,
                 procesando: false,
                 ventaExitosa: {
@@ -1311,6 +1767,16 @@
                         return;
                     }
 
+                    // Guardia de Control de Caja
+                    if (this.cajaEstado === 'cerrada') {
+                        this.modalAbrirCaja = true;
+                        return;
+                    }
+                    if (this.cajaEstado === 'cierre_anterior') {
+                        this.modalCierreAnterior = true;
+                        return;
+                    }
+
                     if (this.medioPago === 'credito_personal') {
                         if (!this.clienteSeleccionado) {
                             alert('Para pagar a crédito debe seleccionar un cliente registrado.');
@@ -1323,6 +1789,153 @@
                             this.pagaCon = this.calcularTotal();
                         }
                         this.modalCobro = true;
+                    }
+                },
+
+                async enviarAperturaCaja() {
+                    if (this.procesandoApertura) return;
+                    this.procesandoApertura = true;
+
+                    try {
+                        let res = await fetch(`{{ route('cajas.abrir') }}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({
+                                id_sucursal: {{ $sucursalActiva->id ?? 1 }},
+                                monto_inicial_efectivo: this.montoApertura || 0,
+                                observaciones: this.obsApertura || null
+                            })
+                        });
+
+                        let data = await res.json();
+                        if (!res.ok || !data.success) {
+                            alert(data.error || 'Error al realizar la apertura de caja.');
+                            this.procesandoApertura = false;
+                            return;
+                        }
+
+                        alert('Caja abierta correctamente. Ya puede facturar.');
+                        window.location.reload();
+                    } catch (e) {
+                        console.error('Error abriendo caja:', e);
+                        alert('Error de conexión al abrir la caja.');
+                        this.procesandoApertura = false;
+                    }
+                },
+
+                async enviarCierreAnteriorYAbrir() {
+                    if (this.procesandoCierreAnterior) return;
+                    this.procesandoCierreAnterior = true;
+
+                    try {
+                        let res = await fetch(`{{ route('cajas.cerrar-anterior-y-abrir') }}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({
+                                id_sucursal: {{ $sucursalActiva->id ?? 1 }},
+                                id_caja_anterior: this.cajaAnteriorId,
+                                efectivo_real_contado: this.contadoAnterior || 0,
+                                monto_inicial_efectivo: this.fondoHoyAnterior || 0,
+                                observaciones: this.obsCierreAnterior || null
+                            })
+                        });
+
+                        let data = await res.json();
+                        if (!res.ok || !data.success) {
+                            alert(data.error || 'Error al asentar el cierre anterior y apertura.');
+                            this.procesandoCierreAnterior = false;
+                            return;
+                        }
+
+                        alert('Cierre de jornada anterior asentado y nueva caja abierta con éxito.');
+                        window.location.reload();
+                    } catch (e) {
+                        console.error('Error cerrando anterior y abriendo:', e);
+                        alert('Error de conexión al procesar el cierre.');
+                        this.procesandoCierreAnterior = false;
+                    }
+                },
+
+                async abrirModalMovimiento() {
+                    if (!this.cajaId) {
+                        alert('Debe abrir la caja antes de registrar movimientos.');
+                        return;
+                    }
+                    this.modalMovimientoCaja = true;
+                    await this.cargarMovimientosCaja();
+                },
+
+                async cargarMovimientosCaja() {
+                    if (!this.cajaId) return;
+                    try {
+                        let res = await fetch(`{{ url('/cajas') }}/${this.cajaId}/movimientos`);
+                        let data = await res.json();
+                        this.movimientosCaja = data.movimientos || [];
+                        if (data.totales) {
+                            this.efectivoEsperadoCaja = data.totales.efectivo_esperado || 0;
+                            this.totalIngresosCaja = data.totales.total_ingresos || 0;
+                            this.totalRetirosCaja = data.totales.total_retiros || 0;
+                        }
+                    } catch (e) {
+                        console.error('Error cargando movimientos de caja:', e);
+                    }
+                },
+
+                async enviarMovimientoCaja() {
+                    if (!this.cajaId) return;
+                    let monto = parseFloat(this.movimientoMonto);
+                    if (isNaN(monto) || monto <= 0) {
+                        alert('Ingrese un monto válido mayor a cero.');
+                        return;
+                    }
+                    if (!this.movimientoMotivo || !this.movimientoMotivo.trim()) {
+                        alert('Debe ingresar el motivo o justificación del movimiento.');
+                        return;
+                    }
+
+                    this.procesandoMovimiento = true;
+
+                    try {
+                        let res = await fetch(`{{ url('/cajas') }}/${this.cajaId}/movimientos`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({
+                                tipo: this.movimientoTipo,
+                                monto: monto,
+                                motivo: this.movimientoMotivo.trim(),
+                                comprobante: this.movimientoComprobante ? this.movimientoComprobante.trim() : null
+                            })
+                        });
+
+                        let data = await res.json();
+                        if (!res.ok || !data.success) {
+                            alert(data.error || 'Error al registrar el movimiento.');
+                            this.procesandoMovimiento = false;
+                            return;
+                        }
+
+                        alert(data.message || 'Movimiento registrado correctamente.');
+                        this.movimientoMonto = '';
+                        this.movimientoMotivo = '';
+                        this.movimientoComprobante = '';
+                        this.procesandoMovimiento = false;
+                        await this.cargarMovimientosCaja();
+                    } catch (e) {
+                        console.error('Error registrando movimiento:', e);
+                        alert('Error de conexión al asentar el movimiento.');
+                        this.procesandoMovimiento = false;
                     }
                 },
 
@@ -1362,6 +1975,11 @@
                         let data = await res.json();
 
                         if (!res.ok) {
+                            if (data.requiere_apertura) {
+                                this.modalAbrirCaja = true;
+                            } else if (data.requiere_cierre_anterior) {
+                                this.modalCierreAnterior = true;
+                            }
                             alert(data.error || 'Ocurrió un error al procesar la venta.');
                             this.procesando = false;
                             return;

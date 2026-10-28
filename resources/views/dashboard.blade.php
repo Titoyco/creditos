@@ -82,6 +82,37 @@
                 </div>
             </a>
 
+            {{-- 1.B. Control de Caja & Cierres Z --}}
+            <a href="{{ route('cajas.index') }}"
+               class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-emerald-400 dark:hover:border-emerald-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-center text-emerald-700 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                        </div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            Caja Diaria
+                        </span>
+                    </div>
+                    <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                        Control de Caja (Cierre Z)
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-snug font-medium">
+                        Apertura de turno, arqueo de efectivo físico, fallos de caja, reportes por medio de pago e impresión de Cierre Z.
+                    </p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Turnos y Arqueos</span>
+                    <span class="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-all duration-200 flex items-center justify-center shrink-0">
+                        <svg class="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </span>
+                </div>
+            </a>
+
             {{-- 2. Stock y Catálogo de Artículos --}}
             <a href="{{ route('productos.index') }}"
                class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">

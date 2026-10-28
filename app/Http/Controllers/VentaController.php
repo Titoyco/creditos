@@ -14,6 +14,7 @@ use App\Models\Presentacion;
 use App\Models\Sucursal;
 use App\Models\SucursalIndice;
 use App\Models\Provincia;
+use App\Models\CajaSesion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -219,13 +220,21 @@ class VentaController extends Controller
         $esTdf = $sucursalActiva ? $sucursalActiva->isTdf() : true;
         $esChubut = $sucursalActiva ? $sucursalActiva->isChubut() : false;
 
+        // Estado del Control de Caja para la sucursal activa
+        $cajaActiva = CajaSesion::activaParaSucursal($sucursalId);
+        $requiereCierreAnterior = $cajaActiva && !$cajaActiva->esDeHoy();
+        $totalesCajaActiva = $cajaActiva ? $cajaActiva->calcularTotales() : null;
+
         return view('ventas.create', compact(
             'sucursalActiva',
             'presentacion',
             'tasaInteresCredito',
             'productoGenerico',
             'esTdf',
-            'esChubut'
+            'esChubut',
+            'cajaActiva',
+            'requiereCierreAnterior',
+            'totalesCajaActiva'
         ));
     }
 
@@ -454,6 +463,29 @@ class VentaController extends Controller
         $sucursal = Sucursal::findOrFail($sucursalId);
         $user = auth()->user();
 
+        // Verificación estricta de Apertura y Control de Caja
+        $cajaActiva = CajaSesion::activaParaSucursal($sucursalId);
+        if (!$cajaActiva) {
+            $msg = 'No hay una caja abierta para esta sucursal. Debe realizar la Apertura de Caja antes de emitir la primera factura.';
+            if ($request->wantsJson()) {
+                return response()->json(['error' => $msg, 'requiere_apertura' => true], 422);
+            }
+            return back()->with('error', $msg);
+        }
+
+        if (!$cajaActiva->esDeHoy()) {
+            $fechaAperturaStr = $cajaActiva->fecha_apertura->format('d/m/Y');
+            $msg = "La caja abierta pertenece a una jornada anterior ({$fechaAperturaStr}). Debe realizar el Cierre Z de la jornada previa e ingresar el dinero antes de continuar facturando.";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'error' => $msg,
+                    'requiere_cierre_anterior' => true,
+                    'caja_anterior_id' => $cajaActiva->id
+                ], 422);
+            }
+            return back()->with('error', $msg);
+        }
+
         // Cálculo de subtotal a partir de los renglones
         $subtotal = 0;
         foreach ($validated['items'] as $item) {
@@ -530,7 +562,8 @@ class VentaController extends Controller
                 $recargoFinanciacion,
                 $totalFinal,
                 $cuotasNum,
-                $valorCuotaRef
+                $valorCuotaRef,
+                $cajaActiva
             ) {
                 // 1. Siguiente número correlativo de comprobante por sucursal
                 $numeroFactura = $sucursal->siguienteNumeroComprobante();
@@ -596,6 +629,7 @@ class VentaController extends Controller
                     'id_sucursal'         => $sucursal->id,
                     'id_usuario'          => $user?->id ?? 1,
                     'id_cliente'          => $cliente?->id,
+                    'id_caja_sesion'      => $cajaActiva->id,
                     'cliente_nombre'      => $clienteNombre,
                     'cliente_documento'   => $clienteDoc,
                     'punto_venta'         => $sucursal->id,

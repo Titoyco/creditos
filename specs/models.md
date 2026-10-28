@@ -318,3 +318,155 @@ protected $fillable = [
    - La anulación de créditos (`anularCredito`) exige que el crédito no posea cuotas con amortización (`entrego == 0`); tras asentar auditoría y novedad en legajo, destruye el crédito y sus cuotas en cascada.
 
 
+---
+
+## 6. Modelo `Sucursal` (Datos Fiscales, Comerciales y de Facturación)
+
+- **Clase**: `App\Models\Sucursal`
+- **Tabla**: `sucursales`
+- **Migración principal y ampliaciones**:
+  - `database/migrations/2026_03_21_124050_create_sucursales_table.php`
+  - `database/migrations/2026_09_27_230928_add_direccion_to_sucursales_table.php`
+  - `database/migrations/2026_10_23_000001_add_datos_fiscales_to_sucursales_table.php`
+
+### 6.1 Esquema de Base de Datos y Datos Fiscales
+
+| Columna | Tipo BD | Modificadores | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK, Auto-increment | Identificador único de la sucursal |
+| `nombre` | `varchar(191)` | Not Null | Nombre descriptivo de la sucursal (Ej: Trelew - Centro, Ushuaia) |
+| `codigo_sucursal` | `varchar(10)` | UNIQUE, Nullable | Código interno / contable |
+| `razon_social` | `varchar(191)` | Nullable | Razón social del responsable fiscal |
+| `nombre_fantasia` | `varchar(191)` | Nullable | Nombre comercial / de fantasía ("La Marina") |
+| `cuit` | `varchar(20)` | Nullable | CUIT fiscal correspondiente |
+| `condicion_iva` | `varchar(100)` | Nullable | Condición frente al IVA (Ej: IVA Responsable Inscripto) |
+| `ingresos_brutos` | `varchar(100)` | Nullable | Número de Ingresos Brutos / Convenio Multilateral |
+| `direccion` | `varchar(191)` | Nullable | Dirección física del local comercial |
+| `id_provincia` | `bigint unsigned` | Nullable, FK -> `provincias(id)` | Provincia de radicación física |
+| `telefono` | `varchar(50)` | Nullable | Teléfono fijo o celular de contacto comercial |
+| `email` | `varchar(191)` | Nullable | Correo electrónico comercial para facturación |
+| `web` | `varchar(191)` | Nullable | Página web institucional (`www.tiendaslamarina.com.ar`) |
+| `punto_venta` | `integer` | Nullable, Default `1` | Número de punto de venta asignado para facturación |
+| `created_at` / `updated_at` | `timestamp` | Nullable | Marcas de tiempo |
+
+### 6.2 Datos Fiscales Configurados por Jurisdicción
+
+- **Chubut (Trelew):**
+  - Nombre de Fantasía: *"La Marina"*
+  - Razón Social: *"Tiendas la Marina SAS"*
+  - CUIT: `30-71699602-2`
+  - Domicilio: `Rivadavia 249 - Trelew - Chubut`
+- **Tierra del Fuego (Ushuaia):**
+  - Nombre de Fantasía: *"La Marina"*
+  - Razón Social: *"BARZINI GUILLERMO ENRIQUE"*
+  - CUIT: `20-11474524-4`
+  - Domicilio: `San Martín 1255 - Ushuaia - Tierra del Fuego`
+
+### 6.3 Relaciones Eloquent
+- **`clientes()`**: `HasMany` con `Cliente::class` (`id_sucursal`).
+- **`creditos()`**: `HasMany` con `Credito::class` (`id_sucursal`).
+- **`ventas()`**: `HasMany` con `Venta::class` (`id_sucursal`).
+- **`cajasSesiones()`**: `HasMany` con `CajaSesion::class` (`id_sucursal`).
+- **`provincia()`**: `BelongsTo` con `Provincia::class` (`id_provincia`).
+- **`stocks()`**: `HasMany` con `ProductoStock::class` (`id_sucursal`).
+
+---
+
+## 7. Modelos `CajaSesion` y `CajaMovimiento` (Control de Cajas, Arqueo y Movimientos Manuales)
+
+- **Clases**: `App\Models\CajaSesion`, `App\Models\CajaMovimiento`
+- **Tablas**: `cajas_sesiones`, `cajas_movimientos`
+- **Migraciones**:
+  - `database/migrations/2026_10_27_230000_create_cajas_sesiones_table.php`
+  - `database/migrations/2026_10_28_080000_create_cajas_movimientos_table.php`
+
+### 7.1 Esquema `cajas_sesiones`
+
+| Columna | Tipo BD | Descripción |
+| :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK del turno de caja |
+| `id_sucursal` | `bigint unsigned` | FK -> `sucursales(id)` |
+| `id_usuario_apertura` | `bigint unsigned` | FK -> `users(id)` usuario que abrió la caja |
+| `id_usuario_cierre` | `bigint unsigned` | FK -> `users(id)` usuario que efectuó el Cierre Z |
+| `fecha_apertura` | `datetime` | Fecha y hora de apertura del turno |
+| `fecha_cierre` | `datetime` | Fecha y hora de Cierre Z |
+| `monto_inicial_efectivo` | `decimal(14,2)` | Fondo inicial ingresado en la apertura |
+| `monto_final_efectivo_esperado` | `decimal(14,2)` | Efectivo teórico del sistema ($Fondo + VentasEf + Ingresos - Retiros$) |
+| `monto_final_efectivo_real` | `decimal(14,2)` | Efectivo físico contado por el cajero en el arqueo |
+| `diferencia_efectivo` | `decimal(14,2)` | Fallo de caja ($Real - Esperado$). Positivo = Sobrante, Negativo = Faltante |
+| `total_efectivo` | `decimal(14,2)` | Total facturado en efectivo |
+| `total_tarjeta_debito` | `decimal(14,2)` | Total facturado con tarjeta de débito |
+| `total_tarjeta_credito` | `decimal(14,2)` | Total facturado con tarjeta de crédito |
+| `total_credito_personal` | `decimal(14,2)` | Total financiado en cuenta corriente / crédito personal |
+| `total_transferencia` | `decimal(14,2)` | Total cobrado por transferencia bancaria / QR |
+| `total_otros` | `decimal(14,2)` | Total cobrado con otros medios |
+| `total_general` | `decimal(14,2)` | Facturación total acumulada del turno |
+| `cant_ventas_*` | `integer` | Contadores de comprobantes emitidos por cada medio de pago |
+| `cant_ventas_total` | `integer` | Contador total de ventas del turno |
+| `total_ingresos_efectivo` | `decimal(14,2)` | Total de ingresos manuales justificados |
+| `total_retiros_efectivo` | `decimal(14,2)` | Total de retiros/gastos manuales justificados |
+| `cant_ingresos_efectivo` | `integer` | Cantidad de ingresos manuales |
+| `cant_retiros_efectivo` | `integer` | Cantidad de retiros/gastos manuales |
+| `estado` | `varchar(20)` | `abierta` / `cerrada` |
+| `observaciones_apertura` | `text` | Notas del operador en apertura (ej. desglose de billetes de cambio) |
+| `observaciones_cierre` | `text` | Justificaciones de arqueo / notas de cierre |
+
+### 7.2 Esquema `cajas_movimientos` (Ingresos y Retiros Manuales Justificados)
+
+| Columna | Tipo BD | Modificadores | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK | Identificador único del movimiento |
+| `id_caja_sesion` | `bigint unsigned` | FK -> `cajas_sesiones(id)` ON DELETE CASCADE | Sesión de caja en la que ocurrió |
+| `id_usuario` | `bigint unsigned` | FK -> `users(id)` | Usuario responsable que registró el movimiento |
+| `tipo` | `varchar(20)` | Not Null (`ingreso` o `retiro`) | Clasificación del flujo de dinero |
+| `monto` | `decimal(14,2)` | Not Null, Min `0.01` | Monto dinerario en pesos ARS |
+| `motivo` | `varchar(255)` | Not Null | **Justificación obligatoria** (ej. "Pago flete proveedor", "Compra insumos", "Aporte sencillo") |
+| `comprobante` | `varchar(100)` | Nullable | N° de recibo, remito o factura física de respaldo |
+| `created_at` / `updated_at` | `timestamp` | Nullable | Marcas de tiempo de auditoría |
+
+### 7.3 Métodos Clave de `CajaSesion`
+- **`calcularTotales()`**: Suma en tiempo real las ventas activas discriminadas por medio de pago, computa los movimientos manuales (`totalIngresos`, `totalRetiros`) y formula el `efectivo_esperado`.
+- **`cerrar(float $efectivoRealContado, ?string $observaciones, ?int $usuarioId)`**: Fija la fecha de cierre, persiste el arqueo, calcula la diferencia/fallo y marca `estado = 'cerrada'`.
+- **`esDeHoy()`**: Determina si la sesión pertenece a la jornada actual (`fecha_apertura->isToday()`).
+- **`scopeActivaParaSucursal($sucursalId)`**: Devuelve la caja con `estado = 'abierta'` correspondiente a la sucursal.
+
+---
+
+## 8. Modelos `Venta` y `VentaItem` (Punto de Venta POS & Facturación)
+
+- **Clases**: `App\Models\Venta`, `App\Models\VentaItem`
+- **Tablas**: `ventas`, `venta_items`
+- **Migración**: `database/migrations/2026_10_23_000003_create_ventas_table.php`
+
+### 8.1 Atributos e Integridad
+- **`id_caja_sesion`**: FK relacional mandatoria hacia `cajas_sesiones.id`. Ninguna venta puede emitirse si la caja de la sucursal no se encuentra abierta y al día.
+- **`medio_pago`**: Valores tipificados: `efectivo`, `tarjeta_debito`, `tarjeta_credito`, `credito_personal`, `transferencia`, `otros`.
+- **`id_credito`**: FK relacional opcional hacia `creditos.id` generada automáticamente cuando la venta se cobra mediante `credito_personal`.
+- **`estado`**: `completada` o `anulada`. Al anularse una venta, el stock reservado se repone de inmediato y, si generó crédito personal, dicho crédito se cancela.
+
+---
+
+## 9. Modelos de Stock: `Producto`, `ProductoSucursal`, `ProductoStock` y `StockMovimiento`
+
+- **Clases**: `App\Models\Producto`, `App\Models\ProductoStock`, `App\Models\StockMovimiento`
+- **Tablas**: `productos`, `productos_sucursales` / `productos_stock`, `stock_movimientos`
+
+### 9.1 Control de Stock por Sucursal y Prevención de Stock Negativo
+- Cada producto registra stock diferenciado por sucursal (`id_sucursal`, `id_producto`, `stock_actual`, `stock_minimo`).
+- **Validación en Facturación:** Si el producto tiene habilitado `controla_stock = true` y su stock disponible en la sucursal es `0` (o inferior a la cantidad solicitada), el sistema bloquea la emisión para evitar saldos negativos.
+- **Corrección Rápida por Recuento Físico:** El POS permite que el operador, previa confirmación por recuento en mostrador, ejecute una corrección en el acto registrando un `StockMovimiento` de tipo `recuento_fisico` para regularizar el inventario y continuar con la venta.
+
+---
+
+## 10. Modelo `User` (Seguridad, Autenticación y Superusuario Secreto)
+
+- **Clase**: `App\Models\User`
+- **Tabla**: `users`
+
+### 10.1 Políticas de Seguridad y Privacidad
+- **Autenticación sin credenciales expuestas:** Se eliminó todo selector o precarga de usuarios/claves en la vista de bienvenida (`/login`). El acceso requiere autenticación obligatoria mediante `username` y `password` encriptado (Bcrypt).
+- **Aislamiento de Rutas:** Todas las rutas operativas (`/sistema/*`, `/ventas/*`, `/cajas/*`, `/recibos/*`, `/clientes/*`, `/creditos/*`) se encuentran blindadas bajo el middleware `auth`.
+- **Superusuario Secreto (`superuser`):**
+  - Credencial de emergencia con privilegios totales.
+  - **Filtro de privacidad:** Excluido programáticamente de los listados y combos de administración de usuarios para que operadores comunes no detecten su existencia.
+  - **Autorización exclusiva:** Operaciones críticas de alta sensibilidad (como la restauración total de la base de datos desde copias de seguridad `.zip`) quedan restringidas exclusivamente al `superuser` o administradores de nivel superior.

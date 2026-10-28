@@ -153,6 +153,23 @@ class VentasTest extends TestCase
             'max_cuotas'  => 3,
             'suspendido'  => true,
         ]);
+
+        // Cajas activas para Ushuaia y Trelew para permitir ventas en los tests
+        \App\Models\CajaSesion::create([
+            'id_sucursal' => $this->sucUshuaia->id,
+            'id_usuario_apertura' => $this->admin->id,
+            'fecha_apertura' => now(),
+            'monto_inicial_efectivo' => 10000,
+            'estado' => 'abierta',
+        ]);
+
+        \App\Models\CajaSesion::create([
+            'id_sucursal' => $this->sucTrelew->id,
+            'id_usuario_apertura' => $this->admin->id,
+            'fecha_apertura' => now(),
+            'monto_inicial_efectivo' => 10000,
+            'estado' => 'abierta',
+        ]);
     }
 
     public function test_ventas_index_renderiza_correctamente_con_kpis_y_ordenamiento(): void
