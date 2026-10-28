@@ -151,101 +151,47 @@
             </div>
 
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <!-- Efectivo -->
-                <div class="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
-                    <div class="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                        <span>💵 Efectivo</span>
-                        <span class="text-[10px] bg-emerald-200/80 dark:bg-emerald-900 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_efectivo }}
-                        </span>
+                @if(!empty($totales['por_medio']))
+                    @foreach($totales['por_medio'] as $mpCodigo => $mpData)
+                        @if($mpData['cant'] > 0 || in_array($mpCodigo, ['efectivo', 'tarjeta_debito', 'tarjeta_credito', 'credito_personal', 'transferencia']))
+                            @php
+                                $color = $mpData['color'] ?? 'slate';
+                                $borderBg = match($color) {
+                                    'emerald' => 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300',
+                                    'sky', 'cyan' => 'border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300',
+                                    'blue', 'indigo' => 'border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-800 dark:text-indigo-300',
+                                    'amber', 'yellow' => 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300',
+                                    'teal' => 'border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 text-teal-800 dark:text-teal-300',
+                                    'purple', 'violet' => 'border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 text-purple-800 dark:text-purple-300',
+                                    default => 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 text-slate-700 dark:text-slate-300',
+                                };
+                            @endphp
+                            <div class="p-3.5 rounded-xl border {{ $borderBg }}">
+                                <div class="flex items-center justify-between text-xs font-bold">
+                                    <span class="truncate mr-1">{{ $mpData['icono'] ?? '💳' }} {{ $mpData['nombre'] }}</span>
+                                    <span class="text-[10px] bg-white/80 dark:bg-slate-800/80 px-1.5 py-0.5 rounded font-black shadow-2xs">
+                                        {{ $mpData['cant'] }}
+                                    </span>
+                                </div>
+                                <div class="text-base font-black font-mono text-slate-900 dark:text-white mt-2">
+                                    ${{ number_format($mpData['total'], 2, ',', '.') }}
+                                </div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    {{ $caja->total_general > 0 ? round(($mpData['total'] / $caja->total_general) * 100, 1) : 0 }}% del total
+                                </div>
+                            </div>
+                        @endif
+                    @endforeach
+                @else
+                    <!-- Fallback estándar si por_medio no está inicializado -->
+                    <div class="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+                        <div class="flex items-center justify-between text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                            <span>💵 Efectivo</span>
+                            <span class="text-[10px] bg-emerald-200/80 dark:bg-emerald-900 px-1.5 py-0.5 rounded font-black">{{ $caja->cant_ventas_efectivo }}</span>
+                        </div>
+                        <div class="text-base font-black font-mono text-emerald-900 dark:text-emerald-200 mt-2">${{ number_format($caja->total_efectivo, 2, ',', '.') }}</div>
                     </div>
-                    <div class="text-base font-black font-mono text-emerald-900 dark:text-emerald-200 mt-2">
-                        ${{ number_format($caja->total_efectivo, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_efectivo / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
-
-                <!-- Tarjeta Débito -->
-                <div class="p-3.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-950/20">
-                    <div class="flex items-center justify-between text-xs font-bold text-sky-800 dark:text-sky-300">
-                        <span>💳 Tarjeta Débito</span>
-                        <span class="text-[10px] bg-sky-200/80 dark:bg-sky-900 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_tarjeta_debito }}
-                        </span>
-                    </div>
-                    <div class="text-base font-black font-mono text-sky-900 dark:text-sky-200 mt-2">
-                        ${{ number_format($caja->total_tarjeta_debito, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-sky-700 dark:text-sky-400 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_tarjeta_debito / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
-
-                <!-- Tarjeta Crédito -->
-                <div class="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20">
-                    <div class="flex items-center justify-between text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                        <span>💳 Tarjeta Crédito</span>
-                        <span class="text-[10px] bg-indigo-200/80 dark:bg-indigo-900 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_tarjeta_credito }}
-                        </span>
-                    </div>
-                    <div class="text-base font-black font-mono text-indigo-900 dark:text-indigo-200 mt-2">
-                        ${{ number_format($caja->total_tarjeta_credito, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-indigo-700 dark:text-indigo-400 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_tarjeta_credito / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
-
-                <!-- Crédito Personal / Cta Cte -->
-                <div class="p-3.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
-                    <div class="flex items-center justify-between text-xs font-bold text-amber-800 dark:text-amber-300">
-                        <span>📑 Crédito Personal / Cta Cte</span>
-                        <span class="text-[10px] bg-amber-200/80 dark:bg-amber-900 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_credito_personal }}
-                        </span>
-                    </div>
-                    <div class="text-base font-black font-mono text-amber-900 dark:text-amber-200 mt-2">
-                        ${{ number_format($caja->total_credito_personal, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_credito_personal / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
-
-                <!-- Transferencia / Mercado Pago -->
-                <div class="p-3.5 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20">
-                    <div class="flex items-center justify-between text-xs font-bold text-teal-800 dark:text-teal-300">
-                        <span>📱 Transferencia / MP</span>
-                        <span class="text-[10px] bg-teal-200/80 dark:bg-teal-900 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_transferencia }}
-                        </span>
-                    </div>
-                    <div class="text-base font-black font-mono text-teal-900 dark:text-teal-200 mt-2">
-                        ${{ number_format($caja->total_transferencia, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-teal-700 dark:text-teal-400 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_transferencia / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
-
-                <!-- Otros Medios -->
-                <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40">
-                    <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                        <span>📦 Otros Medios</span>
-                        <span class="text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded font-black">
-                            {{ $caja->cant_ventas_otros }}
-                        </span>
-                    </div>
-                    <div class="text-base font-black font-mono text-slate-800 dark:text-slate-200 mt-2">
-                        ${{ number_format($caja->total_otros, 2, ',', '.') }}
-                    </div>
-                    <div class="text-[10px] text-slate-500 mt-0.5">
-                        {{ $caja->total_general > 0 ? round(($caja->total_otros / $caja->total_general) * 100, 1) : 0 }}% del total
-                    </div>
-                </div>
+                @endif
             </div>
         </div>
 
@@ -357,7 +303,7 @@
                                 </td>
                                 <td class="py-2.5 px-4">
                                     <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                                        {{ str_replace('_', ' ', $v->medio_pago) }}
+                                        {{ $v->medioPago?->icono ?: '💳' }} {{ $v->medioPago?->nombre ?: str_replace('_', ' ', $v->medio_pago) }}
                                     </span>
                                 </td>
                                 <td class="py-2.5 px-4 text-center">

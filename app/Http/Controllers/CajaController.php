@@ -287,7 +287,7 @@ class CajaController extends Controller
         $caja->load(['sucursal.provincia', 'usuarioApertura', 'usuarioCierre', 'movimientos.usuario']);
         
         $ventas = $caja->ventas()
-            ->with(['cliente', 'usuario'])
+            ->with(['cliente', 'usuario', 'medioPago'])
             ->orderBy('id', 'desc')
             ->paginate(50);
 
@@ -396,10 +396,18 @@ class CajaController extends Controller
             $query->whereDate('fecha', '<=', $fechaHasta);
         }
 
-        // Resumen total por medio de pago
+        // Resumen total por medio de pago consolidado
         $porMedio = (clone $query)
-            ->selectRaw('medio_pago, count(*) as cant_ventas, sum(total) as total_monto')
-            ->groupBy('medio_pago')
+            ->leftJoin('medios_pago', 'ventas.id_medio_pago', '=', 'medios_pago.id')
+            ->selectRaw('
+                COALESCE(medios_pago.codigo, ventas.medio_pago) as medio_pago,
+                COALESCE(medios_pago.nombre, ventas.medio_pago) as medio_pago_nombre,
+                medios_pago.icono,
+                medios_pago.color,
+                count(*) as cant_ventas,
+                sum(ventas.total) as total_monto
+            ')
+            ->groupBy(DB::raw('COALESCE(medios_pago.codigo, ventas.medio_pago)'), DB::raw('COALESCE(medios_pago.nombre, ventas.medio_pago)'), 'medios_pago.icono', 'medios_pago.color')
             ->orderByDesc('total_monto')
             ->get();
 
@@ -409,8 +417,9 @@ class CajaController extends Controller
         // Desglose cruzado por sucursal y medio de pago
         $porSucursalMedio = (clone $query)
             ->join('sucursales', 'ventas.id_sucursal', '=', 'sucursales.id')
-            ->selectRaw('ventas.id_sucursal, sucursales.nombre as sucursal_nombre, ventas.medio_pago, count(*) as cant_ventas, sum(ventas.total) as total_monto')
-            ->groupBy('ventas.id_sucursal', 'sucursales.nombre', 'ventas.medio_pago')
+            ->leftJoin('medios_pago', 'ventas.id_medio_pago', '=', 'medios_pago.id')
+            ->selectRaw('ventas.id_sucursal, sucursales.nombre as sucursal_nombre, COALESCE(medios_pago.nombre, ventas.medio_pago) as medio_pago, count(*) as cant_ventas, sum(ventas.total) as total_monto')
+            ->groupBy('ventas.id_sucursal', 'sucursales.nombre', DB::raw('COALESCE(medios_pago.nombre, ventas.medio_pago)'))
             ->orderBy('sucursales.nombre')
             ->orderByDesc('total_monto')
             ->get();
@@ -422,7 +431,7 @@ class CajaController extends Controller
                 fputcsv($handle, ['Medio de Pago', 'Cantidad Ventas', 'Total Facturado ($ ARS)', 'Participacion (%)']);
                 foreach ($porMedio as $fila) {
                     $pct = $totalGeneral > 0 ? round(($fila->total_monto / $totalGeneral) * 100, 2) : 0;
-                    fputcsv($handle, [$fila->medio_pago, $fila->cant_ventas, $fila->total_monto, $pct]);
+                    fputcsv($handle, [$fila->medio_pago_nombre ?? $fila->medio_pago, $fila->cant_ventas, $fila->total_monto, $pct]);
                 }
                 fputcsv($handle, ['TOTAL GENERAL', $cantidadGeneral, $totalGeneral, 100.0]);
                 fclose($handle);

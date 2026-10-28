@@ -22,6 +22,7 @@ class Recibo extends Model implements Auditable
         'importe_total',
         'saldo_a_favor_generado',
         'medio_pago',
+        'id_medio_pago',
         'observaciones',
         'anulado',
         'fecha_anulacion',
@@ -40,6 +41,11 @@ class Recibo extends Model implements Auditable
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class, 'id_sucursal');
+    }
+
+    public function medioPago(): BelongsTo
+    {
+        return $this->belongsTo(MedioPago::class, 'id_medio_pago');
     }
 
     public function cliente(): BelongsTo

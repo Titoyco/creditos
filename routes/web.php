@@ -113,6 +113,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/backup/{filename}/descargar', [BackupController::class, 'download'])->name('sistema.backup.download');
         Route::post('/backup/restaurar', [BackupController::class, 'restore'])->name('sistema.backup.restore');
         Route::delete('/backup/{filename}', [BackupController::class, 'destroy'])->name('sistema.backup.destroy');
+
+        // Medios de Pago (ABM y gestión consolidada)
+        Route::get('/medios-pago', [\App\Http\Controllers\MedioPagoController::class, 'index'])->name('sistema.medios-pago.index');
+        Route::get('/medios-pago/crear', [\App\Http\Controllers\MedioPagoController::class, 'create'])->name('sistema.medios-pago.create');
+        Route::post('/medios-pago', [\App\Http\Controllers\MedioPagoController::class, 'store'])->name('sistema.medios-pago.store');
+        Route::get('/medios-pago/{medioPago}/editar', [\App\Http\Controllers\MedioPagoController::class, 'edit'])->name('sistema.medios-pago.edit');
+        Route::put('/medios-pago/{medioPago}', [\App\Http\Controllers\MedioPagoController::class, 'update'])->name('sistema.medios-pago.update');
+        Route::match(['post', 'patch'], '/medios-pago/{medioPago}/toggle-activo', [\App\Http\Controllers\MedioPagoController::class, 'toggleActivo'])->name('sistema.medios-pago.toggle-activo');
+        Route::delete('/medios-pago/{medioPago}', [\App\Http\Controllers\MedioPagoController::class, 'destroy'])->name('sistema.medios-pago.destroy');
     });
 
     // --- PERFIL DE USUARIO ---

@@ -223,7 +223,9 @@ class VentaController extends Controller
         // Estado del Control de Caja para la sucursal activa
         $cajaActiva = CajaSesion::activaParaSucursal($sucursalId);
         $requiereCierreAnterior = $cajaActiva && !$cajaActiva->esDeHoy();
-        $totalesCajaActiva = $cajaActiva ? $cajaActiva->calcularTotales() : null;
+        $totalesCajaActiva = $cajaActiva ? $cajaActiva->calcularTotales() : [];
+        // Medios de pago activos para el mostrador
+        $mediosPago = \App\Models\MedioPago::activos()->get();
 
         return view('ventas.create', compact(
             'sucursalActiva',
@@ -234,7 +236,8 @@ class VentaController extends Controller
             'esChubut',
             'cajaActiva',
             'requiereCierreAnterior',
-            'totalesCajaActiva'
+            'totalesCajaActiva',
+            'mediosPago'
         ));
     }
 
@@ -448,7 +451,7 @@ class VentaController extends Controller
             'id_cliente'        => 'nullable|exists:clientes,id',
             'cliente_nombre'    => 'nullable|string|max:191',
             'cliente_documento' => 'nullable|string|max:50',
-            'medio_pago'        => 'required|string|in:efectivo,tarjeta_debito,tarjeta_credito,credito_personal,transferencia',
+            'medio_pago'        => 'required|string|max:50',
             'cuotas'            => 'nullable|integer|min:1|max:4',
             'observaciones'     => 'nullable|string|max:1000',
             'items'             => 'required|array|min:1',
@@ -501,6 +504,10 @@ class VentaController extends Controller
         }
 
         $medioPago = $validated['medio_pago'];
+        $medioPagoModel = \App\Models\MedioPago::where('codigo', $medioPago)->first();
+        $idMedioPago = $medioPagoModel?->id;
+        $esCreditoPersonal = ($medioPago === 'credito_personal' || $medioPagoModel?->tipo_base === 'credito');
+
         $cliente = null;
         $credito = null;
         $recargoFinanciacion = 0;
@@ -508,7 +515,7 @@ class VentaController extends Controller
         $valorCuotaRef = $subtotal;
 
         // Validaciones estrictas si el medio de pago es Crédito Personal
-        if ($medioPago === 'credito_personal') {
+        if ($esCreditoPersonal) {
             if (empty($validated['id_cliente'])) {
                 $msg = 'Para abonar con Crédito Personal debe seleccionar un cliente registrado (no Consumidor Final).';
                 return $request->wantsJson() ? response()->json(['error' => $msg], 422) : back()->with('error', $msg);
@@ -548,7 +555,17 @@ class VentaController extends Controller
             }
         }
 
-        $totalFinal = round($subtotal + $recargoFinanciacion, 2);
+        $descuentoMedio = 0;
+        if (!$esCreditoPersonal && $medioPagoModel) {
+            if ($medioPagoModel->recargo_porcentaje > 0) {
+                $recargoFinanciacion = round($subtotal * ((float)$medioPagoModel->recargo_porcentaje / 100), 2);
+            }
+            if ($medioPagoModel->descuento_porcentaje > 0) {
+                $descuentoMedio = round($subtotal * ((float)$medioPagoModel->descuento_porcentaje / 100), 2);
+            }
+        }
+
+        $totalFinal = max(0, round($subtotal + $recargoFinanciacion - $descuentoMedio, 2));
 
         // Transacción completa y atómica
         try {
@@ -558,8 +575,11 @@ class VentaController extends Controller
                 $cliente,
                 $validated,
                 $medioPago,
+                $idMedioPago,
+                $esCreditoPersonal,
                 $subtotal,
                 $recargoFinanciacion,
+                $descuentoMedio,
                 $totalFinal,
                 $cuotasNum,
                 $valorCuotaRef,
@@ -571,7 +591,7 @@ class VentaController extends Controller
 
                 // 2. Si es Crédito Personal, dar de alta el Crédito y las Cuotas
                 $idCredito = null;
-                if ($medioPago === 'credito_personal' && $cliente) {
+                if ($esCreditoPersonal && $cliente) {
                     $presentacion = Presentacion::activaParaSucursal($sucursal->id);
 
                     // Incremento de correlativo en sucursal_indices
@@ -638,13 +658,14 @@ class VentaController extends Controller
                     'tipo_comprobante'    => 'FACTURA_B',
                     'fecha'               => now(),
                     'medio_pago'          => $medioPago,
+                    'id_medio_pago'       => $idMedioPago,
                     'subtotal'            => $subtotal,
                     'recargo'             => $recargoFinanciacion,
-                    'descuento'           => 0,
+                    'descuento'           => $descuentoMedio,
                     'total'               => $totalFinal,
                     'id_credito'          => $idCredito,
-                    'cuotas_credito'      => $medioPago === 'credito_personal' ? $cuotasNum : null,
-                    'valor_cuota_credito' => $medioPago === 'credito_personal' ? $valorCuotaRef : null,
+                    'cuotas_credito'      => $esCreditoPersonal ? $cuotasNum : null,
+                    'valor_cuota_credito' => $esCreditoPersonal ? $valorCuotaRef : null,
                     'estado'              => 'completada',
                     'observaciones'       => $validated['observaciones'] ?? null,
                 ]);

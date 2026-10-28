@@ -565,3 +565,30 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
   }
   ```
 - Garantiza que todas las URLs, formularios `@csrf`, scripts y hojas de estilo se sirvan con protocolo seguro HTTPS en el servidor de producción (`https://app.tiendaslamarina.com.ar`).
+
+---
+
+## 9. Módulo Medios de Pago (ABM Consolidado)
+
+### 9.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/sistema/medios-pago` | `sistema.medios-pago.index` | `MedioPagoController@index` | `auth` | Listado consolidado con conteo de movimientos |
+| GET | `/sistema/medios-pago/crear` | `sistema.medios-pago.create` | `MedioPagoController@create` | `auth` | Formulario de alta de nuevo medio |
+| POST | `/sistema/medios-pago` | `sistema.medios-pago.store` | `MedioPagoController@store` | `auth` | Valida y almacena un nuevo medio de pago |
+| GET | `/sistema/medios-pago/{medioPago}/editar` | `sistema.medios-pago.edit` | `MedioPagoController@edit` | `auth` | Formulario de edición y configuración |
+| PUT | `/sistema/medios-pago/{medioPago}` | `sistema.medios-pago.update` | `MedioPagoController@update` | `auth` | Actualiza propiedades, recargos y colores |
+| POST / PATCH | `/sistema/medios-pago/{medioPago}/toggle-activo` | `sistema.medios-pago.toggle-activo` | `MedioPagoController@toggleActivo` | `auth` | Habilita o inhabilita rápidamente el medio |
+| DELETE | `/sistema/medios-pago/{medioPago}` | `sistema.medios-pago.destroy` | `MedioPagoController@destroy` | `auth` | Eliminación segura (solo si tiene 0 movimientos) |
+
+### 9.2 Lógica de Negocio y Reglas de Integridad
+1. **Regla de Eliminación Segura:**
+   - La acción `destroy` computa `$totalMovs = $cantVentas + $cantCuotas + $cantRecibos`.
+   - Si `$totalMovs > 0`, la petición es rechazada con código de redirección y mensaje flash de advertencia detallando exactamente cuántas ventas, pagos de cuotas y recibos dependen de dicho registro.
+   - Si `$totalMovs === 0`, el registro se elimina de forma limpia.
+2. **Activación / Desactivación Rápida:**
+   - Para impedir el cobro mediante un medio con historial sin romper la integridad referencial, el usuario puede alternar `activo = false` mediante `toggle-activo`.
+   - Los medios inactivos no se renderizan en el mostrador POS ni en los selectores de cobranza, pero sus estadísticas históricas continúan disponibles en el Resumen de Caja y reportes.
+3. **Exportación e Importación:**
+   - Se actualizó `app:export-cajas-sql` para exportar la tabla `medios_pago` junto a las sesiones de caja y movimientos hacia `database/data/cajas_historicas.sql`.

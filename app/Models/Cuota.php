@@ -21,6 +21,7 @@ class Cuota extends Model implements Auditable
         'saldo_actual',     // (valor_base + intereses) - entrego
         'fecha_cobro',
         'medio_pago',
+        'id_medio_pago',
         'referencia_pago',
         'banco_envio',
         'fecha_ultimo_envio',
@@ -30,6 +31,10 @@ class Cuota extends Model implements Auditable
 
     public function credito(): BelongsTo {
         return $this->belongsTo(Credito::class, 'id_credito');
+    }
+
+    public function medioPago(): BelongsTo {
+        return $this->belongsTo(MedioPago::class, 'id_medio_pago');
     }
 
     /**

@@ -158,7 +158,7 @@
                     },
                     @endforeach
                 ],
-                medio_pago: 'Efectivo',
+                medio_pago: '{{ $mediosPago->firstWhere("codigo", "efectivo")?->nombre ?? $mediosPago->first()?->nombre ?? "Efectivo" }}',
                 montoEntrega: '',
                 montoAFavor: 0,
                 aplicarExcedenteACuotas: true,
@@ -542,13 +542,11 @@
                                 <div>
                                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Medio de Pago</label>
                                     <select name="medio_pago" x-model="medio_pago" required class="w-full text-xs font-bold rounded-lg border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500 py-2 px-2.5 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-xs">
-                                        <option value="Efectivo">💵 Efectivo (Caja mostrador)</option>
-                                        <option value="Tarjeta de Débito">💳 Tarjeta de Débito</option>
-                                        <option value="Tarjeta de Crédito">💳 Tarjeta de Crédito</option>
-                                        <option value="Transferencia Bancaria">🏦 Transferencia Bancaria</option>
-                                        <option value="Débito Automático">🏦 Débito en Cuenta Bancaria</option>
-                                        <option value="Cheque">📜 Cheque</option>
-                                        <option value="Otro">Otro medio de pago</option>
+                                        @foreach($mediosPago as $mp)
+                                            <option value="{{ $mp->nombre }}">
+                                                {{ $mp->icono ?: '💳' }} {{ $mp->nombre }}
+                                            </option>
+                                        @endforeach
                                     </select>
                                 </div>
 

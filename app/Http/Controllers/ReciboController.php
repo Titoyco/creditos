@@ -138,13 +138,15 @@ class ReciboController extends Controller
 
         $sucursales = Sucursal::all();
         $sucursalActiva = config('app.sucursal_activa') ?? Sucursal::first();
+        $mediosPago = \App\Models\MedioPago::activos()->get();
 
         return view('recibos.create', compact(
             'cliente',
             'cuotasPendientes',
             'cuotasSeleccionadasIds',
             'sucursales',
-            'sucursalActiva'
+            'sucursalActiva',
+            'mediosPago'
         ));
     }
 
@@ -187,7 +189,13 @@ class ReciboController extends Controller
             return back()->withInput()->with('error', 'El recibo debe tener un importe mayor a cero (imputado a cuotas o saldo a favor).');
         }
 
-        $recibo = DB::transaction(function () use ($validated, $itemsCuotas, $totalCuotas, $montoAFavor, $importeTotal, $cliente, $sucursal, $fechaCobro, $user) {
+        // Resolución de medio de pago consolidado
+        $medioPagoInput = $validated['medio_pago'];
+        $mpModel = \App\Models\MedioPago::where('codigo', $medioPagoInput)->orWhere('nombre', $medioPagoInput)->first();
+        $idMedioPago = $mpModel?->id;
+        $medioPagoNombre = $mpModel?->nombre ?? $medioPagoInput;
+
+        $recibo = DB::transaction(function () use ($validated, $itemsCuotas, $totalCuotas, $montoAFavor, $importeTotal, $cliente, $sucursal, $fechaCobro, $user, $idMedioPago, $medioPagoNombre) {
             // 1. Obtener siguiente número correlativo de recibo
             $numeroRecibo = $sucursal->siguienteNumeroRecibo();
 
@@ -200,7 +208,8 @@ class ReciboController extends Controller
                 'fecha'                  => $fechaCobro,
                 'importe_total'          => $importeTotal,
                 'saldo_a_favor_generado' => $montoAFavor,
-                'medio_pago'             => $validated['medio_pago'],
+                'medio_pago'             => $medioPagoNombre,
+                'id_medio_pago'          => $idMedioPago,
                 'observaciones'          => $validated['observaciones'] ?? null,
                 'anulado'                => false,
             ]);
@@ -240,10 +249,11 @@ class ReciboController extends Controller
 
                 // Actualizar la cuota
                 $cuota->update([
-                    'entrego'      => (float)$cuota->entrego + $montoPago,
-                    'saldo_actual' => $saldoNuevo,
-                    'fecha_cobro'  => $fechaCobro,
-                    'medio_pago'   => $validated['medio_pago'],
+                    'entrego'       => (float)$cuota->entrego + $montoPago,
+                    'saldo_actual'  => $saldoNuevo,
+                    'fecha_cobro'   => $fechaCobro,
+                    'medio_pago'    => $medioPagoNombre,
+                    'id_medio_pago' => $idMedioPago,
                 ]);
             }
 

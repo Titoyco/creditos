@@ -100,6 +100,34 @@ class ExportCajasDataCommand extends Command
         });
         $this->info("✓ {$totalMovs} cajas_movimientos exportadas.");
 
+        // 3. Exportar medios_pago consolidada
+        $this->info("Exportando medios_pago...");
+        fwrite($fp, "-- Tabla: medios_pago\n");
+        $columnsMedios = ['id', 'codigo', 'nombre', 'tipo_base', 'recargo_porcentaje', 'descuento_porcentaje', 'requiere_referencia', 'permite_vuelto', 'icono', 'color', 'orden', 'activo', 'created_at', 'updated_at'];
+        $colListMedios = '`' . implode('`, `', $columnsMedios) . '`';
+
+        $totalMedios = 0;
+        $rowsMedios = DB::table('medios_pago')->orderBy('id')->get();
+        if ($rowsMedios->isNotEmpty()) {
+            $valueRows = [];
+            foreach ($rowsMedios as $r) {
+                $vals = [];
+                foreach ((array)$r as $k => $v) {
+                    if (is_null($v)) {
+                        $vals[] = 'NULL';
+                    } elseif (is_numeric($v)) {
+                        $vals[] = (string)$v;
+                    } else {
+                        $vals[] = "'" . addslashes((string)$v) . "'";
+                    }
+                }
+                $valueRows[] = '(' . implode(', ', $vals) . ')';
+                $totalMedios++;
+            }
+            fwrite($fp, "REPLACE INTO `medios_pago` ({$colListMedios}) VALUES\n" . implode(",\n", $valueRows) . ";\n\n");
+        }
+        $this->info("✓ {$totalMedios} medios_pago exportados.");
+
         fwrite($fp, "SET FOREIGN_KEY_CHECKS = 1;\n");
         fclose($fp);
 

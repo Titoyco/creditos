@@ -527,7 +527,7 @@
                     </div>
 
                     <!-- Detalle de Financiación si es Crédito Personal -->
-                    <template x-if="medioPago === 'credito_personal'">
+                    <template x-if="esCredito">
                         <div class="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
                             <span class="text-amber-400 font-bold" x-text="'Interés ' + tasaInteres + '% (+$ ' + formatDinero(calcularRecargo()) + ')'"></span>
                             <span class="text-indigo-400 font-bold uppercase text-sm" x-text="cuotasPlan + ' x $' + formatDinero(calcularValorCuota(cuotasPlan))"></span>
@@ -535,69 +535,56 @@
                     </template>
                 </div>
 
-                <!-- TARJETA DE MEDIOS DE PAGO (BOTONES GRANDES TABLET TOUCH) -->
+                <!-- TARJETA DE MEDIOS DE PAGO (BOTONES GRANDES TABLET TOUCH CONSOLIDADOS) -->
                 <div class="bg-white dark:bg-slate-800 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
                     <div class="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-700/60">
                         <span class="text-xs font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider flex items-center gap-1.5">
                             <span>💳</span>
                             <span>Seleccionar Medio de Pago</span>
                         </span>
-                        <span class="text-[10px] text-slate-400 font-mono font-bold uppercase" x-text="medioPago.replace('_', ' ')"></span>
+                        <span class="text-[10px] text-slate-400 font-mono font-bold uppercase" x-text="medioPagoActual ? medioPagoActual.nombre : medioPago.replace('_', ' ')"></span>
                     </div>
 
-                    <!-- 4 Botones Grandes de Medios de Pago -->
-                    <div class="grid grid-cols-2 gap-2.5">
-                        {{-- Botón 1: Efectivo --}}
-                        <button type="button" @click="medioPago = 'efectivo'"
-                                :class="medioPago === 'efectivo' 
-                                    ? 'bg-emerald-600 text-white font-black border-emerald-600 shadow-md ring-2 ring-emerald-400/50' 
-                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                                class="py-3 px-3 rounded-xl border text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition min-h-[58px] active:scale-98">
-                            <span class="text-xl">💵</span>
-                            <span class="tracking-tight uppercase font-black">Efectivo</span>
-                        </button>
-
-                        {{-- Botón 2: Débito --}}
-                        <button type="button" @click="medioPago = 'tarjeta_debito'"
-                                :class="medioPago === 'tarjeta_debito' 
-                                    ? 'bg-cyan-600 text-white font-black border-cyan-600 shadow-md ring-2 ring-cyan-400/50' 
-                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                                class="py-3 px-3 rounded-xl border text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition min-h-[58px] active:scale-98">
-                            <span class="text-xl">💳</span>
-                            <span class="tracking-tight uppercase font-black">T. Débito</span>
-                        </button>
-
-                        {{-- Botón 3: Tarjeta Crédito --}}
-                        <button type="button" @click="medioPago = 'tarjeta_credito'"
-                                :class="medioPago === 'tarjeta_credito' 
-                                    ? 'bg-blue-600 text-white font-black border-blue-600 shadow-md ring-2 ring-blue-400/50' 
-                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
-                                class="py-3 px-3 rounded-xl border text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition min-h-[58px] active:scale-98">
-                            <span class="text-xl">💳</span>
-                            <span class="tracking-tight uppercase font-black">T. Crédito</span>
-                        </button>
-
-                        {{-- Botón 4: Crédito Personal --}}
-                        <button type="button" 
-                                @click="if (clienteSeleccionado) { medioPago = 'credito_personal'; } else { alert('Para pagar a crédito personal debe seleccionar un cliente registrado.'); }"
-                                :disabled="!clienteSeleccionado"
-                                :class="{
-                                    'bg-indigo-600 text-white font-black border-indigo-600 shadow-md ring-2 ring-indigo-400/50': medioPago === 'credito_personal',
-                                    'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100': medioPago !== 'credito_personal' && clienteSeleccionado,
-                                    'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800': !clienteSeleccionado
-                                }"
-                                class="py-3 px-3 rounded-xl border text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition min-h-[58px] active:scale-98"
-                                title="Habilitado al seleccionar cliente registrado">
-                            <span class="text-xl">📄</span>
-                            <div class="text-left">
-                                <span class="tracking-tight uppercase font-black block">Crédito</span>
-                                <span class="text-[9px] block opacity-80" x-text="clienteSeleccionado ? 'Habilitado' : 'Requiere Cliente'"></span>
-                            </div>
-                        </button>
+                    <!-- Botones Dinámicos de Medios de Pago desde la BD consolidada -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        @foreach($mediosPago as $mp)
+                            @php
+                                $isCredito = ($mp->tipo_base === 'credito' || $mp->codigo === 'credito_personal');
+                                $icon = $mp->icono ?: ($isCredito ? '📄' : ($mp->tipo_base === 'efectivo' ? '💵' : '💳'));
+                            @endphp
+                            <button type="button" 
+                                    @click="seleccionarMedioPago(@js($mp))"
+                                    @if($isCredito)
+                                        :disabled="!clienteSeleccionado"
+                                        :class="{
+                                            'bg-indigo-600 text-white font-black border-indigo-600 shadow-md ring-2 ring-indigo-400/50': medioPago === '{{ $mp->codigo }}',
+                                            'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100': medioPago !== '{{ $mp->codigo }}' && clienteSeleccionado,
+                                            'opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-900 text-slate-400 border-slate-200 dark:border-slate-800': !clienteSeleccionado
+                                        }"
+                                        title="Habilitado al seleccionar cliente registrado"
+                                    @else
+                                        :class="medioPago === '{{ $mp->codigo }}' 
+                                            ? 'bg-slate-900 dark:bg-indigo-600 text-white font-black border-slate-900 dark:border-indigo-600 shadow-md ring-2 ring-indigo-400/50' 
+                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'"
+                                    @endif
+                                    class="py-3 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition min-h-[58px] active:scale-98">
+                                <span class="text-xl">{{ $icon }}</span>
+                                <div class="text-left">
+                                    <span class="tracking-tight uppercase font-black block leading-tight">{{ $mp->nombre }}</span>
+                                    @if($isCredito)
+                                        <span class="text-[9px] block opacity-80" x-text="clienteSeleccionado ? 'Habilitado' : 'Requiere Cliente'"></span>
+                                    @elseif($mp->recargo_porcentaje > 0)
+                                        <span class="text-[9px] block text-amber-500 font-mono">+{{ (float)$mp->recargo_porcentaje }}% rec.</span>
+                                    @elseif($mp->descuento_porcentaje > 0)
+                                        <span class="text-[9px] block text-emerald-500 font-mono">-{{ (float)$mp->descuento_porcentaje }}% desc.</span>
+                                    @endif
+                                </div>
+                            </button>
+                        @endforeach
                     </div>
 
                     <!-- SELECTOR DE CUOTAS (SI ES CRÉDITO PERSONAL) -->
-                    <template x-if="medioPago === 'credito_personal' && clienteSeleccionado">
+                    <template x-if="esCredito && clienteSeleccionado">
                         <div class="pt-2.5 border-t border-slate-200 dark:border-slate-700 space-y-2">
                             <div class="flex items-center justify-between">
                                 <span class="text-xs font-black uppercase text-indigo-900 dark:text-indigo-300 flex items-center gap-1">
@@ -636,7 +623,7 @@
                     </template>
 
                     <!-- PANEL DE COBRO EN EFECTIVO RÁPIDO & VUELTO (SI ES EFECTIVO) -->
-                    <template x-if="medioPago === 'efectivo'">
+                    <template x-if="esEfectivo">
                         <div class="pt-2.5 border-t border-slate-200 dark:border-slate-700 space-y-2">
                             <div class="flex items-center justify-between text-xs">
                                 <span class="font-bold text-slate-700 dark:text-slate-300 uppercase">Cálculo Rápido de Vuelto:</span>
@@ -685,11 +672,11 @@
                             :disabled="items.length === 0 || procesando"
                             :class="items.length === 0 
                                 ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-400 dark:text-slate-500' 
-                                : (medioPago === 'credito_personal' 
+                                : (esCredito 
                                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98' 
                                     : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98')"
                             class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2">
-                        <span x-text="procesando ? 'Procesando...' : (medioPago === 'credito_personal' ? 'Verificar y Facturar Crédito' : 'PAGAR / COBRAR AHORA')"></span>
+                        <span x-text="procesando ? 'Procesando...' : (esCredito ? 'Verificar y Facturar Crédito' : 'PAGAR / COBRAR AHORA')"></span>
                         <span x-show="!procesando" class="font-mono text-sm sm:text-base font-bold" x-text="'($ ' + formatDinero(calcularTotal()) + ')'"></span>
                     </button>
                 </div>
@@ -845,7 +832,7 @@
                 
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
                     <h3 class="text-base font-black text-slate-900 dark:text-white uppercase flex items-center gap-2">
-                        <span x-text="medioPago === 'efectivo' ? '💵 Cobro en Efectivo' : '💳 Cobro con Tarjeta'"></span>
+                        <span x-text="medioPagoActual ? (medioPagoActual.icono + ' Cobro con ' + medioPagoActual.nombre) : '💳 Cobro de Factura'"></span>
                     </h3>
                     <button type="button" @click="modalCobro = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
                 </div>
@@ -855,10 +842,28 @@
                     <span class="text-3xl font-black text-slate-900 dark:text-white font-mono tabular-nums"
                           x-text="'$ ' + formatDinero(calcularTotal())">
                     </span>
+                    <template x-if="medioPagoActual && Number(medioPagoActual.recargo_porcentaje) > 0">
+                        <span class="text-[10px] text-amber-500 font-mono block mt-1" x-text="'Incluye recargo del ' + medioPagoActual.recargo_porcentaje + '% (+$ ' + formatDinero(calcularRecargo()) + ')'"></span>
+                    </template>
+                    <template x-if="medioPagoActual && Number(medioPagoActual.descuento_porcentaje) > 0">
+                        <span class="text-[10px] text-emerald-500 font-mono block mt-1" x-text="'Incluye descuento del ' + medioPagoActual.descuento_porcentaje + '% (-$ ' + formatDinero(calcularDescuento()) + ')'"></span>
+                    </template>
                 </div>
 
+                <!-- Campo de referencia / comprobante si el medio de pago lo requiere -->
+                <template x-if="medioPagoActual && medioPagoActual.requiere_referencia">
+                    <div class="space-y-1.5 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase">N° Cupón / Comprobante / Transacción:</label>
+                        <input type="text" 
+                               x-model="referenciaPago" 
+                               @keydown.enter.prevent="enviarVenta()"
+                               placeholder="Ej: Cupón 123456 / Ref. 987654 / Cheque N°..." 
+                               class="w-full text-xs font-mono font-bold py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </template>
+
                 <!-- Calculador de Vuelto si es Efectivo -->
-                <template x-if="medioPago === 'efectivo'">
+                <template x-if="esEfectivo">
                     <div class="space-y-3 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
                         <div>
                             <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Paga con:</label>
@@ -1382,7 +1387,32 @@
                 clienteSeleccionado: null,
                 clienteQuery: '',
                 sugerenciasClientes: [],
-                medioPago: 'efectivo',
+                medioPago: '{{ $mediosPago->firstWhere("codigo", "efectivo")?->codigo ?? $mediosPago->first()?->codigo ?? "efectivo" }}',
+                mediosPagoLista: @json($mediosPago),
+                referenciaPago: '',
+                get medioPagoActual() {
+                    return this.mediosPagoLista.find(m => m.codigo === this.medioPago) || null;
+                },
+                get esCredito() {
+                    let mp = this.medioPagoActual;
+                    return (mp && (mp.tipo_base === 'credito' || mp.codigo === 'credito_personal')) || this.medioPago === 'credito_personal';
+                },
+                get esEfectivo() {
+                    let mp = this.medioPagoActual;
+                    return (mp && (mp.tipo_base === 'efectivo' || mp.permite_vuelto)) || this.medioPago === 'efectivo';
+                },
+                seleccionarMedioPago(mp) {
+                    if ((mp.tipo_base === 'credito' || mp.codigo === 'credito_personal') && !this.clienteSeleccionado) {
+                        alert('Para operar con ' + mp.nombre + ' debe seleccionar un cliente registrado.');
+                        return;
+                    }
+                    this.medioPago = mp.codigo;
+                    if (this.esEfectivo) {
+                        if (!this.pagaCon || this.pagaCon < this.calcularTotal()) {
+                            this.pagaCon = this.calcularTotal();
+                        }
+                    }
+                },
                 cuotasPlan: 1,
                 tasaInteres: {{ (float)$tasaInteresCredito }},
                 montoGenerico: '',
@@ -1465,14 +1495,28 @@
                 },
 
                 calcularRecargo() {
-                    if (this.medioPago === 'credito_personal' && this.tasaInteres > 0) {
-                        return Math.round(this.calcularSubtotal() * (this.tasaInteres / 100) * 100) / 100;
+                    let sub = this.calcularSubtotal();
+                    if (this.esCredito && this.tasaInteres > 0) {
+                        return Math.round(sub * (this.tasaInteres / 100) * 100) / 100;
+                    }
+                    let mp = this.medioPagoActual;
+                    if (mp && Number(mp.recargo_porcentaje) > 0) {
+                        return Math.round(sub * (Number(mp.recargo_porcentaje) / 100) * 100) / 100;
+                    }
+                    return 0;
+                },
+
+                calcularDescuento() {
+                    let sub = this.calcularSubtotal();
+                    let mp = this.medioPagoActual;
+                    if (mp && Number(mp.descuento_porcentaje) > 0) {
+                        return Math.round(sub * (Number(mp.descuento_porcentaje) / 100) * 100) / 100;
                     }
                     return 0;
                 },
 
                 calcularTotal() {
-                    return Math.round((this.calcularSubtotal() + this.calcularRecargo()) * 100) / 100;
+                    return Math.max(0, Math.round((this.calcularSubtotal() + this.calcularRecargo() - this.calcularDescuento()) * 100) / 100);
                 },
 
                 calcularValorCuota(cuotas) {
@@ -1744,7 +1788,7 @@
                 deseleccionarCliente() {
                     this.clienteSeleccionado = null;
                     this.infoCredito = null;
-                    if (this.medioPago === 'credito_personal') {
+                    if (this.esCredito) {
                         this.medioPago = 'efectivo';
                     }
                     this.focusBarcode();
@@ -1777,7 +1821,7 @@
                         return;
                     }
 
-                    if (this.medioPago === 'credito_personal') {
+                    if (this.esCredito) {
                         if (!this.clienteSeleccionado) {
                             alert('Para pagar a crédito debe seleccionar un cliente registrado.');
                             return;
@@ -1785,8 +1829,10 @@
                         this.consultarInfoCredito(this.clienteSeleccionado.id);
                         this.modalCredito = true;
                     } else {
-                        if (!this.pagaCon || this.pagaCon < this.calcularTotal()) {
-                            this.pagaCon = this.calcularTotal();
+                        if (this.esEfectivo) {
+                            if (!this.pagaCon || this.pagaCon < this.calcularTotal()) {
+                                this.pagaCon = this.calcularTotal();
+                            }
                         }
                         this.modalCobro = true;
                     }
@@ -1957,7 +2003,8 @@
                         cliente_nombre: this.clienteSeleccionado ? this.clienteSeleccionado.nombre : 'CONSUMIDOR FINAL',
                         cliente_documento: this.clienteSeleccionado ? this.clienteSeleccionado.dni : null,
                         medio_pago: this.medioPago,
-                        cuotas: this.medioPago === 'credito_personal' ? this.cuotasPlan : null,
+                        cuotas: this.esCredito ? this.cuotasPlan : null,
+                        observaciones: this.referenciaPago ? ('[Ref: ' + this.referenciaPago + ']') : null,
                         items: this.items
                     };
 
@@ -2010,6 +2057,7 @@
                     this.clienteSeleccionado = null;
                     this.infoCredito = null;
                     this.medioPago = 'efectivo';
+                    this.referenciaPago = '';
                     this.cuotasPlan = 1;
                     this.modalExito = false;
                     this.focusBarcode();

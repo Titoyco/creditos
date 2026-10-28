@@ -470,3 +470,38 @@ protected $fillable = [
   - Credencial de emergencia con privilegios totales.
   - **Filtro de privacidad:** Excluido programáticamente de los listados y combos de administración de usuarios para que operadores comunes no detecten su existencia.
   - **Autorización exclusiva:** Operaciones críticas de alta sensibilidad (como la restauración total de la base de datos desde copias de seguridad `.zip`) quedan restringidas exclusivamente al `superuser` o administradores de nivel superior.
+
+---
+
+## 11. Modelo `MedioPago` (Consolidación y ABM de Medios de Pago)
+
+- **Clase**: `App\Models\MedioPago`
+- **Tabla**: `medios_pago`
+- **Migración**: `database/migrations/2026_10_28_120000_create_medios_pago_table_and_add_foreign_keys.php`
+
+### 11.1 Atributos e Integridad Relacional
+- **`id`**: Clave primaria autonumérica.
+- **`codigo`**: Identificador único en formato slug (ej: `efectivo`, `tarjeta_debito`, `tarjeta_credito`, `credito_personal`, `transferencia`, `cheque`, `otros`).
+- **`nombre`**: Denominación legible para el operador y tickets (ej: "Efectivo", "Tarjeta Débito", "Mercado Pago QR").
+- **`tipo_base`**: Clasificación funcional (`efectivo`, `tarjeta`, `debito`, `tarjeta_credito`, `credito`, `banco`, `transferencia`, `cheque`, `otro`, `otros`). Permite que el sistema sepa el comportamiento operativo del medio.
+- **`recargo_porcentaje`**: Recargo automático a aplicar sobre el subtotal de venta (ej: 10% para ciertas tarjetas de crédito).
+- **`descuento_porcentaje`**: Descuento automático a aplicar sobre el subtotal de venta (ej: 5% por pago en efectivo o transferencia).
+- **`requiere_referencia`**: Booleano. Si es `true`, el POS y cobros exigen número de cupón, ID de transferencia o referencia bancaria.
+- **`permite_vuelto`**: Booleano. Determina si el modal de cobro habilita el cálculo de efectivo recibido y vuelto a entregar.
+- **`icono`**: Emoji o identificador visual para botones de mostrador y reportes (ej: 💵, 💳, 🏦, 📋).
+- **`color`**: Clave cromática de Tailwind CSS (`emerald`, `sky`, `blue`, `indigo`, `amber`, `purple`, `teal`, `rose`, `slate`).
+- **`orden`**: Posición entera para ordenar los botones de cobro en mostrador.
+- **`activo`**: Booleano. Si es `false`, se desactiva para nuevas operaciones pero preserva los vínculos históricos.
+
+### 11.2 Claves Foráneas Agregadas y Consolidación
+Todas las transacciones de ingresos, ventas, cobranzas y cuotas se vinculan a la tabla consolidada:
+- **`ventas.id_medio_pago`**: FK a `medios_pago.id` (conserva `medio_pago` como string de compatibilidad).
+- **`cuotas.id_medio_pago`**: FK a `medios_pago.id` (conserva `medio_pago` como string de compatibilidad).
+- **`recibos.id_medio_pago`**: FK a `medios_pago.id` (conserva `medio_pago` como string de compatibilidad).
+
+### 11.3 Regla de Eliminación Segura (Integridad Referencial Estricta)
+- Un medio de pago **SOLO puede eliminarse si no posee movimientos asociados**:
+  - `ventas()->count() === 0`
+  - `cuotas()->count() === 0`
+  - `recibos()->count() === 0`
+- Si registra movimientos, el controlador bloquea la eliminación informando el conteo discriminado de transacciones asociadas e instruye al usuario a desactivarlo (`activo = false`) para evitar su uso en nuevas operaciones.

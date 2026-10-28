@@ -136,17 +136,16 @@
                                 $pctCant = $cantidadGeneral > 0 ? ($cant / $cantidadGeneral) * 100 : 0;
                                 $promedio = $cant > 0 ? $monto / $cant : 0;
 
-                                $etiquetas = [
-                                    'efectivo'          => ['💵 Efectivo', 'text-emerald-700 dark:text-emerald-400'],
-                                    'tarjeta_debito'    => ['💳 Tarjeta Débito', 'text-sky-700 dark:text-sky-400'],
-                                    'tarjeta_credito'   => ['💳 Tarjeta Crédito', 'text-indigo-700 dark:text-indigo-400'],
-                                    'credito_personal'  => ['📋 Crédito Personal', 'text-purple-700 dark:text-purple-400'],
-                                    'cuenta_corriente'  => ['📑 Cuenta Corriente', 'text-amber-700 dark:text-amber-400'],
-                                    'transferencia'     => ['📱 Transferencia Bancaria', 'text-teal-700 dark:text-teal-400'],
-                                    'mercado_pago'      => ['📱 Mercado Pago', 'text-cyan-700 dark:text-cyan-400'],
-                                ];
-                                $label = $etiquetas[$fila->medio_pago][0] ?? ucwords(str_replace('_', ' ', $fila->medio_pago));
-                                $color = $etiquetas[$fila->medio_pago][1] ?? 'text-slate-800 dark:text-slate-200';
+                                $label = ($fila->icono ? ($fila->icono . ' ') : '') . ($fila->medio_pago_nombre ?? ucwords(str_replace('_', ' ', $fila->medio_pago)));
+                                $color = match($fila->color ?? '') {
+                                    'emerald' => 'text-emerald-700 dark:text-emerald-400',
+                                    'sky', 'cyan' => 'text-sky-700 dark:text-sky-400',
+                                    'blue', 'indigo' => 'text-indigo-700 dark:text-indigo-400',
+                                    'purple', 'violet' => 'text-purple-700 dark:text-purple-400',
+                                    'amber' => 'text-amber-700 dark:text-amber-400',
+                                    'teal' => 'text-teal-700 dark:text-teal-400',
+                                    default => 'text-slate-800 dark:text-slate-200',
+                                };
                             @endphp
                             <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition">
                                 <td class="py-3 px-4 font-bold {{ $color }}">

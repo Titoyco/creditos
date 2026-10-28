@@ -106,5 +106,18 @@
             </p>
         </a>
 
+        <!-- 8. Medios de Pago -->
+        <a href="{{ route('sistema.medios-pago.index') }}" class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-300 dark:border-slate-700 shadow-sm p-4 hover:border-indigo-500 dark:hover:border-indigo-400 hover:ring-1 hover:ring-indigo-500 transition-all flex flex-col group">
+            <div class="flex items-center space-x-3 mb-2">
+                <div class="p-2 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 rounded text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 dark:group-hover:bg-indigo-600 group-hover:border-indigo-600 group-hover:text-white transition-colors">
+                    <span class="text-xl">💳</span>
+                </div>
+                <h2 class="font-bold text-[11px] text-slate-800 dark:text-slate-100 uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Medios de Pago</h2>
+            </div>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
+                ABM consolidado de formas de cobro: efectivo, tarjetas, créditos, transferencias, recargos y descuentos.
+            </p>
+        </a>
+
     </div>
 </x-app-layout>

@@ -184,7 +184,7 @@ class CajaSesion extends Model implements Auditable
      */
     public function calcularTotales(): array
     {
-        $ventasActivas = $this->ventas()->where('estado', '!=', 'anulada')->get();
+        $ventasActivas = $this->ventas()->with('medioPago')->where('estado', '!=', 'anulada')->get();
 
         $totales = [
             'efectivo' => ['total' => 0.0, 'cant' => 0],
@@ -196,38 +196,139 @@ class CajaSesion extends Model implements Auditable
             'general' => ['total' => 0.0, 'cant' => 0],
         ];
 
-        foreach ($ventasActivas as $v) {
-            $monto = (float) $v->total;
-            $mp = $v->medio_pago;
-
-            if ($mp === 'efectivo') {
-                $totales['efectivo']['total'] += $monto;
-                $totales['efectivo']['cant']++;
-            } elseif ($mp === 'tarjeta_debito') {
-                $totales['tarjeta_debito']['total'] += $monto;
-                $totales['tarjeta_debito']['cant']++;
-            } elseif ($mp === 'tarjeta_credito') {
-                $totales['tarjeta_credito']['total'] += $monto;
-                $totales['tarjeta_credito']['cant']++;
-            } elseif ($mp === 'credito_personal') {
-                $totales['credito_personal']['total'] += $monto;
-                $totales['credito_personal']['cant']++;
-            } elseif ($mp === 'transferencia') {
-                $totales['transferencia']['total'] += $monto;
-                $totales['transferencia']['cant']++;
-            } else {
-                $totales['otros']['total'] += $monto;
-                $totales['otros']['cant']++;
+        // Desglose dinámico por Medios de Pago registrados en la BD consolidada
+        $porMedio = [];
+        try {
+            $mediosTodos = MedioPago::orderBy('orden')->orderBy('id')->get();
+            foreach ($mediosTodos as $mp) {
+                $porMedio[$mp->codigo] = [
+                    'id'        => $mp->id,
+                    'codigo'    => $mp->codigo,
+                    'nombre'    => $mp->nombre,
+                    'icono'     => $mp->icono ?: '💳',
+                    'color'     => $mp->color ?: 'slate',
+                    'tipo_base' => $mp->tipo_base,
+                    'total'     => 0.0,
+                    'cant'      => 0,
+                ];
             }
+        } catch (\Throwable $e) {
+            // Si la tabla no estuviera disponible temporalmente
+        }
 
-            $totales['general']['total'] += $monto;
-            $totales['general']['cant']++;
+        if (empty($porMedio)) {
+            $defaultMedios = [
+                'efectivo'          => ['nombre' => 'Efectivo', 'icono' => '💵', 'color' => 'emerald', 'tipo_base' => 'efectivo'],
+                'tarjeta_debito'    => ['nombre' => 'Tarjeta Débito', 'icono' => '💳', 'color' => 'sky', 'tipo_base' => 'debito'],
+                'tarjeta_credito'   => ['nombre' => 'Tarjeta Crédito', 'icono' => '💳', 'color' => 'blue', 'tipo_base' => 'tarjeta_credito'],
+                'credito_personal'  => ['nombre' => 'Crédito Personal', 'icono' => '📋', 'color' => 'amber', 'tipo_base' => 'credito'],
+                'transferencia'     => ['nombre' => 'Transferencia', 'icono' => '🏦', 'color' => 'teal', 'tipo_base' => 'transferencia'],
+                'otros'             => ['nombre' => 'Otros', 'icono' => '🪙', 'color' => 'slate', 'tipo_base' => 'otros'],
+            ];
+            foreach ($defaultMedios as $cod => $def) {
+                $porMedio[$cod] = [
+                    'id'        => null,
+                    'codigo'    => $cod,
+                    'nombre'    => $def['nombre'],
+                    'icono'     => $def['icono'],
+                    'color'     => $def['color'],
+                    'tipo_base' => $def['tipo_base'],
+                    'total'     => 0.0,
+                    'cant'      => 0,
+                ];
+            }
+        }
+
+        if ($ventasActivas->isNotEmpty()) {
+            foreach ($ventasActivas as $v) {
+                $monto = (float) $v->total;
+                $mp = $v->medio_pago;
+                $codigoMedio = $v->medioPago?->codigo ?? $mp;
+                $tipoBase = $v->medioPago?->tipo_base;
+
+                if ($mp === 'efectivo' || $tipoBase === 'efectivo') {
+                    $totales['efectivo']['total'] += $monto;
+                    $totales['efectivo']['cant']++;
+                } elseif ($mp === 'tarjeta_debito' || $tipoBase === 'debito') {
+                    $totales['tarjeta_debito']['total'] += $monto;
+                    $totales['tarjeta_debito']['cant']++;
+                } elseif ($mp === 'tarjeta_credito' || $tipoBase === 'tarjeta_credito') {
+                    $totales['tarjeta_credito']['total'] += $monto;
+                    $totales['tarjeta_credito']['cant']++;
+                } elseif ($mp === 'credito_personal' || $tipoBase === 'credito') {
+                    $totales['credito_personal']['total'] += $monto;
+                    $totales['credito_personal']['cant']++;
+                } elseif ($mp === 'transferencia' || $tipoBase === 'transferencia') {
+                    $totales['transferencia']['total'] += $monto;
+                    $totales['transferencia']['cant']++;
+                } else {
+                    $totales['otros']['total'] += $monto;
+                    $totales['otros']['cant']++;
+                }
+
+                // Desglose por medio dinámico
+                if (!isset($porMedio[$codigoMedio])) {
+                    $porMedio[$codigoMedio] = [
+                        'id'        => $v->id_medio_pago,
+                        'codigo'    => $codigoMedio,
+                        'nombre'    => $v->medioPago?->nombre ?? ucwords(str_replace('_', ' ', $codigoMedio)),
+                        'icono'     => $v->medioPago?->icono ?: '💳',
+                        'color'     => $v->medioPago?->color ?: 'slate',
+                        'tipo_base' => $tipoBase ?? 'otros',
+                        'total'     => 0.0,
+                        'cant'      => 0,
+                    ];
+                }
+                $porMedio[$codigoMedio]['total'] += $monto;
+                $porMedio[$codigoMedio]['cant']++;
+
+                $totales['general']['total'] += $monto;
+                $totales['general']['cant']++;
+            }
+        } elseif ((float) $this->total_general > 0 || (float) $this->total_efectivo > 0) {
+            // Caso de cajas cerradas o históricas donde los totales ya fueron consolidados en los campos de la sesión
+            $totales['efectivo']         = ['total' => (float)$this->total_efectivo, 'cant' => (int)$this->cant_ventas_efectivo];
+            $totales['tarjeta_debito']    = ['total' => (float)$this->total_tarjeta_debito, 'cant' => (int)$this->cant_ventas_tarjeta_debito];
+            $totales['tarjeta_credito']   = ['total' => (float)$this->total_tarjeta_credito, 'cant' => (int)$this->cant_ventas_tarjeta_credito];
+            $totales['credito_personal']  = ['total' => (float)$this->total_credito_personal, 'cant' => (int)$this->cant_ventas_credito_personal];
+            $totales['transferencia']     = ['total' => (float)$this->total_transferencia, 'cant' => (int)$this->cant_ventas_transferencia];
+            $totales['otros']             = ['total' => (float)$this->total_otros, 'cant' => (int)$this->cant_ventas_otros];
+            $totales['general']           = ['total' => (float)$this->total_general, 'cant' => (int)$this->cant_ventas_total];
+
+            if (isset($porMedio['efectivo'])) {
+                $porMedio['efectivo']['total'] = (float)$this->total_efectivo;
+                $porMedio['efectivo']['cant'] = (int)$this->cant_ventas_efectivo;
+            }
+            if (isset($porMedio['tarjeta_debito'])) {
+                $porMedio['tarjeta_debito']['total'] = (float)$this->total_tarjeta_debito;
+                $porMedio['tarjeta_debito']['cant'] = (int)$this->cant_ventas_tarjeta_debito;
+            }
+            if (isset($porMedio['tarjeta_credito'])) {
+                $porMedio['tarjeta_credito']['total'] = (float)$this->total_tarjeta_credito;
+                $porMedio['tarjeta_credito']['cant'] = (int)$this->cant_ventas_tarjeta_credito;
+            }
+            if (isset($porMedio['credito_personal'])) {
+                $porMedio['credito_personal']['total'] = (float)$this->total_credito_personal;
+                $porMedio['credito_personal']['cant'] = (int)$this->cant_ventas_credito_personal;
+            }
+            if (isset($porMedio['transferencia'])) {
+                $porMedio['transferencia']['total'] = (float)$this->total_transferencia;
+                $porMedio['transferencia']['cant'] = (int)$this->cant_ventas_transferencia;
+            }
+            if (isset($porMedio['otros'])) {
+                $porMedio['otros']['total'] = (float)$this->total_otros;
+                $porMedio['otros']['cant'] = (int)$this->cant_ventas_otros;
+            }
         }
 
         // Redondeo
         foreach ($totales as $k => $data) {
             $totales[$k]['total'] = round($data['total'], 2);
         }
+        foreach ($porMedio as $k => $data) {
+            $porMedio[$k]['total'] = round($data['total'], 2);
+        }
+        $totales['por_medio'] = $porMedio;
 
         // Movimientos de efectivo (ingresos y retiros justificados)
         $movs = $this->movimientos()->get();

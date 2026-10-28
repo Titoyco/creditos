@@ -27,6 +27,7 @@ class Venta extends Model implements Auditable
         'tipo_comprobante',
         'fecha',
         'medio_pago',
+        'id_medio_pago',
         'subtotal',
         'recargo',
         'descuento',
@@ -77,6 +78,11 @@ class Venta extends Model implements Auditable
     public function credito(): BelongsTo
     {
         return $this->belongsTo(Credito::class, 'id_credito');
+    }
+
+    public function medioPago(): BelongsTo
+    {
+        return $this->belongsTo(MedioPago::class, 'id_medio_pago');
     }
 
     public function items(): HasMany
