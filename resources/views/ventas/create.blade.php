@@ -704,7 +704,7 @@
                                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98' 
                                     : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98')"
                             class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2">
-                        <span x-text="procesando ? 'Procesando...' : (esCredito ? 'Verificar y Facturar Crédito' : 'PAGAR / COBRAR AHORA')"></span>
+                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? 'Facturar' : 'Verificar y Facturar Crédito') : 'PAGAR / COBRAR AHORA')"></span>
                         <span x-show="!procesando" class="font-mono text-sm sm:text-base font-bold" x-text="'($ ' + formatDinero(calcularTotal()) + ')'"></span>
                     </button>
                 </div>
@@ -2110,7 +2110,9 @@
                     } else if (this.clienteSeleccionado) {
                         this.nuevoLimiteInput = this.clienteSeleccionado.limite_efectivo || this.clienteSeleccionado.limite || 0;
                     }
-                    this.autorizadoPorVendedor = false;
+                    if (!this.creditoAutorizado) {
+                        this.autorizadoPorVendedor = false;
+                    }
                     this.modalCredito = true;
                 },
 
@@ -2232,6 +2234,11 @@
                     if (this.esCredito) {
                         if (!this.clienteSeleccionado) {
                             alert('Para pagar a crédito debe seleccionar un cliente registrado.');
+                            return;
+                        }
+                        // Si el crédito ya fue verificado y autorizado, emitir la factura directamente
+                        if (this.creditoAutorizado) {
+                            this.enviarVenta();
                             return;
                         }
                         this.abrirModalCredito();

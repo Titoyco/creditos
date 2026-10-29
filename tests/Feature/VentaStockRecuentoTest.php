@@ -431,6 +431,7 @@ class VentaStockRecuentoTest extends TestCase
         $response->assertSee('DETALLE DE COMPRAS:');
         $response->assertSee('PROXIMOS VENCIMIENTOS:');
         $response->assertSee('COMENTARIOS / NOVEDADES:');
+        $response->assertSee('creditoAutorizado ? \'Facturar\' : \'Verificar y Facturar Crédito\'', false);
     }
 
     public function test_edicion_cliente_con_parametro_embed_redirecciona_a_show_embebido()
