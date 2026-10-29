@@ -2000,12 +2000,18 @@
                         _token: '{{ csrf_token() }}',
                         id_sucursal: {{ $sucursalActiva->id ?? 1 }},
                         id_cliente: this.clienteSeleccionado ? this.clienteSeleccionado.id : null,
-                        cliente_nombre: this.clienteSeleccionado ? this.clienteSeleccionado.nombre : 'CONSUMIDOR FINAL',
-                        cliente_documento: this.clienteSeleccionado ? this.clienteSeleccionado.dni : null,
+                        cliente_nombre: this.clienteSeleccionado ? String(this.clienteSeleccionado.nombre) : 'CONSUMIDOR FINAL',
+                        cliente_documento: (this.clienteSeleccionado && this.clienteSeleccionado.dni) ? String(this.clienteSeleccionado.dni) : null,
                         medio_pago: this.medioPago,
-                        cuotas: this.esCredito ? this.cuotasPlan : null,
+                        cuotas: this.esCredito ? parseInt(this.cuotasPlan || 1) : null,
                         observaciones: this.referenciaPago ? ('[Ref: ' + this.referenciaPago + ']') : null,
-                        items: this.items
+                        items: this.items.map(it => ({
+                            id_producto: it.id_producto || null,
+                            codigo_producto: it.codigo_producto ? String(it.codigo_producto) : (it.codigo ? String(it.codigo) : null),
+                            descripcion: String(it.descripcion || 'ARTICULO GENERAL'),
+                            cantidad: parseFloat(it.cantidad) || 1,
+                            precio_unitario: parseFloat(it.precio_unitario) || 0
+                        }))
                     };
 
                     try {
@@ -2027,7 +2033,14 @@
                             } else if (data.requiere_cierre_anterior) {
                                 this.modalCierreAnterior = true;
                             }
-                            alert(data.error || 'Ocurrió un error al procesar la venta.');
+                            let errorMsg = data.error || data.message;
+                            if (data.errors) {
+                                let detalles = Object.values(data.errors).flat().join('\n');
+                                if (detalles && detalles !== errorMsg) {
+                                    errorMsg = errorMsg ? (errorMsg + '\n\n' + detalles) : detalles;
+                                }
+                            }
+                            alert(errorMsg || 'Ocurrió un error al procesar la venta.');
                             this.procesando = false;
                             return;
                         }

@@ -446,21 +446,54 @@ class VentaController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'id_sucursal'       => 'nullable|exists:sucursales,id',
-            'id_cliente'        => 'nullable|exists:clientes,id',
-            'cliente_nombre'    => 'nullable|string|max:191',
-            'cliente_documento' => 'nullable|string|max:50',
-            'medio_pago'        => 'required|string|max:50',
-            'cuotas'            => 'nullable|integer|min:1|max:4',
-            'observaciones'     => 'nullable|string|max:1000',
-            'items'             => 'required|array|min:1',
-            'items.*.descripcion'     => 'required|string|max:255',
-            'items.*.cantidad'        => 'required|numeric|min:0.01',
-            'items.*.precio_unitario' => 'required|numeric|min:0',
-            'items.*.id_producto'     => 'nullable|exists:productos,id',
-            'items.*.codigo_producto' => 'nullable|string|max:50',
-        ]);
+        // Normalizar tipos en el request para evitar fallos cuando llegan enteros desde JSON (DNI, códigos de barras, etc.)
+        $input = $request->all();
+        if (isset($input['cliente_documento']) && $input['cliente_documento'] !== null) {
+            $input['cliente_documento'] = (string) $input['cliente_documento'];
+        }
+        if (isset($input['cliente_nombre']) && $input['cliente_nombre'] !== null) {
+            $input['cliente_nombre'] = (string) $input['cliente_nombre'];
+        }
+        if (isset($input['items']) && is_array($input['items'])) {
+            foreach ($input['items'] as &$item) {
+                if (isset($item['codigo_producto']) && $item['codigo_producto'] !== null) {
+                    $item['codigo_producto'] = (string) $item['codigo_producto'];
+                }
+                if (isset($item['descripcion']) && $item['descripcion'] !== null) {
+                    $item['descripcion'] = (string) $item['descripcion'];
+                }
+            }
+            unset($item);
+        }
+        $request->replace($input);
+
+        try {
+            $validated = $request->validate([
+                'id_sucursal'             => 'nullable|exists:sucursales,id',
+                'id_cliente'              => 'nullable|exists:clientes,id',
+                'cliente_nombre'          => 'nullable|string|max:191',
+                'cliente_documento'       => 'nullable|string|max:50',
+                'medio_pago'              => 'required|string|max:50',
+                'cuotas'                  => 'nullable|integer|min:1|max:4',
+                'observaciones'           => 'nullable|string|max:1000',
+                'items'                   => 'required|array|min:1',
+                'items.*.descripcion'     => 'required|string|max:255',
+                'items.*.cantidad'        => 'required|numeric|min:0.01',
+                'items.*.precio_unitario' => 'required|numeric|min:0',
+                'items.*.id_producto'     => 'nullable|exists:productos,id',
+                'items.*.codigo_producto' => 'nullable|string|max:50',
+            ]);
+        } catch (ValidationException $ve) {
+            $firstError = collect($ve->errors())->flatten()->first() ?? 'Datos de la venta inválidos.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'error'   => $firstError,
+                    'message' => $firstError,
+                    'errors'  => $ve->errors(),
+                ], 422);
+            }
+            throw $ve;
+        }
 
         $sucursalId = $validated['id_sucursal'] ?? config('app.sucursal_activa.id') ?? auth()->user()->id_sucursal ?? 1;
         $sucursal = Sucursal::findOrFail($sucursalId);

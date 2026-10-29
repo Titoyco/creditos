@@ -175,4 +175,116 @@ class VentaStockRecuentoTest extends TestCase
         $this->assertNotNull($movVenta);
         $this->assertEquals(-1, (float)$movVenta->cantidad);
     }
+
+    public function test_venta_con_cliente_dni_numerico_y_articulo_generico_credito_personal()
+    {
+        // 1. Presentación abierta para la sucursal (o usar la existente)
+        $presentacion = \App\Models\Presentacion::activaParaSucursal($this->sucursalTrelew->id)
+            ?: \App\Models\Presentacion::create([
+                'id_sucursal' => $this->sucursalTrelew->id,
+                'numero' => 999,
+                'interes_credito' => 6.0,
+                'fecha_inicio' => now(),
+                'fecha_fin' => null,
+            ]);
+
+        // 2. Cliente con DNI numérico y habilitado
+        $cliente = Cliente::create([
+            'nombre' => 'JUAN TEST DNI ENTERO',
+            'dni' => 20123456,
+            'direccion' => 'San Martin 500',
+            'id_localidad' => 1,
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'tel1' => '2804000001',
+            'email' => 'juan@test.com',
+            'limite' => 100000,
+            'max_cuotas' => 4,
+            'suspendido' => false,
+        ]);
+
+        // 3. Payload con DNI entero (como viene de JSON) y artículo genérico sin stock
+        $payload = [
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'id_cliente' => $cliente->id,
+            'cliente_nombre' => $cliente->nombre,
+            'cliente_documento' => 20123456, // int directo desde JSON
+            'medio_pago' => 'credito_personal',
+            'cuotas' => 2,
+            'items' => [
+                [
+                    'id_producto' => null,
+                    'codigo_producto' => 1, // int directo
+                    'descripcion' => 'VARIOS - ARTICULO GENERAL',
+                    'cantidad' => 1,
+                    'precio_unitario' => 5000,
+                ]
+            ]
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->postJson(route('ventas.store'), $payload);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertDatabaseHas('ventas', [
+            'id_cliente' => $cliente->id,
+            'cliente_documento' => '20123456',
+            'medio_pago' => 'credito_personal',
+            'subtotal' => 5000,
+        ]);
+
+        $this->assertDatabaseHas('creditos', [
+            'id_cliente' => $cliente->id,
+            'id_presentacion' => $presentacion->id,
+            'cantidad_cuotas' => 2,
+        ]);
+    }
+
+    public function test_venta_con_cliente_dni_numerico_y_medio_efectivo()
+    {
+        $cliente = Cliente::create([
+            'nombre' => 'MARIA TEST EFECTIVO',
+            'dni' => 30987654,
+            'direccion' => 'Rivadavia 100',
+            'id_localidad' => 1,
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'tel1' => '2804000002',
+            'email' => 'maria@test.com',
+            'limite' => 50000,
+            'max_cuotas' => 3,
+            'suspendido' => false,
+        ]);
+
+        $payload = [
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'id_cliente' => $cliente->id,
+            'cliente_nombre' => $cliente->nombre,
+            'cliente_documento' => 30987654,
+            'medio_pago' => 'efectivo',
+            'cuotas' => null,
+            'items' => [
+                [
+                    'id_producto' => null,
+                    'codigo_producto' => 'VARIOS',
+                    'descripcion' => 'VARIOS - CARGA RAPIDA',
+                    'cantidad' => 1,
+                    'precio_unitario' => 1200,
+                ]
+            ]
+        ];
+
+        $response = $this->actingAs($this->user)
+            ->postJson(route('ventas.store'), $payload);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $this->assertDatabaseHas('ventas', [
+            'id_cliente' => $cliente->id,
+            'cliente_documento' => '30987654',
+            'medio_pago' => 'efectivo',
+            'total' => 1200,
+        ]);
+    }
 }
