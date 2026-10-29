@@ -190,6 +190,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/buscar-producto', [\App\Http\Controllers\VentaController::class, 'buscarProducto'])->name('ventas.buscar-producto');
     Route::post('/ventas/ajuste-recuento-rapido', [\App\Http\Controllers\VentaController::class, 'ajusteRecuentoRapido'])->name('ventas.ajuste-recuento-rapido');
     Route::get('/ventas/clientes/{cliente}/info-credito', [\App\Http\Controllers\VentaController::class, 'infoCreditoCliente'])->name('ventas.cliente-info-credito');
+    Route::post('/ventas/clientes/{cliente}/actualizar-limite', [\App\Http\Controllers\VentaController::class, 'actualizarLimiteCliente'])->name('ventas.cliente-actualizar-limite');
+    Route::post('/ventas/clientes/{cliente}/comentarios', [\App\Http\Controllers\VentaController::class, 'agregarComentarioCliente'])->name('ventas.cliente-agregar-comentario');
     Route::get('/ventas/{venta}', [\App\Http\Controllers\VentaController::class, 'show'])->name('ventas.show');
     Route::get('/ventas/{venta}/imprimir', [\App\Http\Controllers\VentaController::class, 'imprimir'])->name('ventas.imprimir');
     Route::post('/ventas/{venta}/anular', [\App\Http\Controllers\VentaController::class, 'anular'])->name('ventas.anular');

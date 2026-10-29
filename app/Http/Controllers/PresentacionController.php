@@ -69,10 +69,16 @@ class PresentacionController extends Controller
         $user = Auth::user();
 
         $request->validate([
-            'id_provincia'    => 'required|in:1,2',
-            'interes_credito' => 'required|numeric|min:0',
-            'interes_mora'    => 'required|numeric|min:0',
+            'id_provincia'              => 'required|in:1,2',
+            // Se ingresan como porcentaje entero (ej: 6 = 6%) y se guardan como factor (0.06)
+            'interes_credito'           => 'required|numeric|min:0|max:100',
+            'interes_mora'              => 'required|numeric|min:0|max:100',
+            'primera_cuota_sin_interes' => 'nullable|boolean',
         ]);
+
+        $factorCredito = round((float) $request->interes_credito / 100, 4);
+        $factorMora = round((float) $request->interes_mora / 100, 4);
+        $primeraSinInteres = $request->boolean('primera_cuota_sin_interes');
 
         $idProvincia = (int) $request->id_provincia;
 
@@ -100,19 +106,20 @@ class PresentacionController extends Controller
             DB::beginTransaction();
 
             $ahora = now();
-            $tasaMora = (float) ($presentacionActual->interes_mora ?? $request->interes_mora);
+            $tasaMora = (float) ($presentacionActual->interes_mora ?? $factorMora);
 
             // 2. Cerrar la presentación actual de la provincia
             $presentacionActual->update(['fecha_fin' => $ahora]);
 
             // 3. Crear la nueva presentación para esta provincia
             $nuevaPresentacion = Presentacion::create([
-                'id_provincia'    => $idProvincia,
-                'numero'          => $presentacionActual->numero + 1,
-                'fecha_inicio'    => $ahora,
-                'fecha_fin'       => null,
-                'interes_credito' => $request->interes_credito,
-                'interes_mora'    => $request->interes_mora,
+                'id_provincia'              => $idProvincia,
+                'numero'                    => $presentacionActual->numero + 1,
+                'fecha_inicio'              => $ahora,
+                'fecha_fin'                 => null,
+                'interes_credito'           => $factorCredito,
+                'interes_mora'              => $factorMora,
+                'primera_cuota_sin_interes' => $primeraSinInteres,
             ]);
 
             $numeroNuevo = $nuevaPresentacion->numero;

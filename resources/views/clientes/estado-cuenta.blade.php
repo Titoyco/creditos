@@ -23,10 +23,10 @@
         </div>
 
         <div class="flex bg-slate-100 p-0.5 rounded-md border border-slate-200">
-            <a href="{{ route('clientes.show', $cliente) }}" class="px-3 py-1 rounded text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-all">
+            <a href="{{ route('clientes.show', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="px-3 py-1 rounded text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-all">
                 📄 Legajo Personal
             </a>
-            <a href="{{ route('clientes.estado-cuenta', $cliente) }}" class="px-3 py-1 rounded text-[11px] font-black bg-white text-blue-900 shadow-sm border border-slate-200 transition-all">
+            <a href="{{ route('clientes.estado-cuenta', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="px-3 py-1 rounded text-[11px] font-black bg-white text-blue-900 shadow-sm border border-slate-200 transition-all">
                 💳 Estado de Cuenta
             </a>
         </div>

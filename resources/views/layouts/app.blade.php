@@ -45,6 +45,7 @@
 </head>
 <body class="bg-gray-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-200">
     <div class="min-h-screen">
+        @if(!request()->boolean('embed') && !request()->boolean('popup'))
         <nav class="bg-blue-800 dark:bg-slate-950 border-b border-blue-900 dark:border-slate-800 shadow-lg">
             <div class="max-w-7xl mx-auto px-4 sm:px-4 lg:px-8">
                 <div class="flex justify-between h-16 items-center"> 
@@ -194,9 +195,10 @@
                 </div>
             </div>
         </nav>
+        @endif
 
-        <main class="py-2 max-w-[92%] mx-auto px-4">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main class="{{ (request()->boolean('embed') || request()->boolean('popup')) ? 'p-2 sm:p-4 w-full' : 'py-2 max-w-[92%] mx-auto px-4' }}">
+            <div class="{{ (request()->boolean('embed') || request()->boolean('popup')) ? 'w-full' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6' }}">
             {{ $slot }}
             </div>
         </main>

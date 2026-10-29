@@ -54,6 +54,31 @@ class VentaController extends Controller
     }
 
     /**
+     * Financiación con interés escalonado por cuota.
+     * Con "primera cuota sin interés" (default):
+     *   1 pago  => 0%
+     *   N pagos => tasa * (N - 1)   (ej: 6% -> 2c=6%, 3c=12%, 4c=18%)
+     * Sin el beneficio: N pagos => tasa * N
+     *   total       = monto * (1 + tasa * tramos)
+     *   valor_cuota = total / N
+     */
+    public static function calcularFinanciacion(float $monto, float $factorInteres, int $cuotas, bool $primeraSinInteres = true): array
+    {
+        $cuotas = max(1, $cuotas);
+        $tramos = $primeraSinInteres ? $cuotas - 1 : $cuotas;
+        $factorEfectivo = $factorInteres * $tramos;
+        $recargo = round($monto * $factorEfectivo, 2);
+        $total = round($monto + $recargo, 2);
+
+        return [
+            'factor'      => $factorEfectivo,
+            'recargo'     => $recargo,
+            'total'       => $total,
+            'valor_cuota' => round($total / $cuotas, 2),
+        ];
+    }
+
+    /**
      * Listado histórico de ventas con click-to-sort, filtros de sucursal, fechas y buscador.
      */
     public function index(Request $request)
@@ -211,8 +236,8 @@ class VentaController extends Controller
                     'precio_venta' => 1,
                     'controla_stock' => false,
                     'activo' => true,
-                    'categoria_id' => 1,
-                    'subcategoria_id' => 1,
+                    'categoria_id' => null,
+                    'subcategoria_id' => null,
                 ]
             );
         }
@@ -405,39 +430,206 @@ class VentaController extends Controller
         $tasaInteres = self::normalizarPorcentajeInteres($presentacion);
         $factorInteres = self::normalizarFactorInteres($presentacion);
 
-        // Cálculo de cuotas (1, 2, 3 o 4 pagos) con recargo del interés del lote
-        $montoConInteres = round($monto * (1 + $factorInteres), 2);
-        $recargoTotal = round($montoConInteres - $monto, 2);
-
+        // Cuotas (1 a 4 pagos) con interés escalonado según la configuración del lote
+        $primeraSinInteres = (bool) ($presentacion?->primera_cuota_sin_interes ?? true);
         $cuotas = [];
         for ($i = 1; $i <= 4; $i++) {
-            $cuotaValor = $i > 0 ? round($montoConInteres / $i, 2) : 0;
-            $habilitadaPorCliente = $i <= $estado['max_cuotas'];
+            $calc = self::calcularFinanciacion($monto, $factorInteres, $i, $primeraSinInteres);
             $cuotas[$i] = [
-                'cantidad'         => $i,
-                'valor_cuota'      => $cuotaValor,
-                'total_financiado' => $montoConInteres,
-                'recargo'          => $recargoTotal,
-                'habilitada'       => $habilitadaPorCliente,
+                'cantidad'           => $i,
+                'valor_cuota'        => $calc['valor_cuota'],
+                'total_financiado'   => $calc['total'],
+                'recargo'            => $calc['recargo'],
+                'porcentaje_interes' => round($tasaInteres * ($primeraSinInteres ? $i - 1 : $i), 2),
+                'habilitada'         => $i <= $estado['max_cuotas'],
             ];
         }
 
+        // Obtener cuotas impagas activas del cliente para el detalle de compras y próximos 4 meses
+        $cuotasImpagas = Cuota::whereHas('credito', function ($q) use ($cliente) {
+            $q->where('id_cliente', $cliente->id)
+              ->whereNull('fecha_cancelacion');
+        })
+        ->with(['credito.presentacion', 'credito.sucursal'])
+        ->where('saldo_actual', '>', 0)
+        ->whereNull('fecha_cobro')
+        ->get();
+
+        $loteActual = $presentacion ? (int)$presentacion->numero : 0;
+
+        // Estructura de los próximos 4 vencimientos (1° Mes, 2° Mes, 3° Mes, 4° Mes)
+        $proximosVencimientos = [];
+        for ($m = 1; $m <= 4; $m++) {
+            $targetLote = $loteActual > 0 ? ($loteActual + ($m - 1)) : $m;
+            $proximosVencimientos[$m] = [
+                'numero_mes' => $m,
+                'lote'       => $targetLote,
+                'cuotas'     => [],
+                'total'      => 0.0,
+            ];
+        }
+
+        $totalAdeudado = 0.0;
+        $pendienteCobro = 0.0;
+
+        foreach ($cuotasImpagas as $c) {
+            $saldo = (float) $c->saldo_actual;
+            $totalAdeudado += $saldo;
+
+            // Formato de código de crédito visible: ej "00326983 T"
+            $codNum = preg_replace('/[^0-9]/', '', (string)($c->credito?->credito ?? '0'));
+            $codNumPad = str_pad($codNum ?: '0', 7, '0', STR_PAD_LEFT);
+            $tipoCred = strtoupper($c->credito?->tipo_credito ?? 'T');
+            $identificador = "{$codNumPad} {$tipoCred}";
+
+            $nroCuota = (int) ($c->num_cuota ?? 1);
+            $loteCuota = (int) ($c->lote_calculado ?? (($c->credito?->presentacion?->numero ?? 0) + $nroCuota));
+
+            $cuotaItem = [
+                'id'            => $c->id,
+                'id_credito'    => $c->id_credito,
+                'identificador' => $identificador,
+                'num_cuota'     => $nroCuota,
+                'lote'          => $loteCuota,
+                'saldo'         => $saldo,
+            ];
+
+            if ($loteActual > 0) {
+                if ($loteCuota <= $loteActual) {
+                    $proximosVencimientos[1]['cuotas'][] = $cuotaItem;
+                    $proximosVencimientos[1]['total'] += $saldo;
+                    $pendienteCobro += $saldo;
+                } elseif ($loteCuota === $loteActual + 1) {
+                    $proximosVencimientos[2]['cuotas'][] = $cuotaItem;
+                    $proximosVencimientos[2]['total'] += $saldo;
+                } elseif ($loteCuota === $loteActual + 2) {
+                    $proximosVencimientos[3]['cuotas'][] = $cuotaItem;
+                    $proximosVencimientos[3]['total'] += $saldo;
+                } elseif ($loteCuota === $loteActual + 3) {
+                    $proximosVencimientos[4]['cuotas'][] = $cuotaItem;
+                    $proximosVencimientos[4]['total'] += $saldo;
+                }
+            } else {
+                $proximosVencimientos[1]['cuotas'][] = $cuotaItem;
+                $proximosVencimientos[1]['total'] += $saldo;
+                $pendienteCobro += $saldo;
+            }
+        }
+
+        for ($m = 1; $m <= 4; $m++) {
+            $proximosVencimientos[$m]['total'] = round($proximosVencimientos[$m]['total'], 2);
+        }
+
+        // Novedades ordenadas con la más reciente encima
+        $novedades = $cliente->novedades()
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map(function ($n) {
+                return [
+                    'id'             => $n->id,
+                    'fecha'          => $n->created_at ? $n->created_at->format('d/m/Y') : '',
+                    'fecha_hora'     => $n->created_at ? $n->created_at->format('d/m/Y H:i') : '',
+                    'usuario_nombre' => $n->usuario_nombre ?? 'Operador',
+                    'mensaje'        => $n->mensaje,
+                ];
+            });
+
+        $limiteActual = (float) ($cliente->limite_efectivo ?? $cliente->limite ?? 0);
+
         return response()->json([
             'cliente' => [
-                'id'         => $cliente->id,
-                'nombre'     => $cliente->nombre,
-                'dni'        => $cliente->dni,
-                'nro_cuenta' => $cliente->nro_cuenta,
-                'sucursal'   => $cliente->sucursal?->nombre ?? 'N/A',
+                'id'              => $cliente->id,
+                'nombre'          => $cliente->nombre,
+                'dni'             => $cliente->dni,
+                'nro_cuenta'      => $cliente->nro_cuenta,
+                'sucursal'        => $cliente->sucursal?->nombre ?? 'N/A',
+                'limite'          => $limiteActual,
+                'limite_efectivo' => $limiteActual,
             ],
-            'estado_crediticio' => $estado,
-            'tasa_interes'      => $tasaInteres,
-            'presentacion'      => [
+            'estado_crediticio'    => $estado,
+            'detalle_compras'      => [
+                'total_adeudado'   => round($totalAdeudado, 2),
+                'pendiente_cobro'  => round($pendienteCobro, 2),
+                'mora_vencido'     => round((float)$estado['total_mora'], 2),
+                'limite_disponible'=> (float) $estado['limite_disponible'],
+                'limite_total'     => $limiteActual,
+            ],
+            'proximos_vencimientos'=> array_values($proximosVencimientos),
+            'novedades'            => $novedades,
+            'tasa_interes'         => $tasaInteres,
+            'presentacion'         => [
                 'id'      => $presentacion?->id,
                 'numero'  => $presentacion?->numero,
                 'abierta' => (bool) ($presentacion && is_null($presentacion->fecha_fin)),
             ],
-            'simulacion_cuotas' => $cuotas,
+            'simulacion_cuotas'    => $cuotas,
+        ]);
+    }
+
+    /**
+     * Actualiza el límite de crédito del cliente desde el modal de facturación.
+     */
+    public function actualizarLimiteCliente(Request $request, Cliente $cliente)
+    {
+        $validated = $request->validate([
+            'limite' => 'required|numeric|min:0',
+        ]);
+
+        $nuevoLimite = round((float) $validated['limite'], 2);
+        $limiteAnterior = (float) ($cliente->limite_efectivo ?? $cliente->limite ?? 0);
+
+        $cliente->update([
+            'limite'          => $nuevoLimite,
+            'limite_efectivo' => $nuevoLimite,
+        ]);
+
+        $user = auth()->user();
+        $userName = $user?->name ?? 'Operador';
+
+        $cliente->novedades()->create([
+            'user_id'        => $user?->id,
+            'usuario_nombre' => $userName,
+            'mensaje'        => "Límite modificado de $" . number_format($limiteAnterior, 2, ',', '.') . " a $" . number_format($nuevoLimite, 2, ',', '.') . " por {$userName} en Facturador.",
+            'origen_accion'  => 'pos_limite',
+        ]);
+
+        return response()->json([
+            'success'      => true,
+            'mensaje'      => 'Límite de crédito actualizado correctamente.',
+            'nuevo_limite' => $nuevoLimite,
+        ]);
+    }
+
+    /**
+     * Agrega un nuevo comentario/novedad al legajo del cliente desde el modal de facturación.
+     */
+    public function agregarComentarioCliente(Request $request, Cliente $cliente)
+    {
+        $validated = $request->validate([
+            'mensaje' => 'required|string|max:1000',
+        ]);
+
+        $user = auth()->user();
+        $userName = $user?->name ?? 'Operador';
+
+        $novedad = $cliente->novedades()->create([
+            'user_id'        => $user?->id,
+            'usuario_nombre' => $userName,
+            'mensaje'        => trim($validated['mensaje']),
+            'origen_accion'  => 'pos_comentario',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'mensaje' => 'Comentario registrado en el legajo.',
+            'novedad' => [
+                'id'             => $novedad->id,
+                'fecha'          => $novedad->created_at ? $novedad->created_at->format('d/m/Y') : date('d/m/Y'),
+                'fecha_hora'     => $novedad->created_at ? $novedad->created_at->format('d/m/Y H:i') : date('d/m/Y H:i'),
+                'usuario_nombre' => $userName,
+                'mensaje'        => $novedad->mensaje,
+            ]
         ]);
     }
 
@@ -475,6 +667,7 @@ class VentaController extends Controller
                 'cliente_documento'       => 'nullable|string|max:50',
                 'medio_pago'              => 'required|string|max:50',
                 'cuotas'                  => 'nullable|integer|min:1|max:4',
+                'autorizado_vendedor'     => 'nullable|boolean',
                 'observaciones'           => 'nullable|string|max:1000',
                 'items'                   => 'required|array|min:1',
                 'items.*.descripcion'     => 'required|string|max:255',
@@ -565,24 +758,34 @@ class VentaController extends Controller
             }
 
             // 2. Verificación de salud crediticia (mora, suspensión, límite y cuotas)
+            $autorizadoVendedor = filter_var($request->input('autorizado_vendedor', false), FILTER_VALIDATE_BOOLEAN);
             $estadoCred = $cliente->estadoCrediticio($subtotal);
             if (!$estadoCred['habilitado']) {
-                $motivo = implode(' ', $estadoCred['motivos_bloqueo']);
-                $msg = "No se puede otorgar el crédito: {$motivo}";
-                return $request->wantsJson() ? response()->json(['error' => $msg], 422) : back()->with('error', $msg);
+                if (!$autorizadoVendedor) {
+                    $motivo = implode(' ', $estadoCred['motivos_bloqueo']);
+                    $msg = "No se puede otorgar el crédito: {$motivo}";
+                    return $request->wantsJson() ? response()->json(['error' => $msg], 422) : back()->with('error', $msg);
+                }
             }
 
-            if ($cuotasNum > $estadoCred['max_cuotas']) {
+            if (!$autorizadoVendedor && $cuotasNum > $estadoCred['max_cuotas']) {
                 $msg = "La cantidad de cuotas ({$cuotasNum}) supera el máximo permitido para el cliente ({$estadoCred['max_cuotas']}).";
                 return $request->wantsJson() ? response()->json(['error' => $msg], 422) : back()->with('error', $msg);
             }
 
-            // Interés configurado en la presentación vigente normalizado (ej: 6% -> factor 0.06)
-            $factorInteres = self::normalizarFactorInteres($presentacion);
-            $recargoFinanciacion = round($subtotal * $factorInteres, 2);
-            $totalConInteres = round($subtotal + $recargoFinanciacion, 2);
-            $valorCuotaRef = round($totalConInteres / $cuotasNum, 2);
+            // Interés escalonado según el lote (ej: 6% -> 1 pago 0%, 2c 6%, 3c 12%, 4c 18%)
+            $cuotasNum = max(1, $cuotasNum);
+            $calc = self::calcularFinanciacion(
+                $subtotal,
+                self::normalizarFactorInteres($presentacion),
+                $cuotasNum,
+                (bool) ($presentacion->primera_cuota_sin_interes ?? true)
+            );
+            $recargoFinanciacion = $calc['recargo'];
+            $valorCuotaRef = $calc['valor_cuota'];
         } else {
+            $autorizadoVendedor = false;
+            $estadoCred = null;
             if (!empty($validated['id_cliente'])) {
                 $cliente = Cliente::find($validated['id_cliente']);
             }
@@ -616,7 +819,9 @@ class VentaController extends Controller
                 $totalFinal,
                 $cuotasNum,
                 $valorCuotaRef,
-                $cajaActiva
+                $cajaActiva,
+                $autorizadoVendedor,
+                $estadoCred
             ) {
                 // 1. Siguiente número correlativo de comprobante por sucursal
                 $numeroFactura = $sucursal->siguienteNumeroComprobante();
@@ -665,11 +870,17 @@ class VentaController extends Controller
 
                     $idCredito = $credito->id;
 
+                    // Mensaje para la novedad del legajo
+                    $mensajeNovedad = "COMPRA A CRÉDITO: Factura {$comprobanteFormateado} por $" . number_format($totalFinal, 2, ',', '.') . " en {$cuotasNum} cuotas de $" . number_format($valorCuotaRef, 2, ',', '.') . " (Lote {$presentacion->numero}).";
+                    if ($autorizadoVendedor && $estadoCred && !$estadoCred['habilitado']) {
+                        $mensajeNovedad .= " [AUTORIZACIÓN EXCEPCIONAL POR VENDEDOR: {$user?->name}]";
+                    }
+
                     // Novedad en legajo del cliente
                     $cliente->novedades()->create([
                         'user_id'        => $user?->id,
                         'usuario_nombre' => $user?->name ?? 'Operador',
-                        'mensaje'        => "COMPRA A CRÉDITO: Factura {$comprobanteFormateado} por $" . number_format($totalFinal, 2, ',', '.') . " en {$cuotasNum} cuotas de $" . number_format($valorCuotaRef, 2, ',', '.') . " (Lote {$presentacion->numero}).",
+                        'mensaje'        => $mensajeNovedad,
                         'origen_accion'  => 'pos_venta',
                     ]);
                 }

@@ -5,12 +5,16 @@
             aFavor: 0, 
             cuotasSeleccionadas: 1,
             limiteDisponible: {{ $limiteDisponible }},
+            tasaInteres: {{ \App\Http\Controllers\VentaController::normalizarPorcentajeInteres($presentacionActivaModel ?? null) }},
+            primeraSinInteres: {{ (($presentacionActivaModel?->primera_cuota_sin_interes ?? true)) ? 'true' : 'false' }},
             get subtotal() { 
                 return Math.max(0, (parseFloat(this.valorVenta) || 0) - (parseFloat(this.aFavor) || 0)); 
             },
             calcularCuota(cant) {
                 if (this.subtotal <= 0) return 0;
-                return (this.subtotal / cant).toFixed(2);
+                let tramos = this.primeraSinInteres ? cant - 1 : cant;
+                let total = this.subtotal * (1 + (this.tasaInteres / 100) * tramos);
+                return (total / cant).toFixed(2);
             }
          }">
 

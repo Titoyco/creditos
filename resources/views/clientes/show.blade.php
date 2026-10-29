@@ -2,9 +2,11 @@
     <!-- Encabezado y Navegación de Pestañas -->
     <div class="mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-200 pb-2">
         <div class="flex items-center space-x-3">
+            @if(!request()->boolean('embed'))
             <a href="{{ url()->previous() }}" class="bg-white p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all shadow-sm">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             </a>
+            @endif
             <div>
                 <h1 class="text-lg font-bold text-slate-800 tracking-tight flex items-center space-x-2">
                     <span class="uppercase">{{ $cliente->nombre }}</span>
@@ -22,10 +24,10 @@
         </div>
 
         <div class="flex bg-slate-100 p-0.5 rounded-md border border-slate-200">
-            <a href="{{ route('clientes.show', $cliente) }}" class="px-3 py-1 rounded text-[11px] font-black bg-white text-blue-900 shadow-sm border border-slate-200 transition-all">
+            <a href="{{ route('clientes.show', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="px-3 py-1 rounded text-[11px] font-black bg-white text-blue-900 shadow-sm border border-slate-200 transition-all">
                 📄 Legajo Personal
             </a>
-            <a href="{{ route('clientes.estado-cuenta', $cliente) }}" class="px-3 py-1 rounded text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-all">
+            <a href="{{ route('clientes.estado-cuenta', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="px-3 py-1 rounded text-[11px] font-bold text-slate-600 hover:text-slate-900 transition-all">
                 💳 Estado de Cuenta
             </a>
         </div>
@@ -46,7 +48,7 @@
             <div class="bg-white rounded-md border border-slate-300 shadow-sm overflow-hidden">
                 <div class="bg-slate-100 border-b border-slate-300 px-3 py-1.5 flex justify-between items-center">
                     <h2 class="font-bold text-[10px] text-slate-700 uppercase tracking-wider">1. Identificación y Sucursal</h2>
-                    <a href="{{ route('clientes.edit', $cliente) }}" class="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase flex items-center space-x-1">
+                    <a href="{{ route('clientes.edit', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="text-[10px] font-bold text-blue-600 hover:text-blue-800 uppercase flex items-center space-x-1">
                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                         <span>Editar</span>
                     </a>
@@ -278,7 +280,7 @@
                         <span>+ INICIAR VENTA / CRÉDITO</span>
                     </a>
                 @endif
-                <a href="{{ route('clientes.estado-cuenta', $cliente->id) }}" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs py-2 px-3 rounded-md uppercase transition-all flex items-center justify-center space-x-1.5 shadow-sm">
+                <a href="{{ route('clientes.estado-cuenta', array_merge(['cliente' => $cliente->id], request()->boolean('embed') ? ['embed' => 1] : [])) }}" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs py-2 px-3 rounded-md uppercase transition-all flex items-center justify-center space-x-1.5 shadow-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                     <span>Ver Estado de Cuenta</span>
                 </a>
@@ -312,6 +314,9 @@
                 <div class="border-t border-slate-200 p-2 bg-white">
                     <form action="{{ route('clientes.novedades.store', $cliente->id) }}" method="POST" class="flex flex-col space-y-1.5">
                         @csrf
+                        @if(request()->boolean('embed'))
+                            <input type="hidden" name="embed" value="1">
+                        @endif
                         <textarea name="mensaje" rows="2" placeholder="Agregar nota, llamada o acuerdo..." required class="w-full text-xs rounded border-slate-300 focus:border-blue-500 focus:ring-blue-500 p-1.5 resize-none"></textarea>
                         <button type="submit" class="bg-blue-800 hover:bg-blue-900 text-white font-bold text-[10px] py-1.5 px-3 rounded uppercase transition-all shadow-sm w-full">
                             + Registrar Novedad

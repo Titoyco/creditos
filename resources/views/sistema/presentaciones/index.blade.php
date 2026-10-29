@@ -133,7 +133,7 @@
     <div class="flex flex-col lg:flex-row gap-6 items-start">
         
         <!-- COLUMNA IZQUIERDA: Listado (68%) -->
-        <div class="w-full lg:w-[68%]">
+        <div class="w-full lg:w-[58%]">
             <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-md overflow-hidden mb-6">
                 <div class="bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 px-5 py-3.5 flex items-center justify-between">
                     <h2 class="font-black text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -224,7 +224,7 @@
         </div>
 
         <!-- COLUMNA DERECHA: Panel de Cierre Operativo (32%) -->
-        <div class="w-full lg:w-[32%] sticky top-6">
+        <div class="w-full lg:w-[42%] sticky top-6">
             <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-md overflow-hidden">
                 <div class="bg-gradient-to-r {{ $idProvincia === 2 ? 'from-blue-900 to-indigo-900' : 'from-amber-900 to-orange-950' }} px-5 py-4 text-white">
                     <span class="text-[10px] font-black uppercase tracking-wider block opacity-80">Control de Ciclo Provincial</span>
@@ -260,16 +260,82 @@
                                 <p class="text-[11px] text-slate-500 mt-0.5">Afectará únicamente a créditos originados en sucursales de {{ $idProvincia === 2 ? 'TDF' : 'Chubut' }}.</p>
                             </div>
                             
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Financiación (Ej: 0.06 para 6%)</label>
-                                <input type="number" step="0.001" name="interes_credito" value="{{ $actual->interes_credito ?? '0.06' }}" required 
-                                       class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-blue-500 py-2 px-3 shadow-sm">
-                            </div>
+                            @php
+                                $pctCreditoActual = \App\Http\Controllers\VentaController::normalizarPorcentajeInteres($actual) ?: 6;
+                                $rawMora = (float) ($actual->interes_mora ?? 0.06);
+                                $pctMoraActual = ($rawMora > 0 && $rawMora < 1) ? round($rawMora * 100, 2) : round($rawMora, 2);
+                                $primeraSinInteresActual = $actual ? (bool) ($actual->primera_cuota_sin_interes ?? true) : true;
+                            @endphp
 
-                            <div>
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Mora por Atraso (Ej: 0.06 para 6%)</label>
-                                <input type="number" step="0.001" name="interes_mora" value="{{ $actual->interes_mora ?? '0.06' }}" required 
-                                       class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 focus:border-blue-500 py-2 px-3 shadow-sm">
+                            <div x-data="{
+                                    tasa: {{ $pctCreditoActual }},
+                                    primeraSinInteres: {{ $primeraSinInteresActual ? 'true' : 'false' }},
+                                    pct(n) {
+                                        let t = parseFloat(String(this.tasa).replace(',', '.')) || 0;
+                                        let tramos = this.primeraSinInteres ? n - 1 : n;
+                                        return Math.round(t * tramos * 100) / 100;
+                                    },
+                                    fmt(v) { return Number(v).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
+                                 }"
+                                 class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                                <!-- Inputs -->
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="interes_credito" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Financiación por cuota (%)</label>
+                                        <div class="relative">
+                                            <input id="interes_credito" type="number" step="0.01" min="0" max="100" name="interes_credito"
+                                                   x-model="tasa" value="{{ $pctCreditoActual }}" required
+                                                   class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-blue-500 py-2 pl-3 pr-8 shadow-sm">
+                                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-400 mt-1">Ingresá el número entero (ej: 6 para 6%).</p>
+                                    </div>
+
+                                    <label for="primera_cuota_sin_interes" class="flex items-start gap-2 cursor-pointer select-none p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60">
+                                        <input type="hidden" name="primera_cuota_sin_interes" value="0">
+                                        <input id="primera_cuota_sin_interes" type="checkbox" name="primera_cuota_sin_interes" value="1"
+                                               x-model="primeraSinInteres" @checked($primeraSinInteresActual)
+                                               class="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                        <span class="text-[11px] leading-tight">
+                                            <strong class="block text-slate-800 dark:text-slate-200 uppercase text-[10px]">Primera cuota sin interés</strong>
+                                            <span class="text-slate-500">1 pago = 0%, y se suma la tasa por cada cuota adicional.</span>
+                                        </span>
+                                    </label>
+
+                                    <div>
+                                        <label for="interes_mora" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Interés de Mora por Atraso (%)</label>
+                                        <div class="relative">
+                                            <input id="interes_mora" type="number" step="0.01" min="0" max="100" name="interes_mora" value="{{ $pctMoraActual }}" required
+                                                   class="w-full text-xs font-mono font-bold rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400 focus:border-blue-500 py-2 pl-3 pr-8 shadow-sm">
+                                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabla de interés por cantidad de cuotas -->
+                                <div class="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                    <table class="w-full text-[11px]">
+                                        <thead class="bg-slate-100 dark:bg-slate-900 text-slate-500 uppercase text-[9px]">
+                                            <tr>
+                                                <th class="py-1.5 px-2 text-left font-black">Cuotas</th>
+                                                <th class="py-1.5 px-2 text-right font-black">Interés</th>
+                                                <th class="py-1.5 px-2 text-right font-black">Coef.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 font-mono">
+                                            <template x-for="n in 12" :key="n">
+                                                <tr :class="pct(n) === 0 ? 'bg-emerald-50 dark:bg-emerald-950/40' : ''">
+                                                    <td class="py-1 px-2 font-bold text-slate-700 dark:text-slate-300" x-text="n + (n === 1 ? ' pago' : ' cuotas')"></td>
+                                                    <td class="py-1 px-2 text-right font-black tabular-nums"
+                                                        :class="pct(n) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-800 dark:text-blue-300'"
+                                                        x-text="fmt(pct(n)) + ' %'"></td>
+                                                    <td class="py-1 px-2 text-right text-slate-400 tabular-nums" x-text="(1 + pct(n) / 100).toFixed(4)"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 

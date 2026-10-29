@@ -507,6 +507,7 @@ class CreditoController extends Controller
                 'cliente',
                 'autorizado',
                 'presentacionActual',
+                'presentacionActivaModel',
                 'vencimientos',
                 'limiteTotal',
                 'limiteDisponible',
@@ -616,12 +617,15 @@ class CreditoController extends Controller
             $codigoCredito = (string) $nuevoNumeroIndice;
 
             // 3. La presentación (lote) ya fue resuelta y validada como ABIERTA antes de la transacción.
-            // Cálculo de cuota de referencia (Interés Directo Simple).
+            // Cálculo de cuota de referencia con interés escalonado por cuota (mismo criterio que el POS).
             // Tasa real: `presentaciones.interes_credito` (la columna `tasa_cuotas` NO existe).
-            $interesRaw = (float) ($presentacion->interes_credito ?? 0);
-            $factorInteres = ($interesRaw > 0 && $interesRaw < 1) ? $interesRaw : ($interesRaw / 100);
-            $montoConInteres = $request->importe_original * (1 + $factorInteres);
-            $valorCuotaRef = round($montoConInteres / $request->cantidad_cuotas, 2);
+            $calc = VentaController::calcularFinanciacion(
+                (float) $request->importe_original,
+                VentaController::normalizarFactorInteres($presentacion),
+                (int) $request->cantidad_cuotas,
+                (bool) ($presentacion->primera_cuota_sin_interes ?? true)
+            );
+            $valorCuotaRef = $calc['valor_cuota'];
 
             // 4. Crear la cabecera del Crédito
             $credito = Credito::create([

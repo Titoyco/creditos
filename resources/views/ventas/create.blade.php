@@ -178,7 +178,7 @@
 
                         <template x-if="clienteSeleccionado">
                             <button type="button" @click="deseleccionarCliente()" 
-                                    class="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 transition">
+                                    class="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 transition cursor-pointer">
                                 <span>✕ Volver a Consumidor Final</span>
                             </button>
                         </template>
@@ -250,7 +250,13 @@
                                             👤
                                         </div>
                                         <div>
-                                            <span class="text-xs font-black text-indigo-950 dark:text-indigo-200 block uppercase tracking-tight" x-text="clienteSeleccionado.nombre"></span>
+                                            <button type="button" 
+                                                    @click="abrirFichaClienteModal()" 
+                                                    title="Haga clic para ver o editar la ficha del cliente en modal sin salir de la facturación" 
+                                                    class="text-xs font-black text-indigo-950 dark:text-indigo-200 hover:text-indigo-600 dark:hover:text-indigo-400 block uppercase tracking-tight hover:underline flex items-center gap-1 group text-left cursor-pointer">
+                                                <span x-text="clienteSeleccionado.nombre"></span>
+                                                <span class="text-[10px] text-indigo-500 opacity-70 group-hover:opacity-100">↗</span>
+                                            </button>
                                             <div class="flex items-center gap-2 text-[11px] font-mono text-indigo-700 dark:text-indigo-400 mt-0.5">
                                                 <span x-text="'DNI: ' + clienteSeleccionado.dni"></span>
                                                 <template x-if="clienteSeleccionado.nro_cuenta">
@@ -529,7 +535,7 @@
                     <!-- Detalle de Financiación si es Crédito Personal -->
                     <template x-if="esCredito">
                         <div class="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-mono">
-                            <span class="text-amber-400 font-bold" x-text="'Interés ' + tasaInteres + '% (+$ ' + formatDinero(calcularRecargo()) + ')'"></span>
+                            <span class="text-amber-400 font-bold" x-text="porcentajeInteresCuotas(cuotasPlan) > 0 ? ('Interés ' + porcentajeInteresCuotas(cuotasPlan) + '% (+$ ' + formatDinero(calcularRecargo()) + ')') : 'Sin interés (0%)'"></span>
                             <span class="text-indigo-400 font-bold uppercase text-sm" x-text="cuotasPlan + ' x $' + formatDinero(calcularValorCuota(cuotasPlan))"></span>
                         </div>
                     </template>
@@ -583,6 +589,28 @@
                         @endforeach
                     </div>
 
+                    <!-- AVISO DE AUTORIZACIÓN DE CRÉDITO PERSONAL -->
+                    <template x-if="esCredito && clienteSeleccionado">
+                        <div class="p-2.5 rounded-xl border flex items-center justify-between text-xs"
+                             :class="autorizadoPorVendedor 
+                                 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200' 
+                                 : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200'">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base" x-text="autorizadoPorVendedor ? '⚠️' : '✓'"></span>
+                                <div>
+                                    <span class="font-black uppercase tracking-tight block" 
+                                          x-text="autorizadoPorVendedor ? 'Crédito Autorizado por Vendedor (Excepción)' : 'Crédito Personal Verificado y Autorizado'"></span>
+                                    <span class="text-[11px] opacity-80" 
+                                          x-text="'Margen disponible: $' + formatDinero(infoCredito?.detalle_compras?.limite_disponible || infoCredito?.estado_crediticio?.limite_disponible || 0)"></span>
+                                </div>
+                            </div>
+                            <button type="button" @click="abrirModalCredito()" 
+                                    class="text-xs font-bold text-indigo-700 dark:text-indigo-300 underline hover:opacity-80 cursor-pointer">
+                                Ver Estado / Reautorizar
+                            </button>
+                        </div>
+                    </template>
+
                     <!-- SELECTOR DE CUOTAS (SI ES CRÉDITO PERSONAL) -->
                     <template x-if="esCredito && clienteSeleccionado">
                         <div class="pt-2.5 border-t border-slate-200 dark:border-slate-700 space-y-2">
@@ -591,7 +619,7 @@
                                     <span>Plan de Cuotas a Crédito</span>
                                 </span>
                                 <span class="text-xs font-bold text-slate-500 dark:text-slate-400" 
-                                      x-text="'Interés lote: ' + tasaInteres + '%'">
+                                      x-text="'Interés lote: ' + tasaInteres + '% por cuota' + (primeraSinInteres ? ' (1 pago sin interés)' : '')">
                                 </span>
                             </div>
 
@@ -614,7 +642,7 @@
                                                   :class="cuotasPlan === n ? 'text-amber-300' : 'text-indigo-600 dark:text-indigo-400'"
                                                   x-text="'$ ' + formatDinero(calcularValorCuota(n))">
                                             </span>
-                                            <span class="text-[9px] block text-slate-400" x-text="n > 1 ? '/ cuota' : 'Total'"></span>
+                                            <span class="text-[9px] block text-slate-400" x-text="(n > 1 ? '/ cuota' : 'Total') + ' · ' + porcentajeInteresCuotas(n) + '%'"></span>
                                         </div>
                                     </button>
                                 </template>
@@ -685,138 +713,294 @@
         </div>
 
         <!-- =================================================================== -->
-        <!-- MODAL 1: VERIFICACIÓN Y AUTORIZACIÓN DE CRÉDITO PERSONAL            -->
+        <!-- MODAL 1: ESTADO DE CUENTA Y AUTORIZACIÓN DE CRÉDITO PERSONAL        -->
         <!-- =================================================================== -->
         <div x-show="modalCredito" 
-             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4"
+             class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-start justify-center p-3 sm:p-5 pt-8 sm:pt-12 pb-8"
+             @keydown.window.escape="modalCredito = false; focusBarcode();"
              x-cloak>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-4"
-                 @click.away="modalCredito = false">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-5xl w-full p-3.5 sm:p-5 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-3 max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto"
+                 @click.away="modalCredito = false; focusBarcode();">
                 
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
-                    <div class="flex items-center gap-2">
-                        <span class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-sm">
+                <!-- Encabezado del Modal -->
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <span class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
                             📄
                         </span>
                         <div>
-                            <h3 class="text-base font-black text-slate-900 dark:text-white uppercase">
-                                Verificación de Crédito Personal
-                            </h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Control de legajo y mora en cuenta corriente</p>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                    Estado de Cuenta y Autorización de Crédito
+                                </h3>
+                                <template x-if="clienteSeleccionado">
+                                    <a :href="'{{ url('/clientes') }}/' + clienteSeleccionado.id" target="_blank"
+                                       class="px-2 py-0.5 rounded text-xs font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:underline border border-indigo-200 dark:border-indigo-800 flex items-center gap-1"
+                                       title="Ver legajo completo en nueva pestaña">
+                                        <span x-text="clienteSeleccionado.nombre"></span>
+                                        <span>↗</span>
+                                    </a>
+                                </template>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                DNI: <span class="font-mono font-bold" x-text="clienteSeleccionado ? clienteSeleccionado.dni : '-'"></span> • 
+                                Cuenta: <span class="font-mono font-bold" x-text="clienteSeleccionado?.nro_cuenta || '-'"></span> • 
+                                Sucursal: <span class="font-bold" x-text="infoCredito?.cliente?.sucursal || 'N/A'"></span>
+                            </p>
                         </div>
                     </div>
-                    <button type="button" @click="modalCredito = false" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="consultarInfoCredito(clienteSeleccionado?.id)" 
+                                title="Actualizar datos en vivo"
+                                class="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition cursor-pointer">
+                            🔄 Actualizar
+                        </button>
+                        <button type="button" @click="modalCredito = false; focusBarcode();" 
+                                class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center text-lg font-bold">
+                            ✕
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Diagnóstico Crediticio del Cliente -->
-                <template x-if="infoCredito">
-                    <div class="space-y-3">
-                        <!-- Ficha del Cliente -->
-                        <div class="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl text-xs space-y-1">
-                            <div class="flex justify-between font-bold">
-                                <span class="text-slate-500">Titular:</span>
-                                <span class="text-slate-900 dark:text-white" x-text="infoCredito.cliente.nombre"></span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-500">DNI:</span>
-                                <span class="font-mono text-slate-700 dark:text-slate-300" x-text="infoCredito.cliente.dni"></span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-slate-500">Límite Disponible:</span>
-                                <span class="font-mono font-bold text-emerald-600" x-text="'$ ' + formatDinero(infoCredito.estado_crediticio.limite_disponible)"></span>
-                            </div>
-                        </div>
+                <!-- Contenido con scroll -->
+                <div class="overflow-y-auto flex-1 pr-1 space-y-4">
+                    <template x-if="infoCredito">
+                        <div class="space-y-4">
+                            <!-- FILA SUPERIOR: DETALLE DE COMPRAS (IZQ) vs COMENTARIOS (DER) -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Columna Izquierda: DETALLE DE COMPRAS -->
+                                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                                    <h4 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight border-b border-slate-200 dark:border-slate-700 pb-1.5">
+                                        DETALLE DE COMPRAS:
+                                    </h4>
+                                    <div class="space-y-1.5 text-xs font-mono">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-slate-600 dark:text-slate-400 font-sans font-bold">TOTAL ADEUDADO:</span>
+                                            <span class="text-sm font-black text-slate-900 dark:text-white" 
+                                                  x-text="'$ ' + formatDinero(infoCredito.detalle_compras?.total_adeudado || infoCredito.estado_crediticio?.deuda_acumulada || 0)"></span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-slate-600 dark:text-slate-400 font-sans font-bold">PENDIENTE DE COBRO (A PAGAR):</span>
+                                            <span class="text-sm font-black text-indigo-700 dark:text-indigo-300" 
+                                                  x-text="'$ ' + formatDinero(infoCredito.detalle_compras?.pendiente_cobro || 0)"></span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-slate-600 dark:text-slate-400 font-sans font-bold">MORA (VENCIDO):</span>
+                                            <span class="text-sm font-black" 
+                                                  :class="(infoCredito.detalle_compras?.mora_vencido || infoCredito.estado_crediticio?.total_mora || 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'"
+                                                  x-text="'$ ' + formatDinero(infoCredito.detalle_compras?.mora_vencido || infoCredito.estado_crediticio?.total_mora || 0)"></span>
+                                        </div>
+                                        <div class="flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-700">
+                                            <span class="text-slate-600 dark:text-slate-400 font-sans font-bold">MONTO DISPONIBLE:</span>
+                                            <span class="text-sm font-black text-emerald-600 dark:text-emerald-400" 
+                                                  x-text="'$ ' + formatDinero(infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio?.limite_disponible || 0)"></span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-slate-600 dark:text-slate-400 font-sans font-bold">LÍMITE TOTAL:</span>
+                                            <span class="font-bold text-slate-700 dark:text-slate-300" 
+                                                  x-text="'$ ' + formatDinero(infoCredito.detalle_compras?.limite_total || infoCredito.estado_crediticio?.limite_total || 0)"></span>
+                                        </div>
+                                    </div>
 
-                        <!-- ALERTA SI ESTÁ SUSPENDIDO -->
-                        <div x-show="infoCredito.estado_crediticio.suspendido" 
-                             class="p-3 bg-rose-50 dark:bg-rose-950/60 border-l-4 border-rose-500 rounded-r-lg text-rose-800 dark:text-rose-200 text-xs space-y-1">
-                            <span class="font-black uppercase block">⛔ CLIENTE SUSPENDIDO</span>
-                            <p>El cliente se encuentra bloqueado para emitir operaciones a crédito personal.</p>
-                        </div>
+                                    <!-- Modificación de Límite en Vivo -->
+                                    <div class="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase block mb-1">
+                                            Modificar Límite de Crédito:
+                                        </span>
+                                        <div class="flex items-center gap-2">
+                                            <div class="relative flex-1">
+                                                <span class="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">$</span>
+                                                <input type="number" step="0.01" min="0" x-model="nuevoLimiteInput" 
+                                                       placeholder="Nuevo límite"
+                                                       class="w-full pl-6 pr-2 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg">
+                                            </div>
+                                            <button type="button" @click="guardarNuevoLimite()" :disabled="guardandoLimite"
+                                                    class="px-3 py-1 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50 shrink-0 cursor-pointer">
+                                                <span x-text="guardandoLimite ? 'Guardando...' : 'Modificar Límite'"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
 
-                        <!-- ALERTA SI TIENE MORA -->
-                        <div x-show="infoCredito.estado_crediticio.tiene_mora" 
-                             class="p-3 bg-amber-50 dark:bg-amber-950/60 border-l-4 border-amber-500 rounded-r-lg text-amber-800 dark:text-amber-200 text-xs space-y-1">
-                            <span class="font-black uppercase block">⚠️ CLIENTE CON MORA REGISTRADA</span>
-                            <p class="font-bold" x-text="'Registra ' + infoCredito.estado_crediticio.cuotas_mora_count + ' cuota(s) impagas con mora por un total de $ ' + formatDinero(infoCredito.estado_crediticio.total_mora) + '.'"></p>
-                            <ul class="list-disc list-inside text-[11px] mt-1 space-y-0.5 text-amber-900 dark:text-amber-300">
-                                <template x-for="(mora, mIdx) in infoCredito.estado_crediticio.detalle_mora" :key="mIdx">
-                                    <li x-text="mora"></li>
+                                <!-- Columna Derecha: COMENTARIOS / NOVEDADES (fondo verde menta con scroll) -->
+                                <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+                                    <div>
+                                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-1.5 mb-2">
+                                            <h4 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                                COMENTARIOS / NOVEDADES:
+                                            </h4>
+                                            <span class="text-[10px] text-slate-500 font-bold" x-text="(infoCredito.novedades?.length || 0) + ' nota(s)'"></span>
+                                        </div>
+
+                                        <!-- Caja Verde con Scroll (estilo réplica de captura) -->
+                                        <div class="bg-[#dcfce7] dark:bg-emerald-950/40 border-2 border-[#86efac] dark:border-emerald-700/80 rounded-xl p-2 h-36 overflow-y-auto space-y-1.5 shadow-inner">
+                                            <template x-if="!infoCredito.novedades || infoCredito.novedades.length === 0">
+                                                <p class="text-xs text-emerald-800 dark:text-emerald-300 italic p-3 text-center">
+                                                    Sin comentarios registrados en el legajo del cliente.
+                                                </p>
+                                            </template>
+                                            <template x-for="com in (infoCredito.novedades || [])" :key="com.id">
+                                                <div class="p-1.5 bg-white/75 dark:bg-slate-900/70 rounded-lg border border-emerald-200/90 dark:border-emerald-800/80 text-xs flex items-start gap-2 shadow-2xs">
+                                                    <span class="font-mono font-black text-emerald-900 dark:text-emerald-300 shrink-0 text-[11px]" x-text="com.fecha"></span>
+                                                    <div class="text-slate-900 dark:text-slate-100 flex-grow leading-tight">
+                                                        <span class="font-bold text-indigo-900 dark:text-indigo-300" x-show="com.usuario_nombre" x-text="com.usuario_nombre + ': '"></span>
+                                                        <span x-text="com.mensaje"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Campo Rápido para Añadir Comentario -->
+                                    <div class="mt-2 flex items-center gap-1.5">
+                                        <input type="text" x-model="nuevoComentarioInput" placeholder="Añadir nota al legajo..." 
+                                               @keydown.enter.prevent="guardarNuevoComentario()"
+                                               class="flex-grow px-2.5 py-1 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                        <button type="button" @click="guardarNuevoComentario()" :disabled="guardandoComentario || !nuevoComentarioInput.trim()"
+                                                class="px-2.5 py-1 text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg transition disabled:opacity-40 cursor-pointer shrink-0">
+                                            <span x-text="guardandoComentario ? '...' : '+ Agregar'"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- FILA CENTRAL: PRÓXIMOS VENCIMIENTOS (TABLA 4 MESES) -->
+                            <div class="space-y-1.5">
+                                <h4 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight underline">
+                                    PROXIMOS VENCIMIENTOS:
+                                </h4>
+                                <div class="border border-slate-300 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                                    <!-- Cabecera de 4 Meses -->
+                                    <div class="grid grid-cols-4 bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-700 text-center font-black text-xs py-2 text-slate-800 dark:text-slate-200">
+                                        <template x-for="mes in (infoCredito.proximos_vencimientos || [])" :key="mes.numero_mes">
+                                            <div class="border-r last:border-r-0 border-slate-300 dark:border-slate-700 px-1">
+                                                <span x-text="mes.numero_mes + '° Mes (Lote ' + mes.lote + ')'"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <!-- Celdas de 4 Meses con Cuotas y Totales -->
+                                    <div class="grid grid-cols-4 min-h-[85px] divide-x divide-slate-300 dark:divide-slate-700 text-xs">
+                                        <template x-for="mes in (infoCredito.proximos_vencimientos || [])" :key="'col-' + mes.numero_mes">
+                                            <div class="p-2 flex flex-col justify-between bg-white dark:bg-slate-900">
+                                                <div class="space-y-1 max-h-28 overflow-y-auto">
+                                                    <template x-for="c in mes.cuotas" :key="c.id">
+                                                        <div class="p-1 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] flex items-center justify-between">
+                                                            <span class="font-bold text-indigo-900 dark:text-indigo-300 truncate" x-text="c.identificador"></span>
+                                                            <span class="px-1 text-slate-500 font-bold" x-text="c.num_cuota"></span>
+                                                            <span class="font-black text-slate-900 dark:text-slate-100" x-text="'$' + formatDinero(c.saldo)"></span>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!mes.cuotas || mes.cuotas.length === 0">
+                                                        <span class="text-[10px] text-slate-400 italic block text-center py-4">- Sin cuotas -</span>
+                                                    </template>
+                                                </div>
+                                                <div class="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-700 text-center font-mono font-bold text-xs text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-800/60 py-1 rounded">
+                                                    <span x-text="'Total: $ ' + formatDinero(mes.total)"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- FILA INFERIOR: CONDICIONES DE LA VENTA ACTUAL Y HABILITACIÓN POR VENDEDOR -->
+                            <div class="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-3">
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-200 dark:border-indigo-800/80 pb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200">
+                                            Compra Actual a Facturar:
+                                        </span>
+                                        <span class="text-base font-black font-mono text-indigo-700 dark:text-indigo-300"
+                                              x-text="'$ ' + formatDinero(calcularTotal())"></span>
+                                    </div>
+
+                                    <!-- Selector de Cuotas en el Modal -->
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Plan:</span>
+                                        <div class="flex items-center gap-1">
+                                            @for($i = 1; $i <= 4; $i++)
+                                                <button type="button" @click="cuotasPlan = {{ $i }}"
+                                                        class="px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer"
+                                                        :class="cuotasPlan === {{ $i }} 
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 font-black shadow-xs' 
+                                                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100'">
+                                                    {{ $i }} {{ $i === 1 ? 'Pago' : 'Pagos' }}
+                                                </button>
+                                            @endfor
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between text-xs gap-2">
+                                    <div class="text-slate-700 dark:text-slate-300">
+                                        Plan seleccionado: <span class="font-black text-slate-900 dark:text-white" x-text="cuotasPlan + (cuotasPlan === 1 ? ' cuota' : ' cuotas')"></span> de 
+                                        <span class="font-mono font-black text-indigo-700 dark:text-indigo-400 text-sm" x-text="'$ ' + formatDinero(calcularValorCuota(cuotasPlan))"></span>
+                                        <span class="text-[11px] opacity-80" x-text="' (Int. ' + porcentajeInteresCuotas(cuotasPlan) + '%)'"></span>
+                                    </div>
+                                </div>
+
+                                <!-- SECCIÓN DE ADVERTENCIA / HABILITACIÓN DEL VENDEDOR -->
+                                <template x-if="infoCredito.estado_crediticio.tiene_mora || (calcularTotal() > (infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio.limite_disponible)) || infoCredito.estado_crediticio.suspendido">
+                                    <div class="p-3 bg-amber-100/90 dark:bg-amber-950/80 border-2 border-amber-400 dark:border-amber-600 rounded-xl space-y-2">
+                                        <div class="flex items-center gap-2 text-amber-900 dark:text-amber-200 text-xs font-black uppercase">
+                                            <span>⚠️ ATENCIÓN: El cliente posee restricciones de crédito</span>
+                                        </div>
+                                        <ul class="text-[11px] list-disc list-inside text-amber-900 dark:text-amber-300 space-y-0.5">
+                                            <template x-if="infoCredito.estado_crediticio.suspendido">
+                                                <li>Cliente suspendido para créditos.</li>
+                                            </template>
+                                            <template x-if="infoCredito.estado_crediticio.tiene_mora">
+                                                <li x-text="'Registra mora por $ ' + formatDinero(infoCredito.detalle_compras?.mora_vencido || infoCredito.estado_crediticio.total_mora) + '.'"></li>
+                                            </template>
+                                            <template x-if="calcularTotal() > (infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio.limite_disponible)">
+                                                <li x-text="'El total ($ ' + formatDinero(calcularTotal()) + ') supera el disponible ($ ' + formatDinero(infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio.limite_disponible) + ').'"></li>
+                                            </template>
+                                        </ul>
+
+                                        <!-- CHECKBOX EXCLUSIVO DE HABILITACIÓN POR VENDEDOR -->
+                                        <div class="pt-1.5 border-t border-amber-300 dark:border-amber-700">
+                                            <label class="inline-flex items-center gap-2.5 p-2 bg-white dark:bg-slate-900 rounded-lg border-2 border-amber-500 cursor-pointer shadow-sm hover:bg-amber-50 transition">
+                                                <input type="checkbox" x-model="autorizadoPorVendedor" class="w-4 h-4 text-indigo-600 rounded cursor-pointer">
+                                                <span class="text-xs font-black text-amber-950 dark:text-white uppercase tracking-tight">
+                                                    HABILITAR PARA ESTA COMPRA (Autoriza el vendedor)
+                                                </span>
+                                            </label>
+                                            <p class="text-[10px] text-amber-800 dark:text-amber-400 mt-1">
+                                                Al marcar esta casilla, el vendedor asume la autorización excepcional para emitir la factura a crédito y quedará asentado en el legajo.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </template>
-                            </ul>
-                        </div>
 
-                        <!-- ALERTA SI EXCEDE LÍMITE -->
-                        <div x-show="!infoCredito.estado_crediticio.suspendido && !infoCredito.estado_crediticio.tiene_mora && calcularTotal() > infoCredito.estado_crediticio.limite_disponible" 
-                             class="p-3 bg-amber-50 dark:bg-amber-950/60 border-l-4 border-amber-500 rounded-r-lg text-amber-800 dark:text-amber-200 text-xs space-y-1">
-                            <span class="font-black uppercase block">⚠️ SUPERA EL LÍMITE DISPONIBLE</span>
-                            <p x-text="'El importe total ($ ' + formatDinero(calcularTotal()) + ') excede el disponible actual ($ ' + formatDinero(infoCredito.estado_crediticio.limite_disponible) + ').'"></p>
-                        </div>
-
-                        <!-- TODO OK: HABILITADO -->
-                        <div x-show="infoCredito.estado_crediticio.habilitado && calcularTotal() <= infoCredito.estado_crediticio.limite_disponible" 
-                             class="p-3 bg-emerald-50 dark:bg-emerald-950/60 border-l-4 border-emerald-500 rounded-r-lg text-emerald-800 dark:text-emerald-200 text-xs">
-                            <span class="font-black uppercase block">✓ CRÉDITO APROBADO</span>
-                            <p>El cliente se encuentra al día, sin mora y con margen de crédito suficiente.</p>
-                        </div>
-
-                        <!-- Resumen de las Cuotas a Generar con Interés 6% -->
-                        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs space-y-1">
-                            <div class="flex justify-between">
-                                <span class="font-bold text-slate-700 dark:text-slate-300">Total a Financiar (con interés):</span>
-                                <span class="font-mono font-black text-indigo-700 dark:text-indigo-300" x-text="'$ ' + formatDinero(calcularTotal())"></span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="font-bold text-slate-700 dark:text-slate-300">Plan Seleccionado:</span>
-                                <span class="font-black text-slate-900 dark:text-white" x-text="cuotasPlan + (cuotasPlan === 1 ? ' Pago' : ' Pagos')"></span>
-                            </div>
-                            <div class="flex justify-between text-sm pt-1 border-t border-indigo-200/60 dark:border-indigo-900/60">
-                                <span class="font-black text-indigo-900 dark:text-indigo-200">Importe de cada Cuota:</span>
-                                <span class="font-mono font-black text-indigo-700 dark:text-indigo-400" x-text="'$ ' + formatDinero(calcularValorCuota(cuotasPlan))"></span>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Botones del Modal de Crédito -->
-                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
-                    <!-- Si NO puede pagar a crédito (Mora / Suspendido / Límite): Botón para volver y pagar con efectivo/tarjeta -->
-                    <template x-if="infoCredito && (!infoCredito.estado_crediticio.habilitado || calcularTotal() > infoCredito.estado_crediticio.limite_disponible)">
-                        <div class="w-full space-y-2">
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 text-center">
-                                Debido a la condición de la cuenta, la venta no puede realizarse a crédito. Puede cobrar con otros medios de pago:
-                            </p>
-                            <div class="grid grid-cols-3 gap-2">
-                                <button type="button" @click="cambiarMedioYFacturar('efectivo')"
-                                        class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-2 rounded-lg transition text-center uppercase">
-                                    💵 Efectivo
-                                </button>
-                                <button type="button" @click="cambiarMedioYFacturar('tarjeta_debito')"
-                                        class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs py-2 px-2 rounded-lg transition text-center uppercase">
-                                    💳 Débito
-                                </button>
-                                <button type="button" @click="cambiarMedioYFacturar('tarjeta_credito')"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2 px-2 rounded-lg transition text-center uppercase">
-                                    💳 Tarjeta
-                                </button>
+                                <!-- ESTADO REGULAR APROBADO -->
+                                <template x-if="!infoCredito.estado_crediticio.tiene_mora && !infoCredito.estado_crediticio.suspendido && (calcularTotal() <= (infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio.limite_disponible))">
+                                    <div class="p-2.5 bg-emerald-100/90 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
+                                        <span class="text-base">✓</span>
+                                        <span class="font-bold">Cliente en regla y con margen de crédito disponible para autorizar.</span>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </template>
+                </div>
 
-                    <!-- Si está HABILITADO para crédito -->
-                    <template x-if="infoCredito && infoCredito.estado_crediticio.habilitado && calcularTotal() <= infoCredito.estado_crediticio.limite_disponible">
-                        <div class="flex items-center justify-end gap-2 w-full">
-                            <button type="button" @click="modalCredito = false"
-                                    class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-200 font-bold text-xs py-2 px-4 rounded-lg transition uppercase">
-                                Volver a Factura
-                            </button>
-                            <button type="button" @click="enviarVenta()"
-                                    :disabled="procesando"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs py-2 px-5 rounded-lg shadow transition uppercase flex items-center gap-1">
-                                <span x-text="procesando ? 'Emitiendo...' : 'Confirmar y Facturar Crédito'"></span>
-                            </button>
-                        </div>
-                    </template>
+                <!-- Footer del Modal de Crédito -->
+                <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+                    <button type="button" @click="modalCredito = false; focusBarcode();"
+                            class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 uppercase transition cursor-pointer">
+                        Cancelar / Volver
+                    </button>
+
+                    <!-- Botón Principal: AUTORIZAR CRÉDITO -->
+                    <button type="button" @click="confirmarAutorizacionCredito()"
+                            :disabled="!puedeAutorizarCredito"
+                            class="px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-md flex items-center gap-2 transition cursor-pointer"
+                            :class="puedeAutorizarCredito 
+                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 active:scale-98' 
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'">
+                        <span class="text-sm">✓</span>
+                        <span>AUTORIZAR CRÉDITO</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1382,6 +1566,68 @@
             </div>
         </div>
 
+        <!-- =================================================================== -->
+        <!-- MODAL FICHA Y LEGAJO DEL CLIENTE (SIN SALIR DE FACTURACIÓN)        -->
+        <!-- =================================================================== -->
+        <div x-show="modalFichaCliente" 
+             class="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
+             @keydown.window.escape="cerrarFichaClienteModal()"
+             x-cloak>
+            <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-7xl h-[94vh] shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                
+                <!-- Encabezado del Modal -->
+                <div class="flex items-center justify-between px-4 py-3 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
+                            📄
+                        </span>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                    Ficha y Legajo del Cliente
+                                </h3>
+                                <template x-if="clienteSeleccionado">
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800"
+                                          x-text="clienteSeleccionado.nombre + ' (DNI: ' + clienteSeleccionado.dni + ')'">
+                                    </span>
+                                </template>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                Ver y editar el legajo del cliente directamente sin perder los artículos ni el progreso de la factura
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Botones de Acción del Modal -->
+                    <div class="flex items-center gap-2">
+                        <button type="button" 
+                                @click="recargarFichaCliente()"
+                                title="Actualizar datos de la ficha"
+                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-1 shadow-xs transition cursor-pointer">
+                            <span>🔄</span>
+                            <span class="hidden sm:inline">Recargar</span>
+                        </button>
+                        <button type="button" 
+                                @click="cerrarFichaClienteModal()"
+                                class="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center gap-1 transition cursor-pointer">
+                            <span>✕</span>
+                            <span>Volver a Facturar</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Contenido con iframe optimizado embebido a altura completa -->
+                <div class="flex-1 min-h-0 w-full h-[calc(94vh-65px)] bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
+                    <iframe id="iframeFichaCliente"
+                            :src="fichaClienteUrl"
+                            class="w-full h-full border-0 bg-transparent block"
+                            style="width: 100%; height: 100%; min-height: calc(94vh - 65px); border: 0;"
+                            loading="lazy">
+                    </iframe>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Script de Reactividad Alpine.js del POS -->
@@ -1409,8 +1655,13 @@
                     return (mp && (mp.tipo_base === 'efectivo' || mp.permite_vuelto)) || this.medioPago === 'efectivo';
                 },
                 seleccionarMedioPago(mp) {
-                    if ((mp.tipo_base === 'credito' || mp.codigo === 'credito_personal') && !this.clienteSeleccionado) {
-                        alert('Para operar con ' + mp.nombre + ' debe seleccionar un cliente registrado.');
+                    if (mp.tipo_base === 'credito' || mp.codigo === 'credito_personal') {
+                        if (!this.clienteSeleccionado) {
+                            alert('Para operar con ' + mp.nombre + ' debe seleccionar un cliente primero.');
+                            this.abrirBuscadorCliente();
+                            return;
+                        }
+                        this.abrirModalCredito();
                         return;
                     }
                     this.medioPago = mp.codigo;
@@ -1422,6 +1673,7 @@
                 },
                 cuotasPlan: 1,
                 tasaInteres: {{ (float)$tasaInteresCredito }},
+                primeraSinInteres: {{ ($presentacion?->primera_cuota_sin_interes ?? true) ? 'true' : 'false' }},
                 montoGenerico: '',
                 infoCredito: null,
                 modalCredito: false,
@@ -1432,6 +1684,37 @@
                 recuentoCantidad: 1,
                 recuentoMotivo: 'Recuento físico previo a facturación en mostrador',
                 procesandoRecuento: false,
+
+                // Estado de Autorización de Crédito Personal y Vendedor
+                autorizadoPorVendedor: false,
+                creditoAutorizado: false,
+                nuevoLimiteInput: '',
+                guardandoLimite: false,
+                nuevoComentarioInput: '',
+                guardandoComentario: false,
+
+                // Modal Ficha / Legajo del Cliente
+                modalFichaCliente: false,
+                fichaClienteUrl: '',
+                abrirFichaClienteModal(clienteId = null) {
+                    let id = clienteId || this.clienteSeleccionado?.id;
+                    if (!id) return;
+                    this.fichaClienteUrl = '{{ url('/clientes') }}/' + id + '?embed=1';
+                    this.modalFichaCliente = true;
+                },
+                recargarFichaCliente() {
+                    let iframe = document.getElementById('iframeFichaCliente');
+                    if (iframe && iframe.contentWindow) {
+                        iframe.contentWindow.location.reload();
+                    }
+                },
+                async cerrarFichaClienteModal() {
+                    this.modalFichaCliente = false;
+                    this.focusBarcode();
+                    if (this.clienteSeleccionado) {
+                        await this.consultarInfoCredito(this.clienteSeleccionado.id);
+                    }
+                },
 
                 // Control de Caja / Turnos
                 cajaEstado: '{{ $cajaActiva ? ($requiereCierreAnterior ? 'cierre_anterior' : 'abierta') : 'cerrada' }}',
@@ -1482,6 +1765,7 @@
                             this.modalCredito = false;
                             this.modalCobro = false;
                             this.modalRecuento = false;
+                            this.modalFichaCliente = false;
                             this.focusBarcode();
                         }
                     });
@@ -1503,10 +1787,18 @@
                     return Math.round(sum * 100) / 100;
                 },
 
-                calcularRecargo() {
+                // % de interés total según cantidad de cuotas (ej: 6% -> 1:0%, 2:6%, 3:12%, 4:18%)
+                porcentajeInteresCuotas(cuotas) {
+                    let n = Math.max(1, parseInt(cuotas) || 1);
+                    let tramos = this.primeraSinInteres ? n - 1 : n;
+                    return Math.round(this.tasaInteres * tramos * 100) / 100;
+                },
+
+                calcularRecargo(cuotas = null) {
                     let sub = this.calcularSubtotal();
-                    if (this.esCredito && this.tasaInteres > 0) {
-                        return Math.round(sub * (this.tasaInteres / 100) * 100) / 100;
+                    if (this.esCredito) {
+                        let pct = this.porcentajeInteresCuotas(cuotas ?? this.cuotasPlan);
+                        return Math.round(sub * (pct / 100) * 100) / 100;
                     }
                     let mp = this.medioPagoActual;
                     if (mp && Number(mp.recargo_porcentaje) > 0) {
@@ -1524,13 +1816,14 @@
                     return 0;
                 },
 
-                calcularTotal() {
-                    return Math.max(0, Math.round((this.calcularSubtotal() + this.calcularRecargo() - this.calcularDescuento()) * 100) / 100);
+                calcularTotal(cuotas = null) {
+                    return Math.max(0, Math.round((this.calcularSubtotal() + this.calcularRecargo(cuotas) - this.calcularDescuento()) * 100) / 100);
                 },
 
+                // valor_cuota = subtotal * (1 + tasa * tramos) / cuotas
                 calcularValorCuota(cuotas) {
-                    let totalFinanciado = this.calcularTotal();
                     if (!cuotas || cuotas < 1) cuotas = 1;
+                    let totalFinanciado = this.calcularTotal(cuotas);
                     return Math.round((totalFinanciado / cuotas) * 100) / 100;
                 },
 
@@ -1797,9 +2090,108 @@
                 deseleccionarCliente() {
                     this.clienteSeleccionado = null;
                     this.infoCredito = null;
+                    this.creditoAutorizado = false;
+                    this.autorizadoPorVendedor = false;
                     if (this.esCredito) {
                         this.medioPago = 'efectivo';
                     }
+                    this.focusBarcode();
+                },
+
+                async abrirModalCredito() {
+                    if (!this.clienteSeleccionado) {
+                        alert('Para operar con Crédito Personal debe seleccionar un cliente primero.');
+                        this.abrirBuscadorCliente();
+                        return;
+                    }
+                    await this.consultarInfoCredito(this.clienteSeleccionado.id);
+                    if (this.infoCredito && this.infoCredito.detalle_compras) {
+                        this.nuevoLimiteInput = this.infoCredito.detalle_compras.limite_total;
+                    } else if (this.clienteSeleccionado) {
+                        this.nuevoLimiteInput = this.clienteSeleccionado.limite_efectivo || this.clienteSeleccionado.limite || 0;
+                    }
+                    this.autorizadoPorVendedor = false;
+                    this.modalCredito = true;
+                },
+
+                async guardarNuevoLimite() {
+                    if (!this.clienteSeleccionado) return;
+                    let nuevo = parseFloat(this.nuevoLimiteInput);
+                    if (isNaN(nuevo) || nuevo < 0) {
+                        alert('Ingrese un límite numérico válido mayor o igual a 0.');
+                        return;
+                    }
+                    this.guardandoLimite = true;
+                    try {
+                        let res = await fetch(`{{ url('/ventas/clientes') }}/${this.clienteSeleccionado.id}/actualizar-limite`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ limite: nuevo })
+                        });
+                        let data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.message || data.error || 'Error al actualizar el límite');
+                        }
+                        await this.consultarInfoCredito(this.clienteSeleccionado.id);
+                        alert('✓ Límite de crédito actualizado correctamente a $ ' + this.formatDinero(nuevo));
+                    } catch (e) {
+                        alert('Error: ' + e.message);
+                    } finally {
+                        this.guardandoLimite = false;
+                    }
+                },
+
+                async guardarNuevoComentario() {
+                    if (!this.clienteSeleccionado) return;
+                    let txt = (this.nuevoComentarioInput || '').trim();
+                    if (!txt) return;
+
+                    this.guardandoComentario = true;
+                    try {
+                        let res = await fetch(`{{ url('/ventas/clientes') }}/${this.clienteSeleccionado.id}/comentarios`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ mensaje: txt })
+                        });
+                        let data = await res.json();
+                        if (!res.ok) {
+                            throw new Error(data.message || data.error || 'Error al guardar comentario');
+                        }
+                        if (!this.infoCredito.novedades) {
+                            this.infoCredito.novedades = [];
+                        }
+                        this.infoCredito.novedades.unshift(data.novedad);
+                        this.nuevoComentarioInput = '';
+                    } catch (e) {
+                        alert('Error: ' + e.message);
+                    } finally {
+                        this.guardandoComentario = false;
+                    }
+                },
+
+                get puedeAutorizarCredito() {
+                    if (!this.infoCredito || !this.infoCredito.estado_crediticio) return false;
+                    let limiteDisp = parseFloat(this.infoCredito.detalle_compras?.limite_disponible ?? this.infoCredito.estado_crediticio.limite_disponible ?? 0);
+                    let regularHabilitado = this.infoCredito.estado_crediticio.habilitado && (this.calcularTotal() <= limiteDisp);
+                    return regularHabilitado || this.autorizadoPorVendedor;
+                },
+
+                confirmarAutorizacionCredito() {
+                    if (!this.puedeAutorizarCredito) {
+                        alert('No es posible autorizar el crédito sin la habilitación correspondiente.');
+                        return;
+                    }
+                    this.medioPago = 'credito_personal';
+                    this.creditoAutorizado = true;
+                    this.modalCredito = false;
                     this.focusBarcode();
                 },
 
@@ -1809,6 +2201,13 @@
                         let res = await fetch(`{{ url('/ventas/clientes') }}/${clienteId}/info-credito?monto=${monto}&sucursal_id={{ $sucursalActiva->id ?? 1 }}`);
                         let data = await res.json();
                         this.infoCredito = data;
+                        if (data && data.cliente && this.clienteSeleccionado && this.clienteSeleccionado.id == clienteId) {
+                            this.clienteSeleccionado.nombre = data.cliente.nombre;
+                            this.clienteSeleccionado.dni = data.cliente.dni;
+                            this.clienteSeleccionado.nro_cuenta = data.cliente.nro_cuenta;
+                            this.clienteSeleccionado.limite = data.cliente.limite;
+                            this.clienteSeleccionado.limite_efectivo = data.cliente.limite_efectivo;
+                        }
                     } catch (e) {
                         console.error('Error consultando crédito:', e);
                     }
@@ -1835,8 +2234,7 @@
                             alert('Para pagar a crédito debe seleccionar un cliente registrado.');
                             return;
                         }
-                        this.consultarInfoCredito(this.clienteSeleccionado.id);
-                        this.modalCredito = true;
+                        this.abrirModalCredito();
                     } else {
                         if (this.esEfectivo) {
                             if (!this.pagaCon || this.pagaCon < this.calcularTotal()) {
@@ -2013,6 +2411,7 @@
                         cliente_documento: (this.clienteSeleccionado && this.clienteSeleccionado.dni) ? String(this.clienteSeleccionado.dni) : null,
                         medio_pago: this.medioPago,
                         cuotas: this.esCredito ? parseInt(this.cuotasPlan || 1) : null,
+                        autorizado_vendedor: this.esCredito ? (this.autorizadoPorVendedor ? true : false) : false,
                         observaciones: this.referenciaPago ? ('[Ref: ' + this.referenciaPago + ']') : null,
                         items: this.items.map(it => ({
                             id_producto: it.id_producto || null,
@@ -2057,6 +2456,8 @@
                         // Éxito: cerrar modales de cobro y mostrar modal final
                         this.modalCredito = false;
                         this.modalCobro = false;
+                        this.creditoAutorizado = false;
+                        this.autorizadoPorVendedor = false;
                         this.ventaExitosa = {
                             id: data.venta_id,
                             comprobante: data.comprobante,
@@ -2083,6 +2484,8 @@
                     this.medioPago = 'efectivo';
                     this.referenciaPago = '';
                     this.cuotasPlan = 1;
+                    this.creditoAutorizado = false;
+                    this.autorizadoPorVendedor = false;
                     this.modalExito = false;
                     this.focusBarcode();
                 }

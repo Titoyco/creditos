@@ -21,8 +21,25 @@ class Presentacion extends Model implements Auditable
         'interes_credito', // % de financiación base del lote
         'interes_mora',    // % de mora aplicado al cerrar el lote
         'tasa_cuotas',
-        'tasa_mora'
+        'tasa_mora',
+        'primera_cuota_sin_interes', // true: 1 pago sin interés y +tasa por cada cuota adicional
     ];
+
+    protected $casts = [
+        'primera_cuota_sin_interes' => 'boolean',
+    ];
+
+    /**
+     * Cantidad de "tramos" de interés que se aplican según las cuotas.
+     *   Primera cuota sin interés: 1c=0, 2c=1, 3c=2, 4c=3 ...
+     *   Sin beneficio:              1c=1, 2c=2, 3c=3, 4c=4 ...
+     */
+    public function tramosInteres(int $cuotas): int
+    {
+        $cuotas = max(1, $cuotas);
+        $sinInteres = $this->primera_cuota_sin_interes ?? true;
+        return $sinInteres ? $cuotas - 1 : $cuotas;
+    }
 
     public function provincia(): BelongsTo
     {

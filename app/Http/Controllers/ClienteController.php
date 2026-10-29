@@ -226,6 +226,11 @@ class ClienteController extends Controller
         // Actualizamos el registro del legajo
         $cliente->update($data);
 
+        if ($request->boolean('embed')) {
+            return redirect()->route('clientes.show', ['cliente' => $cliente->id, 'embed' => 1])
+                            ->with('success', 'Legajo de cliente actualizado correctamente.');
+        }
+
         return redirect()->route('clientes.index')
                         ->with('success', 'Legajo de cliente actualizado correctamente.');
     }
@@ -397,6 +402,11 @@ class ClienteController extends Controller
             'mensaje' => trim($request->mensaje),
             'origen_accion' => 'manual',
         ]);
+
+        if ($request->boolean('embed')) {
+            return redirect()->route('clientes.show', ['cliente' => $cliente->id, 'embed' => 1])
+                ->with('success', 'Novedad registrada en el legajo correctamente.');
+        }
 
         return redirect()->route('clientes.show', $cliente->id)
             ->with('success', 'Novedad registrada en el legajo correctamente.');
