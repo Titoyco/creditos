@@ -928,6 +928,13 @@
 
                 <!-- Botones de Impresión Oficial -->
                 <div class="space-y-2 pt-2">
+                    <template x-if="ventaExitosa.pagare_url">
+                        <a :href="ventaExitosa.pagare_url" target="_blank"
+                           class="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow transition flex items-center justify-center gap-2 uppercase tracking-wide">
+                            <span>📋 Imprimir Pagaré de Crédito</span>
+                        </a>
+                    </template>
+
                     <a :href="ventaExitosa.ticket_url" target="_blank"
                        class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-2 uppercase">
                         <span>🖨️ Imprimir Ticket Térmico (80mm)</span>
@@ -1461,7 +1468,9 @@
                     total: 0,
                     ticket_url: '#',
                     a4_url: '#',
-                    redirect_url: '#'
+                    redirect_url: '#',
+                    id_credito: null,
+                    pagare_url: null
                 },
 
                 initPos() {
@@ -2054,7 +2063,9 @@
                             total: data.total,
                             ticket_url: data.ticket_url,
                             a4_url: data.a4_url,
-                            redirect_url: data.redirect_url
+                            redirect_url: data.redirect_url,
+                            id_credito: data.id_credito || null,
+                            pagare_url: data.pagare_url || null
                         };
                         this.modalExito = true;
                     } catch (e) {

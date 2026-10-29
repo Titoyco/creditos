@@ -30,6 +30,13 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
+                @if($venta->credito)
+                    <a href="{{ route('creditos.pagare', $venta->credito->id) }}" target="_blank"
+                       class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-sm transition flex items-center gap-1.5 uppercase">
+                        <span>📋 Pagaré de Crédito</span>
+                    </a>
+                @endif
+
                 <a href="{{ route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']) }}" target="_blank"
                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-sm transition flex items-center gap-1.5 uppercase">
                     <span>🖨️ Ticket (80mm)</span>
@@ -164,9 +171,14 @@
                         </div>
                     </div>
 
-                    <a href="{{ route('creditos.show', $venta->credito->id) }}" class="inline-flex items-center px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition uppercase">
-                        Ver Ficha del Crédito →
-                    </a>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ route('creditos.pagare', $venta->credito->id) }}" target="_blank" class="inline-flex items-center px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg transition uppercase">
+                            Imprimir Pagaré 📋
+                        </a>
+                        <a href="{{ route('creditos.show', $venta->credito->id) }}" class="inline-flex items-center px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition uppercase">
+                            Ver Ficha del Crédito →
+                        </a>
+                    </div>
                 </div>
 
                 {{-- Tabla de Cuotas --}}

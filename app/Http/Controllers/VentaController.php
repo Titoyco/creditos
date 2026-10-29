@@ -787,6 +787,8 @@ class VentaController extends Controller
                 'redirect_url' => route('ventas.show', $venta->id),
                 'ticket_url'   => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']),
                 'a4_url'       => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'a4']),
+                'id_credito'   => $venta->id_credito,
+                'pagare_url'   => $venta->id_credito ? route('creditos.pagare', $venta->id_credito) : null,
             ]);
         }
 
@@ -823,7 +825,14 @@ class VentaController extends Controller
             'items'
         ]);
 
-        $formato = $request->get('formato', 'ticket'); // 'ticket' o 'a4'
+        $formato = $request->get('formato', 'ticket'); // 'ticket', 'a4' o 'pagare'
+
+        if ($formato === 'pagare') {
+            if ($venta->id_credito) {
+                return redirect()->route('creditos.pagare', $venta->id_credito);
+            }
+            return redirect()->route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']);
+        }
 
         return view('ventas.imprimir', compact('venta', 'formato'));
     }

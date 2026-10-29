@@ -226,6 +226,16 @@ class VentaStockRecuentoTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJson(['success' => true]);
+        $data = $response->json();
+        $this->assertNotEmpty($data['id_credito']);
+        $this->assertNotEmpty($data['pagare_url']);
+
+        // Verificar que la URL del pagaré renderiza correctamente
+        $pagareResponse = $this->actingAs($this->user)->get($data['pagare_url']);
+        $pagareResponse->assertStatus(200);
+        $pagareResponse->assertSee('Pagaré');
+        $pagareResponse->assertSee($cliente->nombre);
+        $pagareResponse->assertSee((string)$cliente->dni);
 
         $this->assertDatabaseHas('ventas', [
             'id_cliente' => $cliente->id,

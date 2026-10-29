@@ -659,10 +659,13 @@ class CreditoController extends Controller
 
     public function imprimirPagare(Credito $credito)
     {
-        $credito->load(['cliente', 'sucursal', 'autorizado.cliente', 'cuotas']);
+        $credito->load(['cliente.localidad', 'sucursal.provincia', 'autorizado.cliente', 'cuotas', 'presentacion']);
+        $cliente = $credito->cliente;
 
-        $totalMonto = $credito->cantidad_cuotas * $credito->valor_cuota_ref;
-        
+        $totalMonto = ($credito->cantidad_cuotas && (float)$credito->valor_cuota_ref > 0)
+            ? round((float)$credito->cantidad_cuotas * (float)$credito->valor_cuota_ref, 2)
+            : (float)$credito->importe_original;
+
         // Concepto
         if ($credito->tipo_credito === 'R') {
             $concepto = "En concepto de REFINANCIACION de creditos.";
@@ -671,10 +674,117 @@ class CreditoController extends Controller
         }
 
         // Convertidor de números a letras para el Pagaré
-        $formatter = new \NumberFormatter("es", \NumberFormatter::SPELLOUT);
-        $montoEnLetras = mb_strtoupper($formatter->format($totalMonto));
+        $montoEnLetras = self::convertirMontoEnLetras($totalMonto);
 
-        return view('creditos.pagare', compact('credito', 'totalMonto', 'concepto', 'montoEnLetras'));
+        // Estado crediticio / Deuda acumulada y mora del cliente
+        $estadoCrediticio = $cliente ? $cliente->estadoCrediticio() : null;
+
+        // Próximos vencimientos del cliente (4 meses a partir del lote activo de la sucursal)
+        $sucursalId = $credito->id_sucursal ?? 1;
+        $presentacionActiva = Presentacion::activaParaSucursal($sucursalId) ?? $credito->presentacion;
+        $loteBase = $presentacionActiva ? (int)$presentacionActiva->numero : 0;
+
+        $proximosMeses = [];
+        if ($cliente && $loteBase > 0) {
+            $cuotasPendientes = Cuota::whereHas('credito', function ($q) use ($cliente) {
+                $q->where('id_cliente', $cliente->id)
+                  ->whereNull('fecha_cancelacion');
+            })
+            ->where('saldo_actual', '>', 0)
+            ->whereNull('fecha_cobro')
+            ->with(['credito.presentacion'])
+            ->get();
+
+            for ($i = 1; $i <= 4; $i++) {
+                $targetLote = $loteBase + $i;
+                $cuotasDelMes = $cuotasPendientes->filter(function ($c) use ($targetLote) {
+                    return (int)$c->lote_calculado === $targetLote;
+                });
+
+                $proximosMeses[$i] = [
+                    'numero_mes' => $i,
+                    'lote'       => $targetLote,
+                    'cuotas'     => $cuotasDelMes,
+                    'total'      => (float)$cuotasDelMes->sum('saldo_actual'),
+                ];
+            }
+        }
+
+        return view('creditos.pagare', compact(
+            'credito',
+            'cliente',
+            'totalMonto',
+            'concepto',
+            'montoEnLetras',
+            'estadoCrediticio',
+            'proximosMeses'
+        ));
+    }
+
+    /**
+     * Convierte un monto numérico a su expresión en letras (ej: 48190 -> CUARENTA Y OCHO MIL CIENTO NOVENTA).
+     */
+    public static function convertirMontoEnLetras(float $monto): string
+    {
+        if (class_exists('\NumberFormatter')) {
+            try {
+                $formatter = new \NumberFormatter("es", \NumberFormatter::SPELLOUT);
+                return mb_strtoupper($formatter->format((int)$monto));
+            } catch (\Throwable $e) {
+                // Continuar a fallback manual
+            }
+        }
+
+        return mb_strtoupper(self::numeroALetrasBasico($monto));
+    }
+
+    private static function numeroALetrasBasico(float $numero): string
+    {
+        $unidades = ['', 'un', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez',
+            'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve', 'veinte',
+            'veintiuno', 'veintidós', 'veintitrés', 'veinticuatro', 'veinticinco', 'veintiséis', 'veintisiete', 'veintiocho', 'veintinueve'];
+        $decenas = ['', 'diez', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+        $centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+
+        $entero = (int) $numero;
+        if ($entero === 0) return 'cero';
+        if ($entero === 100) return 'cien';
+
+        $texto = '';
+        if ($entero >= 1000000) {
+            $millones = (int) ($entero / 1000000);
+            $texto .= ($millones === 1 ? 'un millón ' : self::numeroALetrasBasico($millones) . ' millones ');
+            $entero %= 1000000;
+        }
+
+        if ($entero >= 1000) {
+            $miles = (int) ($entero / 1000);
+            $texto .= ($miles === 1 ? 'mil ' : self::numeroALetrasBasico($miles) . ' mil ');
+            $entero %= 1000;
+        }
+
+        if ($entero >= 100) {
+            if ($entero === 100) {
+                $texto .= 'cien ';
+                $entero = 0;
+            } else {
+                $c = (int) ($entero / 100);
+                $texto .= $centenas[$c] . ' ';
+                $entero %= 100;
+            }
+        }
+
+        if ($entero > 0) {
+            if ($entero < 30) {
+                $texto .= $unidades[$entero] . ' ';
+            } else {
+                $d = (int) ($entero / 10);
+                $u = $entero % 10;
+                $texto .= $decenas[$d] . ($u > 0 ? ' y ' . $unidades[$u] : '') . ' ';
+            }
+        }
+
+        return trim($texto);
     }
 
 }
