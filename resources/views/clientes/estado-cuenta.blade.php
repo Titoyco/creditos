@@ -7,7 +7,11 @@
             </a>
             <div>
                 <h1 class="text-lg font-bold text-slate-800 tracking-tight flex items-center space-x-2 flex-wrap gap-1">
-                    <span class="uppercase">{{ $cliente->nombre }}</span>
+                    <a href="{{ route('clientes.show', array_merge(['cliente' => $cliente], request()->boolean('embed') ? ['embed' => 1] : [])) }}" 
+                       class="uppercase hover:text-blue-700 hover:underline transition-colors" 
+                       title="Ver legajo de {{ $cliente->nombre }}">
+                        {{ $cliente->nombre }} ↗
+                    </a>
                     <span class="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded border border-blue-200 uppercase font-mono">DNI: {{ $cliente->dni }}</span>
                     @if($cliente->cuit)
                         <span class="bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200 uppercase font-mono">CUIT: {{ $cliente->cuit }}</span>

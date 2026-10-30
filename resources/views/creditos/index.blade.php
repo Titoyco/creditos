@@ -376,11 +376,17 @@
 
                             <!-- Columna Cliente (Achicada un 25%, con truncate) -->
                             <td class="py-1.5 px-2.5 border-r border-slate-200/60 dark:border-slate-700/50 w-36 max-w-[140px] truncate">
-                                <div class="font-bold uppercase text-[11px] truncate text-slate-800 dark:text-slate-100" title="{{ $credito->cliente->nombre }}">
+                                <a href="{{ route('clientes.show', $credito->cliente->id) }}" 
+                                   class="font-bold uppercase text-[11px] truncate text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline block" 
+                                   title="Ver legajo de {{ $credito->cliente->nombre }}">
                                     {{ $credito->cliente->nombre }}
-                                </div>
+                                </a>
                                 <div class="text-[9px] font-bold text-slate-400 dark:text-slate-500 flex items-center space-x-1 truncate">
-                                    <span>DNI: {{ $credito->cliente->dni }}</span>
+                                    <a href="{{ route('clientes.estado-cuenta', $credito->cliente->id) }}" 
+                                       class="hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                                       title="Ver estado de cuenta de {{ $credito->cliente->nombre }}">
+                                        DNI: {{ $credito->cliente->dni }}
+                                    </a>
                                     <span>•</span>
                                     <span class="text-slate-500 dark:text-slate-400 font-semibold" title="Sucursal del cliente: {{ $credito->cliente->sucursal?->nombre ?? '-' }}">
                                         {{ $credito->cliente->sucursal?->codigo_sucursal ?? $credito->sucursal?->codigo_sucursal ?? 'SUC' }}

@@ -188,12 +188,14 @@
 
                         <td class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/50 truncate max-w-[180px]">
                             <div class="font-bold uppercase text-[11px] truncate text-slate-800 dark:text-slate-100" title="{{ $r->cliente?->nombre }}">
-                                <a href="{{ route('clientes.estado-cuenta', $r->id_cliente) }}" class="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
+                                <a href="{{ route('clientes.show', $r->id_cliente) }}" class="hover:text-blue-700 dark:hover:text-blue-400 hover:underline">
                                     {{ $r->cliente?->nombre ?? 'CLIENTE #' . $r->id_cliente }}
                                 </a>
                             </div>
                             <div class="text-[9px] font-bold text-slate-400 dark:text-slate-500">
-                                DNI: {{ $r->cliente?->dni ?? '-' }}
+                                <a href="{{ route('clientes.estado-cuenta', $r->id_cliente) }}" class="hover:underline hover:text-blue-600 dark:hover:text-blue-400">
+                                    DNI: {{ $r->cliente?->dni ?? '-' }}
+                                </a>
                             </div>
                         </td>
 

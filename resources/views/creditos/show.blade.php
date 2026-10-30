@@ -54,21 +54,49 @@
             <div class="grid grid-cols-2 gap-2">
                 <div>
                     <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-0.5">Cliente Titular</span>
-                    <div class="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase truncate">{{ $credito->cliente->nombre }}</div>
-                    <div class="text-[9px] font-bold text-slate-400 dark:text-slate-500">DNI: {{ $credito->cliente->dni }}</div>
+                    <a href="{{ route('clientes.show', $credito->cliente->id) }}" 
+                       class="text-xs font-black text-blue-700 dark:text-blue-400 hover:underline uppercase truncate block"
+                       title="Ver legajo de {{ $credito->cliente->nombre }}">
+                        {{ $credito->cliente->nombre }} ↗
+                    </a>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <a href="{{ route('clientes.show', $credito->cliente->id) }}" class="text-[9px] font-bold text-slate-400 dark:text-slate-500 hover:underline">
+                            DNI: {{ $credito->cliente->dni }}
+                        </a>
+                        <span class="text-slate-300 dark:text-slate-600 text-[9px]">•</span>
+                        <a href="{{ route('clientes.estado-cuenta', $credito->cliente->id) }}" class="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                            Estado de Cuenta
+                        </a>
+                    </div>
                 </div>
                 <div>
                     <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-0.5">Autorizado</span>
-                    <div class="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase truncate">
-                        {{ $credito->autorizado && $credito->autorizado->cliente ? $credito->autorizado->cliente->nombre : 'TITULAR' }}
-                    </div>
-                    <div class="text-[9px] font-bold text-blue-600 dark:text-blue-400">SUC: {{ $credito->sucursal->nombre ?? 'N/D' }}</div>
+                    @if($credito->autorizado && $credito->autorizado->cliente)
+                        <a href="{{ route('clientes.show', $credito->autorizado->cliente->id) }}" 
+                           class="text-xs font-bold text-blue-700 dark:text-blue-400 hover:underline uppercase truncate block"
+                           title="Ver legajo de {{ $credito->autorizado->cliente->nombre }}">
+                            {{ $credito->autorizado->cliente->nombre }} ↗
+                        </a>
+                    @else
+                        <div class="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase truncate">
+                            TITULAR
+                        </div>
+                    @endif
+                    <div class="text-[9px] font-bold text-blue-600 dark:text-blue-400 mt-0.5">SUC: {{ $credito->sucursal->nombre ?? 'N/D' }}</div>
                 </div>
-                <div class="col-span-2 border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1 flex justify-between">
+                <div class="col-span-2 border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1 flex justify-between items-center text-xs">
                     <div>
                         <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase">Otorgado:</span>
                         <span class="text-[10px] font-bold text-slate-800 dark:text-slate-200">{{ $credito->fecha_credito ? \Carbon\Carbon::parse($credito->fecha_credito)->format('d/m/Y') : 'N/D' }}</span>
                     </div>
+                    @if($credito->venta)
+                        <div>
+                            <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase">Factura:</span>
+                            <a href="{{ route('ventas.show', $credito->venta->id) }}" class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:underline font-mono">
+                                #{{ $credito->venta->comprobante }} ↗
+                            </a>
+                        </div>
+                    @endif
                     @if($credito->fecha_cancelacion)
                         <div>
                             <span class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase">Cancelado:</span>
