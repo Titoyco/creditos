@@ -1093,130 +1093,116 @@
         </div>
 
         <!-- =================================================================== -->
-        <!-- MODAL 3: VENTA EXITOSA & IMPRESIÓN DE COMPROBANTES                  -->
+        <!-- MODAL 3: VENTA EXITOSA & IMPRESIÓN DIRECTA CON VISTA PREVIA        -->
         <!-- =================================================================== -->
         <div x-show="modalExito" 
-             class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4"
-             @keydown.window.escape="if (!modalVisorDocumento) cerrarModalExito()"
+             class="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
+             @keydown.window.escape="cerrarModalExito()"
              x-cloak>
-            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 text-center space-y-4 relative">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-6xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                 style="height: 94vh; max-height: 96vh; min-height: 720px; max-width: 1200px;">
                 
-                <!-- Botón Cruz para Cerrar Modal -->
-                <button type="button" 
-                        @click="cerrarModalExito()" 
-                        class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer" 
-                        title="Cerrar y continuar facturando">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-
-                <div class="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto text-3xl font-black shadow-inner">
-                    ✓
-                </div>
-
-                <div>
-                    <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block">¡Venta Registrada Exitosamente!</span>
-                    <h3 class="text-2xl font-black text-slate-900 dark:text-white font-mono mt-1" x-text="ventaExitosa.comprobante"></h3>
-                    <p class="text-xs text-slate-500 mt-1" x-text="'Total Facturado: $ ' + formatDinero(ventaExitosa.total)"></p>
-                </div>
-
-                <!-- Botones de Impresión Oficial en Modal (Sin salir de facturación) -->
-                <div class="space-y-2 pt-2">
-                    <template x-if="ventaExitosa.pagare_url">
-                        <button type="button" 
-                                @click="abrirVisorDocumento(ventaExitosa.pagare_url, 'Pagaré de Crédito - Factura ' + ventaExitosa.comprobante)"
-                                class="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow transition flex items-center justify-center gap-2 uppercase tracking-wide cursor-pointer">
-                            <span>📋 Imprimir Pagaré de Crédito</span>
-                        </button>
-                    </template>
-
-                    <button type="button" 
-                            @click="abrirVisorDocumento(ventaExitosa.ticket_url, 'Ticket Térmico (80mm) - Factura ' + ventaExitosa.comprobante)"
-                            class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-2 uppercase cursor-pointer">
-                        <span>🖨️ Imprimir Ticket Térmico (80mm)</span>
-                    </button>
-
-                    <button type="button" 
-                            @click="abrirVisorDocumento(ventaExitosa.a4_url, 'Factura A4 - Factura ' + ventaExitosa.comprobante)"
-                            class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-2 uppercase cursor-pointer">
-                        <span>📄 Imprimir Factura A4</span>
-                    </button>
-
-                    <button type="button" 
-                            @click="abrirVisorDocumento(ventaExitosa.redirect_url, 'Detalle de Factura #' + ventaExitosa.comprobante)"
-                            class="w-full py-2 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 uppercase cursor-pointer">
-                        <span>👁️ Ver Ficha de la Factura</span>
-                    </button>
-                </div>
-
-                <div class="pt-3 border-t border-slate-100 dark:border-slate-700">
-                    <button type="button" @click="iniciarNuevaVenta()" 
-                            class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold text-xs uppercase cursor-pointer">
-                        ➕ Iniciar Siguiente Venta de Mostrador
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- =================================================================== -->
-        <!-- MODAL VISOR / IMPRESIÓN DE DOCUMENTOS EN MODAL (PAGARÉ, TICKET, A4) -->
-        <!-- =================================================================== -->
-        <div x-show="modalVisorDocumento" 
-             class="fixed inset-0 z-60 overflow-hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
-             @keydown.window.escape="cerrarVisorDocumento()"
-             x-cloak>
-            <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-5xl h-[94vh] shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                
-                <!-- Encabezado del Visor de Impresión -->
-                <div class="flex items-center justify-between px-4 py-3 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                <!-- Encabezado del Modal -->
+                <div class="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-100 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700/80 shrink-0 gap-2">
                     <div class="flex items-center gap-3">
-                        <span class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm">
-                            🖨️
-                        </span>
+                        <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl font-black shadow-inner shrink-0">
+                            ✓
+                        </div>
                         <div>
-                            <h3 class="text-sm sm:text-base font-black text-slate-900 dark:text-white uppercase tracking-tight"
-                                x-text="visorDocumentoTitulo">
-                            </h3>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                Vista previa e impresión integrada sin salir del facturador
-                            </p>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">¡Venta Registrada Exitosamente!</span>
+                                <span class="font-mono font-black text-sm text-slate-900 dark:text-white" x-text="'#' + ventaExitosa.comprobante"></span>
+                            </div>
+                            <span class="text-xs text-slate-600 dark:text-slate-300 font-bold" x-text="'Total Facturado: $ ' + formatDinero(ventaExitosa.total)"></span>
                         </div>
                     </div>
 
-                    <!-- Botones de Acción del Visor -->
+                    <!-- Botones de Acción de Cabecera -->
                     <div class="flex items-center gap-2">
                         <button type="button" 
-                                @click="imprimirDocumentoEnIframe()"
-                                title="Enviar orden directa de impresión a la impresora"
-                                class="px-3.5 py-1.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                                @click="imprimirComprobanteExito()"
+                                class="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5 transition active:scale-98 cursor-pointer">
                             <span>🖨️</span>
                             <span>Mandar a Imprimir</span>
                         </button>
                         <button type="button" 
-                                @click="abrirVisorEnNuevaPestana()"
-                                title="Abrir en pestaña externa si fuera necesario"
-                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-1 shadow-xs transition cursor-pointer">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                            <span class="hidden sm:inline">Nueva Ventana</span>
+                                @click="cerrarModalExito()"
+                                class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5 transition active:scale-98 cursor-pointer"
+                                title="Iniciar siguiente venta">
+                            <span>➕</span>
+                            <span class="hidden sm:inline">Siguiente Venta</span>
                         </button>
                         <button type="button" 
-                                @click="cerrarVisorDocumento()"
-                                class="px-3 py-1.5 rounded-lg text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center gap-1 transition cursor-pointer">
-                            <span>✕</span>
-                            <span>Cerrar</span>
+                                @click="cerrarModalExito()" 
+                                class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-2 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer" 
+                                title="Cerrar modal (Esc)">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
                         </button>
                     </div>
                 </div>
 
-                <!-- Contenedor con Iframe del Comprobante -->
-                <div class="flex-1 min-h-0 w-full h-[calc(94vh-65px)] bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
-                    <iframe id="iframeVisorDocumento"
-                            :src="visorDocumentoUrl"
-                            class="w-full h-full border-0 bg-white dark:bg-slate-900 block"
-                            style="width: 100%; height: 100%; min-height: calc(94vh - 65px); border: 0;"
+                <!-- Barra de Selección de Comprobantes (Botones Horizontales) -->
+                <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/60 shrink-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-wider mr-1">Comprobante:</span>
+
+                        <!-- Botón Pagaré si es crédito -->
+                        <template x-if="ventaExitosa.pagare_url">
+                            <button type="button" 
+                                    @click="seleccionarDocumentoExito('pagare')"
+                                    :class="documentoExitoTipo === 'pagare' 
+                                        ? 'bg-amber-600 text-white font-black shadow-sm ring-2 ring-amber-400/50' 
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-amber-50 dark:hover:bg-slate-700'"
+                                    class="py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                                <span>📋</span>
+                                <span>Pagaré de Crédito</span>
+                            </button>
+                        </template>
+
+                        <!-- Botón Ticket 80mm -->
+                        <button type="button" 
+                                @click="seleccionarDocumentoExito('ticket')"
+                                :class="documentoExitoTipo === 'ticket' 
+                                    ? 'bg-emerald-600 text-white font-black shadow-sm ring-2 ring-emerald-400/50' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-emerald-50 dark:hover:bg-slate-700'"
+                                class="py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                            <span>🖨️</span>
+                            <span>Ticket Térmico (80mm)</span>
+                        </button>
+
+                        <!-- Botón Factura A4 -->
+                        <button type="button" 
+                                @click="seleccionarDocumentoExito('a4')"
+                                :class="documentoExitoTipo === 'a4' 
+                                    ? 'bg-indigo-600 text-white font-black shadow-sm ring-2 ring-indigo-400/50' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-indigo-50 dark:hover:bg-slate-700'"
+                                class="py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                            <span>📄</span>
+                            <span>Factura A4</span>
+                        </button>
+
+                        <!-- Botón Ficha de la Factura -->
+                        <button type="button" 
+                                @click="seleccionarDocumentoExito('ficha')"
+                                :class="documentoExitoTipo === 'ficha' 
+                                    ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 font-black shadow-sm' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                                class="py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                            <span>👁️</span>
+                            <span>Ver Ficha de Factura</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Vista Previa Directa Debajo de los Botones (Mismo Modal con Altura Completa 94vh) -->
+                <div class="flex-1 min-h-0 w-full bg-slate-100 dark:bg-slate-950 p-2 sm:p-3 relative overflow-hidden flex flex-col"
+                     style="flex: 1 1 auto; height: calc(94vh - 120px); min-height: 600px;">
+                    <iframe id="iframeComprobanteExito"
+                            :src="comprobanteActivoUrl"
+                            class="w-full flex-1 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-xl shadow-inner block"
+                            style="width: 100%; height: 100%; min-height: 600px; border: 0;"
                             loading="lazy">
                     </iframe>
                 </div>
@@ -1652,7 +1638,8 @@
              class="fixed inset-0 z-50 overflow-hidden bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4"
              @keydown.window.escape="cerrarFichaClienteModal()"
              x-cloak>
-            <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-7xl h-[94vh] shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-7xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                 style="height: 94vh; max-height: 96vh; min-height: 720px;">
                 
                 <!-- Encabezado del Modal -->
                 <div class="flex items-center justify-between px-4 py-3 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
@@ -1680,6 +1667,13 @@
                     <!-- Botones de Acción del Modal -->
                     <div class="flex items-center gap-2">
                         <button type="button" 
+                                @click="irAlInicioFichaCliente()"
+                                title="Volver a la portada de la ficha del cliente"
+                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900 flex items-center gap-1 shadow-xs transition cursor-pointer">
+                            <span>🏠</span>
+                            <span class="hidden sm:inline">Inicio</span>
+                        </button>
+                        <button type="button" 
                                 @click="recargarFichaCliente()"
                                 title="Actualizar datos de la ficha"
                                 class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 flex items-center gap-1 shadow-xs transition cursor-pointer">
@@ -1696,11 +1690,12 @@
                 </div>
 
                 <!-- Contenido con iframe optimizado embebido a altura completa -->
-                <div class="flex-1 min-h-0 w-full h-[calc(94vh-65px)] bg-slate-50 dark:bg-slate-900 relative overflow-hidden">
+                <div class="flex-1 min-h-0 w-full bg-slate-50 dark:bg-slate-900 relative overflow-hidden"
+                     style="flex: 1 1 auto; height: calc(94vh - 65px); min-height: 640px;">
                     <iframe id="iframeFichaCliente"
                             :src="fichaClienteUrl"
                             class="w-full h-full border-0 bg-transparent block"
-                            style="width: 100%; height: 100%; min-height: calc(94vh - 65px); border: 0;"
+                            style="width: 100%; height: 100%; min-height: 640px; border: 0;"
                             loading="lazy">
                     </iframe>
                 </div>
@@ -1716,10 +1711,10 @@
                 items: [],
                 barcodeQuery: '',
                 sugerenciasProductos: [],
-                clienteSeleccionado: null,
+                clienteSeleccionado: @json($clienteInicial ?? null),
                 clienteQuery: '',
                 sugerenciasClientes: [],
-                medioPago: '{{ $mediosPago->firstWhere("codigo", "efectivo")?->codigo ?? $mediosPago->first()?->codigo ?? "efectivo" }}',
+                medioPago: '{{ $medioPagoInicial ?? ($mediosPago->firstWhere("codigo", "efectivo")?->codigo ?? $mediosPago->first()?->codigo ?? "efectivo") }}',
                 mediosPagoLista: @json($mediosPago),
                 referenciaPago: '',
                 get medioPagoActual() {
@@ -1778,8 +1773,26 @@
                 abrirFichaClienteModal(clienteId = null) {
                     let id = clienteId || this.clienteSeleccionado?.id;
                     if (!id) return;
-                    this.fichaClienteUrl = '{{ url('/clientes') }}/' + id + '?embed=1';
+                    let targetUrl = '{{ url('/clientes') }}/' + id + '?embed=1';
+                    let iframe = document.getElementById('iframeFichaCliente');
+                    if (iframe) {
+                        iframe.src = 'about:blank';
+                        setTimeout(() => {
+                            iframe.src = targetUrl;
+                        }, 40);
+                    }
+                    this.fichaClienteUrl = targetUrl;
                     this.modalFichaCliente = true;
+                },
+                irAlInicioFichaCliente() {
+                    let id = this.clienteSeleccionado?.id;
+                    if (!id) return;
+                    let targetUrl = '{{ url('/clientes') }}/' + id + '?embed=1';
+                    let iframe = document.getElementById('iframeFichaCliente');
+                    if (iframe) {
+                        iframe.src = targetUrl;
+                    }
+                    this.fichaClienteUrl = targetUrl;
                 },
                 recargarFichaCliente() {
                     let iframe = document.getElementById('iframeFichaCliente');
@@ -1789,6 +1802,11 @@
                 },
                 async cerrarFichaClienteModal() {
                     this.modalFichaCliente = false;
+                    let iframe = document.getElementById('iframeFichaCliente');
+                    if (iframe) {
+                        iframe.src = 'about:blank';
+                    }
+                    this.fichaClienteUrl = '';
                     this.focusBarcode();
                     if (this.clienteSeleccionado) {
                         await this.consultarInfoCredito(this.clienteSeleccionado.id);
@@ -1835,35 +1853,35 @@
                     pagare_url: null
                 },
 
-                // Modal Visor e Impresión de Documentos (Pagaré, Ticket, A4, Ficha Factura)
-                modalVisorDocumento: false,
-                visorDocumentoUrl: '',
-                visorDocumentoTitulo: 'Documento',
-                abrirVisorDocumento(url, titulo = 'Documento') {
-                    if (!url || url === '#' || url === 'null') return;
-                    let finalUrl = url;
-                    if (finalUrl.indexOf('embed=1') === -1) {
-                        finalUrl += (finalUrl.indexOf('?') === -1 ? '?embed=1' : '&embed=1');
+                // Modal de Venta Exitosa con Impresión y Vista Previa Integrada
+                documentoExitoTipo: 'ticket',
+                get comprobanteActivoUrl() {
+                    if (!this.modalExito || !this.ventaExitosa || !this.ventaExitosa.id) return 'about:blank';
+                    let url = '';
+                    if (this.documentoExitoTipo === 'pagare') {
+                        url = this.ventaExitosa.pagare_url || '';
+                    } else if (this.documentoExitoTipo === 'ticket') {
+                        url = this.ventaExitosa.ticket_url || '';
+                    } else if (this.documentoExitoTipo === 'a4') {
+                        url = this.ventaExitosa.a4_url || '';
+                    } else if (this.documentoExitoTipo === 'ficha') {
+                        url = this.ventaExitosa.redirect_url || '';
                     }
-                    this.visorDocumentoUrl = finalUrl;
-                    this.visorDocumentoTitulo = titulo;
-                    this.modalVisorDocumento = true;
+                    if (!url || url === '#' || url === 'null') return 'about:blank';
+                    if (url.indexOf('embed=1') === -1) {
+                        url += (url.indexOf('?') === -1 ? '?embed=1' : '&embed=1');
+                    }
+                    return url;
                 },
-                imprimirDocumentoEnIframe() {
-                    let iframe = document.getElementById('iframeVisorDocumento');
+                seleccionarDocumentoExito(tipo) {
+                    this.documentoExitoTipo = tipo;
+                },
+                imprimirComprobanteExito() {
+                    let iframe = document.getElementById('iframeComprobanteExito');
                     if (iframe && iframe.contentWindow) {
                         iframe.contentWindow.focus();
                         iframe.contentWindow.print();
                     }
-                },
-                abrirVisorEnNuevaPestana() {
-                    if (this.visorDocumentoUrl) {
-                        window.open(this.visorDocumentoUrl, '_blank');
-                    }
-                },
-                cerrarVisorDocumento() {
-                    this.modalVisorDocumento = false;
-                    this.visorDocumentoUrl = '';
                 },
                 cerrarModalExito() {
                     this.modalExito = false;
@@ -1873,13 +1891,18 @@
                 initPos() {
                     this.focusBarcode();
 
+                    if (this.clienteSeleccionado) {
+                        this.consultarInfoCredito(this.clienteSeleccionado.id);
+                        if (this.medioPago === 'credito_personal') {
+                            this.$nextTick(() => {
+                                this.abrirModalCredito();
+                            });
+                        }
+                    }
+
                     // Atajo de teclado: espacio para cobrar, esc para volver al lector
                     window.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape') {
-                            if (this.modalVisorDocumento) {
-                                this.cerrarVisorDocumento();
-                                return;
-                            }
                             if (this.modalExito) {
                                 this.cerrarModalExito();
                                 return;
@@ -2597,6 +2620,7 @@
                             id_credito: data.id_credito || null,
                             pagare_url: data.pagare_url || null
                         };
+                        this.documentoExitoTipo = (data.id_credito && data.pagare_url) ? 'pagare' : 'ticket';
                         this.modalExito = true;
                     } catch (e) {
                         console.error('Error al enviar venta:', e);
@@ -2616,6 +2640,17 @@
                     this.creditoAutorizado = false;
                     this.autorizadoPorVendedor = false;
                     this.modalExito = false;
+                    this.documentoExitoTipo = 'ticket';
+                    this.ventaExitosa = {
+                        id: null,
+                        comprobante: '',
+                        total: 0,
+                        ticket_url: '#',
+                        a4_url: '#',
+                        redirect_url: '#',
+                        id_credito: null,
+                        pagare_url: null
+                    };
                     this.focusBarcode();
                 }
             };

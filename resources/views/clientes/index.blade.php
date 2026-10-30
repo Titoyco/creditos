@@ -147,8 +147,8 @@
 
                                 <x-context-menu.group label="Operaciones de Crédito">
                                     @if(!$estaSuspendido)
-                                        <x-context-menu.item href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" icon="plus" color="emerald">
-                                            + Nuevo Crédito
+                                        <x-context-menu.item href="{{ route('ventas.create', ['id_cliente' => $cliente->id, 'medio_pago' => 'credito_personal']) }}" icon="plus" color="emerald">
+                                            + Nuevo Crédito (Facturador)
                                         </x-context-menu.item>
                                     @else
                                         <x-context-menu.item disabled icon="ban" color="rose">
@@ -257,8 +257,8 @@
 
                                     <x-context-menu.group label="Operaciones">
                                         @if(!$padreSuspendido)
-                                            <x-context-menu.item href="{{ route('creditos.create', ['id_cliente' => $cliente->id, 'id_autorizado' => $autorizado->pivot->id]) }}" icon="plus" color="emerald">
-                                                + Crédito Autorizado
+                                            <x-context-menu.item href="{{ route('ventas.create', ['id_cliente' => $cliente->id, 'medio_pago' => 'credito_personal']) }}" icon="plus" color="emerald">
+                                                + Crédito Autorizado (Facturador)
                                             </x-context-menu.item>
                                         @else
                                             <x-context-menu.item disabled icon="ban" color="rose">

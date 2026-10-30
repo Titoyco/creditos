@@ -604,6 +604,49 @@ class VentaStockRecuentoTest extends TestCase
         $this->assertNotNull($novedad);
         $this->assertStringContainsString('AUTORIZACIÓN EXCEPCIONAL POR VENDEDOR', $novedad->mensaje);
     }
+
+    public function test_redireccion_alta_credito_hacia_facturador_con_cliente(): void
+    {
+        $cliente = Cliente::create([
+            'nombre' => 'JUAN REDIR TEST',
+            'dni' => 20555888,
+            'direccion' => 'Calle Falsa 123',
+            'id_localidad' => 1,
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'tel1' => '2804555888',
+            'limite' => 100000,
+            'max_cuotas' => 4,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('creditos.create', ['id_cliente' => $cliente->id]));
+        $response->assertRedirect(route('ventas.create', [
+            'id_cliente' => $cliente->id,
+            'medio_pago' => 'credito_personal'
+        ]));
+    }
+
+    public function test_facturador_preselecciona_cliente_y_medio_pago(): void
+    {
+        $cliente = Cliente::create([
+            'nombre' => 'PEDRO FACTURADOR TEST',
+            'dni' => 20666999,
+            'direccion' => 'Calle 456',
+            'id_localidad' => 1,
+            'id_sucursal' => $this->sucursalTrelew->id,
+            'tel1' => '2804666999',
+            'limite' => 150000,
+            'max_cuotas' => 6,
+        ]);
+
+        $response = $this->actingAs($this->user)->get(route('ventas.create', [
+            'id_cliente' => $cliente->id,
+            'medio_pago' => 'credito_personal'
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('PEDRO FACTURADOR TEST');
+        $response->assertSee('credito_personal');
+    }
 }
 
 

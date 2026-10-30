@@ -27,9 +27,10 @@
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-900 font-sans antialiased text-xs p-3 sm:p-6 print:p-0">
+<body class="bg-slate-100 text-slate-900 font-sans antialiased text-xs {{ request('embed') ? 'p-1' : 'p-3 sm:p-6' }} print:p-0">
 
-    <!-- Barra Superior de Control de Impresión (No visible al imprimir) -->
+    @if(!request('embed'))
+    <!-- Barra Superior de Control de Impresión (No visible al imprimir ni en modo embebido) -->
     <div class="no-print max-w-3xl mx-auto mb-4 bg-slate-900 text-white p-3 rounded-xl shadow-lg flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center space-x-2">
             <span class="text-sm font-bold">Factura #{{ $venta->comprobante }}</span>
@@ -58,6 +59,7 @@
             </button>
         </div>
     </div>
+    @endif
 
     @if($formato === 'ticket')
         <!-- ============================================================== -->

@@ -114,8 +114,9 @@
         }
     </style>
 </head>
-<body onload="imprimir();">
+<body @if(!request('embed')) onload="imprimir();" @endif style="{{ request('embed') ? 'padding: 4px;' : '' }}">
 
+@if(!request('embed'))
 <div class="barra-acciones no-print">
     <a href="javascript:window.history.back()" class="btn-accion btn-volver">
         ← Volver
@@ -124,6 +125,7 @@
         🖨️ Imprimir Pagaré
     </button>
 </div>
+@endif
 
 <div class="contenedor">
 

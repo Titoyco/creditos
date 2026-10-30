@@ -320,11 +320,11 @@ class VentasTest extends TestCase
         ]);
         $this->assertCount(4, $resNormal->json('simulacion_cuotas'));
         $this->assertEquals(6.0, $resNormal->json('tasa_interes'));
-        // Simulación a 3 cuotas con 6% de interés sobre $30.000 (total $31.800)
+        // Simulación a 3 cuotas con interés escalonado (1 cuota 0%, 2: 6%, 3: 12% = $3.600 sobre $30.000 -> total $33.600)
         $cuota3 = $resNormal->json('simulacion_cuotas.3');
-        $this->assertEquals(31800, (float)$cuota3['total_financiado']);
-        $this->assertEquals(1800, (float)$cuota3['recargo']);
-        $this->assertEquals(10600, (float)$cuota3['valor_cuota']);
+        $this->assertEquals(33600, (float)$cuota3['total_financiado']);
+        $this->assertEquals(3600, (float)$cuota3['recargo']);
+        $this->assertEquals(11200, (float)$cuota3['valor_cuota']);
 
         // 2. Cliente Suspendido
         $resSusp = $this->actingAs($this->admin)->getJson(
@@ -369,17 +369,17 @@ class VentasTest extends TestCase
         $this->assertNotNull($venta->id_credito);
         $this->assertEquals(3, $venta->cuotas_credito);
         $this->assertEquals(25000, (float)$venta->subtotal);
-        $this->assertEquals(1500, (float)$venta->recargo_financiacion); // 6% de interés sobre $25.000
-        $this->assertEquals(26500, (float)$venta->total);
+        $this->assertEquals(3000, (float)$venta->recargo_financiacion); // 12% de interés (3 cuotas con primera sin interés) sobre $25.000
+        $this->assertEquals(28000, (float)$venta->total);
 
         // Crédito y Cuotas
         $credito = $venta->credito;
         $this->assertNotNull($credito);
         $this->assertEquals($this->clienteNormal->id, $credito->id_cliente);
         $this->assertEquals(25000, (float)$credito->importe_original);
-        $this->assertEquals(8833.33, (float)$credito->valor_cuota_ref); // $26.500 / 3 = $8.833,33
+        $this->assertEquals(9333.33, (float)$credito->valor_cuota_ref); // $28.000 / 3 = $9.333,33
         $this->assertCount(3, $credito->cuotas);
-        $this->assertEquals(8833.33, (float)$credito->cuotas->first()->valor_base);
+        $this->assertEquals(9333.33, (float)$credito->cuotas->first()->valor_base);
 
         // Novedad en legajo
         $novedad = $this->clienteNormal->novedades()->first();

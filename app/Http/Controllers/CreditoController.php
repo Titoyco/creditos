@@ -392,17 +392,17 @@ class CreditoController extends Controller
     }
 
     public function create(Request $request)
-        {
-            $clienteId = $request->get('id_cliente');
-            $autorizadoId = $request->get('id_autorizado');
+    {
+        $clienteId = $request->get('id_cliente') ?? $request->get('cliente_id');
 
-            // Cargamos el cliente con sus relaciones clave
-            $cliente = Cliente::with([
-                'sucursal', 
-                'creditos.cuotas', 
-                'novedades.user', 
-                'autorizados'
-            ])->findOrFail($clienteId);
+        return redirect()->route('ventas.create', array_filter([
+            'id_cliente' => $clienteId,
+            'medio_pago' => 'credito_personal',
+        ]));
+    }
+
+    public function oldCreateDisabled(Request $request)
+    {
             
             // Verificamos si la operación la realiza una firma autorizada.
             // ⚠️ $autorizadoId es el ID del REGISTRO de autorización (cliente_autorizados.id),

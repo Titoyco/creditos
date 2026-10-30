@@ -274,7 +274,8 @@
                         <span class="text-[9px] text-rose-600 block mt-0.5">Operaciones de crédito bloqueadas</span>
                     </div>
                 @else
-                    <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" 
+                    <a href="{{ route('ventas.create', ['id_cliente' => $cliente->id, 'medio_pago' => 'credito_personal']) }}" 
+                       target="_top"
                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2 px-3 rounded-md uppercase transition-all flex items-center justify-center space-x-1.5 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
                         <span>+ INICIAR VENTA / CRÉDITO</span>

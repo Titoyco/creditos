@@ -87,13 +87,13 @@
                     <div class="bg-rose-50 border border-rose-200 text-rose-800 px-3 py-1 rounded shadow-sm flex items-center">
                         <span class="font-black text-[10px] uppercase">⛔ CLIENTE SUSPENDIDO</span>
                     </div>
-                @else
-                    <a href="{{ route('creditos.create', ['id_cliente' => $cliente->id]) }}" 
-                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] py-1 px-3 rounded uppercase transition-all flex items-center justify-center space-x-1 shadow-sm">
+                    <a href="{{ route('ventas.create', ['id_cliente' => $cliente->id, 'medio_pago' => 'credito_personal']) }}" 
+                       target="_top"
+                       class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] py-1 px-3 rounded uppercase transition-all flex items-center justify-center space-x-1 shadow-sm">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
                         </svg>
-                        <span>NUEVO CRÉDITO</span>
+                        <span>NUEVO CRÉDITO (FACTURADOR)</span>
                     </a>
                 @endif
             </div>

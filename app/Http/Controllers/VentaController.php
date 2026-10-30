@@ -210,10 +210,18 @@ class VentaController extends Controller
     /**
      * Punto de Venta (POS) & Facturación rápida.
      */
-    public function create()
+    public function create(Request $request)
     {
         $sucursalActiva = config('app.sucursal_activa') ?? Sucursal::first();
         $sucursalId = $sucursalActiva?->id ?? 1;
+
+        // Cliente preseleccionado si viene redirigido desde el módulo de clientes o créditos
+        $clienteInicial = null;
+        $clienteId = $request->get('id_cliente') ?? $request->get('cliente_id');
+        if ($clienteId) {
+            $clienteInicial = Cliente::find($clienteId);
+        }
+        $medioPagoInicial = $request->get('medio_pago', 'efectivo');
 
         // Presentación activa para la sucursal y su tasa de interés vigente normalizada (ej: 6.0%)
         $presentacion = Presentacion::activaParaSucursal($sucursalId);
@@ -262,7 +270,9 @@ class VentaController extends Controller
             'cajaActiva',
             'requiereCierreAnterior',
             'totalesCajaActiva',
-            'mediosPago'
+            'mediosPago',
+            'clienteInicial',
+            'medioPagoInicial'
         ));
     }
 
