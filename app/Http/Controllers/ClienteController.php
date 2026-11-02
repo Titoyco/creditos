@@ -429,6 +429,7 @@ class ClienteController extends Controller
                   ->orWhere('cuit', 'LIKE', "%{$term}%")
                   ->orWhere('nro_cuenta', 'LIKE', "%{$term}%");
             })
+            ->orderByRaw('CASE WHEN dni = ? OR nro_cuenta = ? THEN 0 WHEN dni LIKE ? THEN 1 ELSE 2 END', [$term, $term, "{$term}%"])
             ->orderBy('nombre')
             ->limit(15)
             ->get(['id', 'id_sucursal', 'nombre', 'dni', 'nro_cuenta', 'cuit', 'saldo', 'suspendido']);

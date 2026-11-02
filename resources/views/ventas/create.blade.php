@@ -159,6 +159,82 @@
         @endif
 
         <!-- =================================================================== -->
+        <!-- BARRA GUÍA DE FLUJO DINÁMICO POR TECLADO (MODO CRÉDITO / TRELEW)    -->
+        <!-- =================================================================== -->
+        <div x-show="esTrelew || esCredito" x-cloak
+             class="mb-3 p-2.5 bg-indigo-950 text-white rounded-xl border border-indigo-700/80 shadow-md flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+                <span class="text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded bg-indigo-800 text-indigo-200 flex items-center gap-1">
+                    <span>⚡</span>
+                    <span>Flujo Rápido</span>
+                </span>
+
+                <!-- Paso 1: Cliente -->
+                <button type="button" @click="irAPaso(1)"
+                        class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
+                        :class="pasoActualFlujo === 1 
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
+                            : (clienteSeleccionado ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span x-text="clienteSeleccionado ? '✓ 1. Cliente' : '1. Cargar Cliente'"></span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F2</kbd>
+                </button>
+
+                <span class="text-indigo-400 font-black">→</span>
+
+                <!-- Paso 2: Monto -->
+                <button type="button" @click="irAPaso(2)"
+                        class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
+                        :class="pasoActualFlujo === 2 
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
+                            : (items.length > 0 ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span x-text="items.length > 0 ? '✓ 2. Monto ($' + formatDinero(calcularSubtotal()) + ')' : '2. Cargar Monto'"></span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F3</kbd>
+                </button>
+
+                <span class="text-indigo-400 font-black">→</span>
+
+                <!-- Paso 3: Crédito Personal -->
+                <button type="button" @click="irAPaso(3)"
+                        class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
+                        :class="pasoActualFlujo === 3 
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
+                            : (creditoAutorizado ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span x-text="creditoAutorizado ? '✓ 3. Crédito Aprobado' : '3. Ir a Crédito Personal'"></span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F4</kbd>
+                </button>
+
+                <span class="text-indigo-400 font-black">→</span>
+
+                <!-- Paso 4: Facturar y Generar Pagaré -->
+                <button type="button" @click="irAPaso(4)"
+                        class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
+                        :class="pasoActualFlujo === 4 
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs animate-pulse' 
+                            : (modalExito ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span>4. Facturar y Pagaré</span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F8</kbd>
+                </button>
+
+                <span class="text-indigo-400 font-black">→</span>
+
+                <!-- Paso 5: Imprimir y Reiniciar -->
+                <button type="button" @click="irAPaso(5)"
+                        class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
+                        :class="pasoActualFlujo === 5 
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs animate-pulse' 
+                            : 'bg-indigo-900/70 text-indigo-200'">
+                    <span>5. Imprimir y Reiniciar</span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F9</kbd>
+                </button>
+            </div>
+
+            <div class="text-[11px] font-mono text-indigo-200 flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded bg-emerald-600 text-white font-black">ENTER</span>
+                <span>Avanzar siguiente paso</span>
+            </div>
+        </div>
+
+        <!-- =================================================================== -->
         <!-- CUADRÍCULA VERTICAL EN 2 COLUMNAS (50% IZQUIERDA / 50% DERECHA)     -->
         <!-- =================================================================== -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -169,17 +245,19 @@
             <div class="space-y-3">
                 
                 <!-- 1. Tarjeta de Datos del Cliente -->
-                <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"
+                     :class="pasoActualFlujo === 1 ? 'ring-2 ring-amber-400 border-amber-400' : ''">
                     <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-700/60">
                         <span class="text-xs font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider flex items-center gap-1.5">
                             <span>👤</span>
-                            <span>Datos del Cliente</span>
+                            <span>1. Datos del Cliente</span>
+                            <span class="text-[9px] font-mono bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-1.5 py-0.5 rounded">F2</span>
                         </span>
 
                         <template x-if="clienteSeleccionado">
                             <button type="button" @click="deseleccionarCliente()" 
                                     class="text-xs font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1 transition cursor-pointer">
-                                <span>✕ Volver a Consumidor Final</span>
+                                <span>✕ Cambiar Cliente (F2)</span>
                             </button>
                         </template>
                     </div>
@@ -199,7 +277,8 @@
                                                 Por Defecto
                                             </span>
                                         </div>
-                                        <span class="text-[11px] text-slate-500 dark:text-slate-400">Cliente genérico de mostrador (Efectivo / Tarjeta)</span>
+                                        <span class="text-[11px] text-slate-500 dark:text-slate-400"
+                                              x-text="esTrelew ? 'Busque y seleccione el cliente con ENTER para generar el crédito' : 'Cliente genérico de mostrador (Efectivo / Tarjeta)'"></span>
                                     </div>
                                 </div>
                             </div>
@@ -212,21 +291,36 @@
                                     </svg>
                                 </div>
                                 <input type="text" 
+                                       x-ref="clienteInput"
                                        x-model="clienteQuery"
-                                       @input.debounce.250ms="buscarClientes()"
-                                       placeholder="Buscar cliente registrado por DNI o Apellido y Nombre..."
-                                       class="w-full text-xs py-2 pl-9 pr-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-inner">
+                                       @input.debounce.200ms="buscarClientes()"
+                                       @keydown.down.prevent="moverSugerenciaCliente(1)"
+                                       @keydown.up.prevent="moverSugerenciaCliente(-1)"
+                                       @keydown.enter.prevent="confirmarClienteEnter()"
+                                       placeholder="Buscar cliente por DNI, N° Cuenta o Apellido y Nombre y presione ENTER..."
+                                       class="w-full text-xs py-2 pl-9 pr-16 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-inner"
+                                       autocomplete="off">
+                                <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
+                                    <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono px-1.5 py-0.5 rounded font-bold">
+                                        ENTER
+                                    </span>
+                                </div>
                                 
                                 <!-- Dropdown de resultados de clientes -->
                                 <div x-show="sugerenciasClientes.length > 0"
                                      @click.away="sugerenciasClientes = []"
                                      class="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800"
                                      x-cloak>
-                                    <template x-for="cli in sugerenciasClientes" :key="cli.id">
+                                    <template x-for="(cli, idx) in sugerenciasClientes" :key="cli.id">
                                         <button type="button" @click="seleccionarCliente(cli)"
-                                                class="w-full text-left p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-800 transition flex items-center justify-between">
+                                                @mouseenter="indiceSugerenciaCliente = idx"
+                                                :class="indiceSugerenciaCliente === idx ? 'bg-indigo-50 dark:bg-slate-800 ring-1 ring-inset ring-indigo-400' : 'hover:bg-indigo-50 dark:hover:bg-slate-800'"
+                                                class="w-full text-left p-2.5 transition flex items-center justify-between">
                                             <div>
-                                                <span class="font-bold text-slate-800 dark:text-white text-xs block" x-text="cli.nombre"></span>
+                                                <div class="flex items-center gap-1.5">
+                                                    <span class="font-bold text-slate-800 dark:text-white text-xs" x-text="cli.nombre"></span>
+                                                    <span x-show="indiceSugerenciaCliente === idx" class="text-[9px] font-mono font-black text-indigo-600 dark:text-indigo-400">[ENTER]</span>
+                                                </div>
                                                 <span class="text-[10px] font-mono text-slate-400" x-text="'DNI: ' + cli.dni + ' | Cta: ' + (cli.nro_cuenta || '-')"></span>
                                             </div>
                                             <span class="text-[9px] px-2 py-0.5 rounded font-black uppercase"
@@ -310,10 +404,51 @@
                     </template>
                 </div>
 
-                <!-- 2. Barra de Carga Rápida: Escáner + Artículo Genérico VARIOS -->
-                <div class="space-y-2">
+                <!-- 2. Barra de Carga Rápida: Monto Genérico VARIOS + Escáner -->
+                <div class="flex flex-col gap-2">
+                    <!-- Carga Rápida de Monto / Artículo Genérico VARIOS (En Trelew aparece primero como Paso 2) -->
+                    <div :class="[
+                            esTrelew ? 'order-1 p-3 border-2' : 'order-2 p-2 border',
+                            pasoActualFlujo === 2 ? 'ring-2 ring-amber-400 border-amber-500' : 'border-amber-200 dark:border-amber-800/50'
+                         ]"
+                         class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-800/90 rounded-xl shadow-xs flex items-center justify-between gap-2 transition">
+                        <div class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
+                                ⚡
+                            </span>
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-black uppercase text-amber-900 dark:text-amber-200 block leading-tight"
+                                          x-text="esTrelew ? '2. Cargar Monto del Crédito (VARIOS)' : 'Carga Rápida de Artículo Genérico (VARIOS)'">
+                                    </span>
+                                    <span class="text-[9px] font-mono bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-bold">F3</span>
+                                </div>
+                                <span class="text-[10px] text-amber-700 dark:text-amber-400 leading-none"
+                                      x-text="esTrelew ? 'Ingrese el monto y presione ENTER para ir a Crédito Personal' : 'Venta de mostrador sin código'">
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 flex-grow justify-end">
+                            <div class="relative" :class="esTrelew ? 'w-36 sm:w-44' : 'w-28'">
+                                <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-xs font-black text-slate-400">$</span>
+                                <input type="number" step="0.01" min="1" 
+                                       x-ref="montoGenericoInput"
+                                       x-model="montoGenerico" 
+                                       @keydown.enter.prevent="procesarMontoGenericoEnter()"
+                                       placeholder="0.00"
+                                       class="w-full text-sm font-mono font-black py-1.5 pl-6 pr-2 rounded-lg border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                            </div>
+                            <button type="button" @click="procesarMontoGenericoEnter()"
+                                    class="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-1.5 px-3 rounded-lg shadow-xs transition uppercase shrink-0 cursor-pointer flex items-center gap-1">
+                                <span x-text="esTrelew ? 'Cargar ↵' : '+ Varios'"></span>
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Input Escáner de Código de Barras / Búsqueda -->
-                    <div class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border-2 border-indigo-500/40 dark:border-indigo-500/50 shadow-sm relative">
+                    <div :class="esTrelew ? 'order-2' : 'order-1'"
+                         class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border-2 border-indigo-500/40 dark:border-indigo-500/50 shadow-sm relative">
                         <div class="flex items-center gap-2">
                             <div class="relative flex-grow">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-indigo-600 dark:text-indigo-400">
@@ -371,38 +506,6 @@
                             </template>
                         </div>
                     </div>
-
-                    <!-- Carga Rápida de Artículo Genérico VARIOS -->
-                    <div class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-800/90 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50 shadow-xs flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                            <span class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-black text-xs shrink-0">
-                                ⚡
-                            </span>
-                            <div>
-                                <span class="text-[11px] font-black uppercase text-amber-900 dark:text-amber-200 block leading-tight">
-                                    Carga Rápida de Artículo Genérico (VARIOS)
-                                </span>
-                                <span class="text-[9px] text-amber-700 dark:text-amber-400 leading-none">
-                                    Venta de mostrador sin código
-                                </span>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center gap-1.5 flex-grow justify-end">
-                            <div class="relative w-28">
-                                <span class="absolute inset-y-0 left-0 pl-2 flex items-center text-xs font-black text-slate-400">$</span>
-                                <input type="number" step="0.01" min="1" 
-                                       x-model="montoGenerico" 
-                                       @keydown.enter.prevent="agregarArticuloGenerico()"
-                                       placeholder="0.00"
-                                       class="w-full text-xs font-mono font-bold py-1 pl-5 pr-1.5 rounded-lg border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-amber-500 focus:border-amber-500">
-                            </div>
-                            <button type="button" @click="agregarArticuloGenerico()"
-                                    class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-1 px-2.5 rounded-lg shadow-xs transition uppercase shrink-0">
-                                + Varios
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- 3. Tabla Compacta de Artículos Cargados en la Factura -->
@@ -454,6 +557,7 @@
                                                 <input type="number" min="0.01" step="1" 
                                                        x-model.number="item.cantidad"
                                                        @change="validarItem(index)"
+                                                       @keydown.enter.prevent="if (esTrelew && clienteSeleccionado) abrirModalCredito(); else focusBarcode();"
                                                        class="w-10 text-center text-xs font-bold font-mono py-0.5 px-0 border-0 bg-transparent text-slate-900 dark:text-white focus:ring-0">
                                                 <button type="button" @click="cambiarCantidad(index, 1)" 
                                                         class="px-2 py-0.5 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-black text-xs leading-none transition">
@@ -467,6 +571,7 @@
                                             <input type="number" step="0.01" min="0" 
                                                    x-model.number="item.precio_unitario"
                                                    @change="validarItem(index)"
+                                                   @keydown.enter.prevent="if (esTrelew && clienteSeleccionado) abrirModalCredito(); else focusBarcode();"
                                                    class="w-20 text-right text-xs font-mono font-bold py-0.5 px-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500">
                                         </td>
 
@@ -490,7 +595,7 @@
                                         <td colspan="6" class="py-12 text-center text-slate-400 dark:text-slate-500">
                                             <div class="text-3xl mb-1.5">🛒</div>
                                             <p class="font-bold text-xs">Factura vacía</p>
-                                            <p class="text-[11px] mt-0.5">Escanee un código de barras o use la carga rápida de artículos varios.</p>
+                                            <p class="text-[11px] mt-0.5" x-text="esTrelew ? '1) Seleccione el cliente (F2) y 2) Cargue el monto con ENTER (F3).' : 'Escanee un código de barras o use la carga rápida de artículos varios.'"></p>
                                         </td>
                                     </tr>
                                 </template>
@@ -500,10 +605,12 @@
                 </div>
 
                 <!-- Barra de Atajos de Teclado -->
-                <div class="flex flex-wrap items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1 font-mono">
-                    <span>💡 [ENTER] Agregar código escaneado</span>
-                    <span>💡 [ESC] Enfocar escáner</span>
-                    <span>💡 [ESPACIO] Abrir cobro</span>
+                <div class="flex flex-wrap items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1 font-mono gap-2">
+                    <span>💡 [F2] Cliente</span>
+                    <span>💡 [F3] Monto</span>
+                    <span>💡 [F4] Crédito Personal</span>
+                    <span>💡 [F8] Facturar</span>
+                    <span>💡 [ENTER] Avanzar</span>
                 </div>
             </div>
 
@@ -592,21 +699,23 @@
                     <!-- AVISO DE AUTORIZACIÓN DE CRÉDITO PERSONAL -->
                     <template x-if="esCredito && clienteSeleccionado">
                         <div class="p-2.5 rounded-xl border flex items-center justify-between text-xs"
-                             :class="autorizadoPorVendedor 
-                                 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200' 
-                                 : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200'">
+                             :class="!creditoAutorizado
+                                 ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200'
+                                 : (autorizadoPorVendedor 
+                                     ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200' 
+                                     : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200')">
                             <div class="flex items-center gap-2">
-                                <span class="text-base" x-text="autorizadoPorVendedor ? '⚠️' : '✓'"></span>
+                                <span class="text-base" x-text="!creditoAutorizado ? '📄' : (autorizadoPorVendedor ? '⚠️' : '✓')"></span>
                                 <div>
                                     <span class="font-black uppercase tracking-tight block" 
-                                          x-text="autorizadoPorVendedor ? 'Crédito Autorizado por Vendedor (Excepción)' : 'Crédito Personal Verificado y Autorizado'"></span>
+                                          x-text="!creditoAutorizado ? '3. Verificar Estado de Cuenta / Crédito Personal' : (autorizadoPorVendedor ? 'Crédito Autorizado por Vendedor (Excepción)' : 'Crédito Personal Verificado y Autorizado')"></span>
                                     <span class="text-[11px] opacity-80" 
                                           x-text="'Margen disponible: $' + formatDinero(infoCredito?.detalle_compras?.limite_disponible || infoCredito?.estado_crediticio?.limite_disponible || 0)"></span>
                                 </div>
                             </div>
                             <button type="button" @click="abrirModalCredito()" 
-                                    class="text-xs font-bold text-indigo-700 dark:text-indigo-300 underline hover:opacity-80 cursor-pointer">
-                                Ver Estado / Reautorizar
+                                    class="text-xs font-bold text-indigo-700 dark:text-indigo-300 underline hover:opacity-80 cursor-pointer flex items-center gap-1">
+                                <span x-text="creditoAutorizado ? 'Ver Estado / Reautorizar' : 'Abrir Crédito (F4)'"></span>
                             </button>
                         </div>
                     </template>
@@ -615,8 +724,9 @@
                     <template x-if="esCredito && clienteSeleccionado">
                         <div class="pt-2.5 border-t border-slate-200 dark:border-slate-700 space-y-2">
                             <div class="flex items-center justify-between">
-                                <span class="text-xs font-black uppercase text-indigo-900 dark:text-indigo-300 flex items-center gap-1">
+                                <span class="text-xs font-black uppercase text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
                                     <span>Plan de Cuotas a Crédito</span>
+                                    <span class="text-[9px] font-mono bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 rounded font-bold">Teclas 1-4</span>
                                 </span>
                                 <span class="text-xs font-bold text-slate-500 dark:text-slate-400" 
                                       x-text="'Interés lote: ' + tasaInteres + '% por cuota' + (primeraSinInteres ? ' (1 pago sin interés)' : '')">
@@ -625,7 +735,7 @@
 
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 <template x-for="n in [1, 2, 3, 4]" :key="n">
-                                    <button type="button" @click="cuotasPlan = n"
+                                    <button type="button" @click="seleccionarCuotaPlan(n)"
                                             :disabled="infoCredito && n > infoCredito.estado_crediticio.max_cuotas"
                                             :class="{
                                                 'bg-indigo-700 text-white font-black border-indigo-800 shadow-md ring-2 ring-indigo-400': cuotasPlan === n,
@@ -696,16 +806,21 @@
                 <!-- BOTÓN PRINCIPAL DE COBRO (TABLET ACCIÓN PRIMARIA GIGANTE) -->
                 <div>
                     <button type="button" 
+                            x-ref="btnFacturarPrincipal"
                             @click="abrirModalPago()"
                             :disabled="items.length === 0 || procesando"
-                            :class="items.length === 0 
-                                ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-400 dark:text-slate-500' 
-                                : (esCredito 
-                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98' 
-                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98')"
-                            class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2">
-                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? 'Facturar' : 'Verificar y Facturar Crédito') : 'PAGAR / COBRAR AHORA')"></span>
+                            :class="[
+                                items.length === 0 
+                                    ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-400 dark:text-slate-500' 
+                                    : (esCredito 
+                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400' 
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400'),
+                                pasoActualFlujo === 4 ? 'ring-4 ring-amber-400' : ''
+                            ]"
+                            class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2 cursor-pointer">
+                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? '4. Facturar y Generar Pagaré' : '3. Ir a Crédito Personal') : 'PAGAR / COBRAR AHORA')"></span>
                         <span x-show="!procesando" class="font-mono text-sm sm:text-base font-bold" x-text="'($ ' + formatDinero(calcularTotal()) + ')'"></span>
+                        <span x-show="!procesando && items.length > 0" class="text-xs font-mono px-2 py-0.5 rounded bg-black/25 text-amber-300" x-text="esCredito ? (creditoAutorizado ? 'ENTER / F8' : 'ENTER / F4') : 'ENTER'"></span>
                     </button>
                 </div>
 
@@ -717,10 +832,10 @@
         <!-- =================================================================== -->
         <div x-show="modalCredito" 
              class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-start justify-center p-3 sm:p-5 pt-8 sm:pt-12 pb-8"
-             @keydown.window.escape="modalCredito = false; focusBarcode();"
+             @keydown.window.escape="cerrarModalCredito()"
              x-cloak>
             <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-5xl w-full p-3.5 sm:p-5 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-3 max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto"
-                 @click.away="modalCredito = false; focusBarcode();">
+                 @click.away="cerrarModalCredito()">
                 
                 <!-- Encabezado del Modal -->
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 shrink-0">
@@ -731,15 +846,15 @@
                         <div>
                             <div class="flex items-center gap-2">
                                 <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                                    Estado de Cuenta y Autorización de Crédito
+                                    3. Estado de Cuenta y Autorización de Crédito
                                 </h3>
                                 <template x-if="clienteSeleccionado">
-                                    <a :href="'{{ url('/clientes') }}/' + clienteSeleccionado.id" target="_blank"
-                                       class="px-2 py-0.5 rounded text-xs font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:underline border border-indigo-200 dark:border-indigo-800 flex items-center gap-1"
-                                       title="Ver legajo completo en nueva pestaña">
+                                    <button type="button" @click="abrirFichaClienteModal()"
+                                            class="px-2 py-0.5 rounded text-xs font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:underline border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer"
+                                            title="Ver legajo completo en modal">
                                         <span x-text="clienteSeleccionado.nombre"></span>
                                         <span>↗</span>
-                                    </a>
+                                    </button>
                                 </template>
                             </div>
                             <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -755,7 +870,7 @@
                                 class="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition cursor-pointer">
                             🔄 Actualizar
                         </button>
-                        <button type="button" @click="modalCredito = false; focusBarcode();" 
+                        <button type="button" @click="cerrarModalCredito()" 
                                 class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center text-lg font-bold">
                             ✕
                         </button>
@@ -811,6 +926,7 @@
                                             <div class="relative flex-1">
                                                 <span class="absolute left-2.5 top-1.5 text-xs text-slate-400 font-bold">$</span>
                                                 <input type="number" step="0.01" min="0" x-model="nuevoLimiteInput" 
+                                                       @keydown.enter.prevent="guardarNuevoLimite()"
                                                        placeholder="Nuevo límite"
                                                        class="w-full pl-6 pr-2 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg">
                                             </div>
@@ -916,10 +1032,10 @@
 
                                     <!-- Selector de Cuotas en el Modal -->
                                     <div class="flex items-center gap-1.5">
-                                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Plan:</span>
+                                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Plan (Teclas 1-4):</span>
                                         <div class="flex items-center gap-1">
                                             @for($i = 1; $i <= 4; $i++)
-                                                <button type="button" @click="cuotasPlan = {{ $i }}"
+                                                <button type="button" @click="seleccionarCuotaPlan({{ $i }})"
                                                         class="px-2.5 py-1 text-xs font-bold rounded-lg border transition cursor-pointer"
                                                         :class="cuotasPlan === {{ $i }} 
                                                             ? 'bg-indigo-600 text-white border-indigo-600 font-black shadow-xs' 
@@ -960,7 +1076,7 @@
                                         <!-- CHECKBOX EXCLUSIVO DE HABILITACIÓN POR VENDEDOR -->
                                         <div class="pt-1.5 border-t border-amber-300 dark:border-amber-700">
                                             <label class="inline-flex items-center gap-2.5 p-2 bg-white dark:bg-slate-900 rounded-lg border-2 border-amber-500 cursor-pointer shadow-sm hover:bg-amber-50 transition">
-                                                <input type="checkbox" x-model="autorizadoPorVendedor" class="w-4 h-4 text-indigo-600 rounded cursor-pointer">
+                                                <input type="checkbox" x-ref="chkAutorizarVendedor" x-model="autorizadoPorVendedor" @change="if (autorizadoPorVendedor) focusBtnAutorizarCredito()" class="w-4 h-4 text-indigo-600 rounded cursor-pointer">
                                                 <span class="text-xs font-black text-amber-950 dark:text-white uppercase tracking-tight">
                                                     HABILITAR PARA ESTA COMPRA (Autoriza el vendedor)
                                                 </span>
@@ -974,9 +1090,12 @@
 
                                 <!-- ESTADO REGULAR APROBADO -->
                                 <template x-if="!infoCredito.estado_crediticio.tiene_mora && !infoCredito.estado_crediticio.suspendido && (calcularTotal() <= (infoCredito.detalle_compras?.limite_disponible || infoCredito.estado_crediticio.limite_disponible))">
-                                    <div class="p-2.5 bg-emerald-100/90 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
-                                        <span class="text-base">✓</span>
-                                        <span class="font-bold">Cliente en regla y con margen de crédito disponible para autorizar.</span>
+                                    <div class="p-2.5 bg-emerald-100/90 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-base">✓</span>
+                                            <span class="font-bold">Cliente en regla y con margen de crédito disponible. Presione ENTER para autorizar y continuar.</span>
+                                        </div>
+                                        <span class="text-[10px] font-mono font-black bg-emerald-700 text-white px-2 py-0.5 rounded shrink-0">APROBADO</span>
                                     </div>
                                 </template>
                             </div>
@@ -985,22 +1104,38 @@
                 </div>
 
                 <!-- Footer del Modal de Crédito -->
-                <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                    <button type="button" @click="modalCredito = false; focusBarcode();"
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+                    <button type="button" @click="cerrarModalCredito()"
                             class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 uppercase transition cursor-pointer">
-                        Cancelar / Volver
+                        Cancelar / Volver (ESC)
                     </button>
 
-                    <!-- Botón Principal: AUTORIZAR CRÉDITO -->
-                    <button type="button" @click="confirmarAutorizacionCredito()"
-                            :disabled="!puedeAutorizarCredito"
-                            class="px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-md flex items-center gap-2 transition cursor-pointer"
-                            :class="puedeAutorizarCredito 
-                                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 active:scale-98' 
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'">
-                        <span class="text-sm">✓</span>
-                        <span>AUTORIZAR CRÉDITO</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <!-- Botón Secundario Rápido: Autorizar y Facturar Directo (F8) -->
+                        <button type="button" @click="autorizarYFacturarDirecto()"
+                                x-show="items.length > 0"
+                                :disabled="!puedeAutorizarCredito || procesando"
+                                class="px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-sm flex items-center gap-1.5 transition cursor-pointer"
+                                :class="puedeAutorizarCredito 
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-98' 
+                                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'">
+                            <span>⚡</span>
+                            <span>Autorizar y Facturar Directo (F8)</span>
+                        </button>
+
+                        <!-- Botón Principal: AUTORIZAR CRÉDITO (ENTER) -->
+                        <button type="button" 
+                                x-ref="btnAutorizarCreditoModal"
+                                @click="confirmarAutorizacionCredito()"
+                                :disabled="!puedeAutorizarCredito"
+                                class="px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-tight shadow-md flex items-center gap-2 transition cursor-pointer focus:ring-4 focus:ring-amber-400"
+                                :class="puedeAutorizarCredito 
+                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 active:scale-98' 
+                                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'">
+                            <span class="text-sm">✓</span>
+                            <span>AUTORIZAR CRÉDITO (ENTER)</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1110,7 +1245,7 @@
                         </div>
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">¡Venta Registrada Exitosamente!</span>
+                                <span class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">¡Venta y Pagaré Generados Exitosamente!</span>
                                 <span class="font-mono font-black text-sm text-slate-900 dark:text-white" x-text="'#' + ventaExitosa.comprobante"></span>
                             </div>
                             <span class="text-xs text-slate-600 dark:text-slate-300 font-bold" x-text="'Total Facturado: $ ' + formatDinero(ventaExitosa.total)"></span>
@@ -1120,17 +1255,19 @@
                     <!-- Botones de Acción de Cabecera -->
                     <div class="flex items-center gap-2">
                         <button type="button" 
-                                @click="imprimirComprobanteExito()"
-                                class="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5 transition active:scale-98 cursor-pointer">
+                                x-ref="btnImprimirExito"
+                                @click="imprimirComprobanteExito(esTrelew)"
+                                class="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5 transition active:scale-98 cursor-pointer focus:ring-4 focus:ring-amber-400">
                             <span>🖨️</span>
-                            <span>Mandar a Imprimir</span>
+                            <span x-text="esTrelew ? '5. Imprimir y Volver a Comenzar (ENTER / F9)' : 'Mandar a Imprimir (ENTER / F9)'"></span>
                         </button>
                         <button type="button" 
+                                x-ref="btnSiguienteVentaExito"
                                 @click="cerrarModalExito()"
-                                class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5 transition active:scale-98 cursor-pointer"
+                                class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5 transition active:scale-98 cursor-pointer focus:ring-4 focus:ring-amber-400"
                                 title="Iniciar siguiente venta">
                             <span>➕</span>
-                            <span class="hidden sm:inline">Siguiente Venta</span>
+                            <span class="hidden sm:inline">Siguiente Venta (F2 / ESC)</span>
                         </button>
                         <button type="button" 
                                 @click="cerrarModalExito()" 
@@ -1201,6 +1338,7 @@
                      style="flex: 1 1 auto; height: calc(94vh - 120px); min-height: 600px;">
                     <iframe id="iframeComprobanteExito"
                             :src="comprobanteActivoUrl"
+                            @load="onIframeExitoLoad()"
                             class="w-full flex-1 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-xl shadow-inner block"
                             style="width: 100%; height: 100%; min-height: 600px; border: 0;"
                             loading="lazy">
@@ -1708,12 +1846,14 @@
     <script>
         function posApp() {
             return {
+                esTrelew: {{ !$esTdf ? 'true' : 'false' }},
                 items: [],
                 barcodeQuery: '',
                 sugerenciasProductos: [],
                 clienteSeleccionado: @json($clienteInicial ?? null),
                 clienteQuery: '',
                 sugerenciasClientes: [],
+                indiceSugerenciaCliente: 0,
                 medioPago: '{{ $medioPagoInicial ?? ($mediosPago->firstWhere("codigo", "efectivo")?->codigo ?? $mediosPago->first()?->codigo ?? "efectivo") }}',
                 mediosPagoLista: @json($mediosPago),
                 referenciaPago: '',
@@ -1728,11 +1868,98 @@
                     let mp = this.medioPagoActual;
                     return (mp && (mp.tipo_base === 'efectivo' || mp.permite_vuelto)) || this.medioPago === 'efectivo';
                 },
+                get pasoActualFlujo() {
+                    if (this.modalExito) return 5;
+                    if (this.modalCredito) return 3;
+                    if (!this.clienteSeleccionado) return 1;
+                    if (this.items.length === 0) return 2;
+                    if (this.esCredito && !this.creditoAutorizado) return 3;
+                    return 4;
+                },
+                irAPaso(paso) {
+                    if (paso === 1) {
+                        this.modalCredito = false;
+                        this.modalCobro = false;
+                        if (this.clienteSeleccionado) {
+                            this.deseleccionarCliente();
+                        } else {
+                            this.focusCliente();
+                        }
+                        return;
+                    }
+                    if (paso === 2) {
+                        this.modalCredito = false;
+                        this.modalCobro = false;
+                        this.focusMontoGenerico();
+                        return;
+                    }
+                    if (paso === 3) {
+                        if (!this.clienteSeleccionado) {
+                            this.focusCliente();
+                            return;
+                        }
+                        if (parseFloat(this.montoGenerico) > 0) {
+                            this.agregarArticuloGenerico(false);
+                        }
+                        this.abrirModalCredito();
+                        return;
+                    }
+                    if (paso === 4) {
+                        if (!this.clienteSeleccionado && this.esCredito) {
+                            this.focusCliente();
+                            return;
+                        }
+                        if (parseFloat(this.montoGenerico) > 0) {
+                            this.agregarArticuloGenerico(false);
+                        }
+                        if (this.items.length === 0) {
+                            this.focusMontoGenerico();
+                            return;
+                        }
+                        this.abrirModalPago();
+                        return;
+                    }
+                    if (paso === 5 && this.modalExito) {
+                        this.imprimirComprobanteExito(this.esTrelew);
+                    }
+                },
+                avanzarPasoFlujo() {
+                    let paso = this.pasoActualFlujo;
+                    if (paso === 1) {
+                        if (this.clienteQuery.trim().length >= 2) {
+                            this.confirmarClienteEnter();
+                        } else {
+                            this.focusCliente();
+                        }
+                    } else if (paso === 2) {
+                        if (parseFloat(this.montoGenerico) > 0) {
+                            this.procesarMontoGenericoEnter();
+                        } else {
+                            this.focusMontoGenerico();
+                        }
+                    } else if (paso === 3) {
+                        if (this.modalCredito) {
+                            if (this.puedeAutorizarCredito) {
+                                this.confirmarAutorizacionCredito();
+                            }
+                        } else {
+                            this.abrirModalCredito();
+                        }
+                    } else if (paso === 4) {
+                        this.abrirModalPago();
+                    } else if (paso === 5) {
+                        if (!this.yaImprimioExito) {
+                            this.imprimirComprobanteExito(this.esTrelew);
+                        } else {
+                            this.cerrarModalExito();
+                        }
+                    }
+                },
                 seleccionarMedioPago(mp) {
                     if (mp.tipo_base === 'credito' || mp.codigo === 'credito_personal') {
                         if (!this.clienteSeleccionado) {
                             alert('Para operar con ' + mp.nombre + ' debe seleccionar un cliente primero.');
-                            this.abrirBuscadorCliente();
+                            this.focusCliente();
                             return;
                         }
                         this.abrirModalCredito();
@@ -1807,9 +2034,13 @@
                         iframe.src = 'about:blank';
                     }
                     this.fichaClienteUrl = '';
-                    this.focusBarcode();
                     if (this.clienteSeleccionado) {
                         await this.consultarInfoCredito(this.clienteSeleccionado.id);
+                    }
+                    if (this.modalCredito) {
+                        this.focusBtnAutorizarCredito();
+                    } else {
+                        this.focusInicialSegunModo();
                     }
                 },
 
@@ -1855,6 +2086,10 @@
 
                 // Modal de Venta Exitosa con Impresión y Vista Previa Integrada
                 documentoExitoTipo: 'ticket',
+                yaImprimioExito: false,
+                iframeExitoCargado: false,
+                impresionPendienteExito: false,
+                autoCerrarTrasImprimir: false,
                 get comprobanteActivoUrl() {
                     if (!this.modalExito || !this.ventaExitosa || !this.ventaExitosa.id) return 'about:blank';
                     let url = '';
@@ -1874,14 +2109,77 @@
                     return url;
                 },
                 seleccionarDocumentoExito(tipo) {
+                    this.iframeExitoCargado = false;
                     this.documentoExitoTipo = tipo;
                 },
-                imprimirComprobanteExito() {
+                onIframeExitoLoad() {
+                    if (!this.modalExito) return;
                     let iframe = document.getElementById('iframeComprobanteExito');
-                    if (iframe && iframe.contentWindow) {
-                        iframe.contentWindow.focus();
-                        iframe.contentWindow.print();
+                    if (!iframe || !iframe.contentWindow) return;
+                    let currentUrl = this.comprobanteActivoUrl;
+                    if (!currentUrl || currentUrl === 'about:blank') return;
+
+                    this.iframeExitoCargado = true;
+
+                    try {
+                        iframe.contentWindow.addEventListener('keydown', (ev) => {
+                            this.manejarAtajoGlobal(ev);
+                        });
+                    } catch (err) {
+                        // Ignore cross-origin if any
                     }
+
+                    if (this.impresionPendienteExito) {
+                        this.impresionPendienteExito = false;
+                        this.ejecutarImpresionIframe(iframe, this.autoCerrarTrasImprimir);
+                    } else {
+                        this.focusBtnImprimirExito();
+                    }
+                },
+                imprimirComprobanteExito(volverAComenzar = false) {
+                    let iframe = document.getElementById('iframeComprobanteExito');
+                    if (!iframe || !iframe.contentWindow) return;
+
+                    if (!this.iframeExitoCargado) {
+                        this.impresionPendienteExito = true;
+                        this.autoCerrarTrasImprimir = volverAComenzar;
+                        return;
+                    }
+
+                    this.ejecutarImpresionIframe(iframe, volverAComenzar);
+                },
+                ejecutarImpresionIframe(iframe, autoCerrar = false) {
+                    this.yaImprimioExito = true;
+                    let win = iframe.contentWindow;
+                    let finalizo = false;
+                    let alTerminar = () => {
+                        if (finalizo) return;
+                        finalizo = true;
+                        win.onafterprint = null;
+                        window.focus();
+                        if (autoCerrar) {
+                            setTimeout(() => {
+                                if (this.modalExito) {
+                                    this.cerrarModalExito();
+                                }
+                            }, 120);
+                        } else {
+                            this.$nextTick(() => {
+                                if (this.$refs.btnSiguienteVentaExito) {
+                                    this.$refs.btnSiguienteVentaExito.focus();
+                                }
+                            });
+                        }
+                    };
+
+                    win.onafterprint = alTerminar;
+                    win.focus();
+                    win.print();
+
+                    // En navegadores de escritorio donde print() es síncrono, continúa aquí al cerrar el diálogo
+                    setTimeout(() => {
+                        alTerminar();
+                    }, 250);
                 },
                 cerrarModalExito() {
                     this.modalExito = false;
@@ -1889,30 +2187,209 @@
                 },
 
                 initPos() {
-                    this.focusBarcode();
-
                     if (this.clienteSeleccionado) {
                         this.consultarInfoCredito(this.clienteSeleccionado.id);
-                        if (this.medioPago === 'credito_personal') {
-                            this.$nextTick(() => {
-                                this.abrirModalCredito();
-                            });
-                        }
                     }
 
-                    // Atajo de teclado: espacio para cobrar, esc para volver al lector
+                    this.focusInicialSegunModo();
+
                     window.addEventListener('keydown', (e) => {
-                        if (e.key === 'Escape') {
-                            if (this.modalExito) {
-                                this.cerrarModalExito();
-                                return;
-                            }
-                            this.modalCredito = false;
+                        this.manejarAtajoGlobal(e);
+                    });
+                },
+
+                manejarAtajoGlobal(e) {
+                    // 1. Escape: cerrar modales o reiniciar venta tras éxito
+                    if (e.key === 'Escape') {
+                        if (this.modalExito) {
+                            e.preventDefault();
+                            this.cerrarModalExito();
+                            return;
+                        }
+                        if (this.modalCredito) {
+                            e.preventDefault();
+                            this.cerrarModalCredito();
+                            return;
+                        }
+                        if (this.modalCobro || this.modalRecuento || this.modalFichaCliente) {
+                            e.preventDefault();
                             this.modalCobro = false;
                             this.modalRecuento = false;
                             this.modalFichaCliente = false;
-                            this.focusBarcode();
+                            this.focusInicialSegunModo();
+                            return;
                         }
+                        this.focusInicialSegunModo();
+                        return;
+                    }
+
+                    // 2. Teclas de Función F2, F3, F4, F8, F9
+                    if (e.key === 'F2') {
+                        e.preventDefault();
+                        if (this.modalExito) {
+                            this.cerrarModalExito();
+                        } else {
+                            this.irAPaso(1);
+                        }
+                        return;
+                    }
+                    if (e.key === 'F3') {
+                        e.preventDefault();
+                        if (!this.modalExito) {
+                            this.irAPaso(2);
+                        }
+                        return;
+                    }
+                    if (e.key === 'F4') {
+                        e.preventDefault();
+                        if (this.modalExito) {
+                            this.imprimirComprobanteExito(this.esTrelew);
+                            return;
+                        }
+                        if (this.modalCredito) {
+                            if (this.puedeAutorizarCredito) {
+                                this.confirmarAutorizacionCredito();
+                            }
+                            return;
+                        }
+                        this.irAPaso(3);
+                        return;
+                    }
+                    if (e.key === 'F8') {
+                        e.preventDefault();
+                        if (this.modalCredito && this.puedeAutorizarCredito && this.items.length > 0) {
+                            this.autorizarYFacturarDirecto();
+                            return;
+                        }
+                        if (!this.modalExito) {
+                            this.irAPaso(4);
+                        }
+                        return;
+                    }
+                    if (e.key === 'F9') {
+                        e.preventDefault();
+                        if (this.modalExito) {
+                            this.imprimirComprobanteExito(this.esTrelew);
+                        }
+                        return;
+                    }
+
+                    let tag = document.activeElement?.tagName || '';
+                    let enInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) && document.activeElement?.type !== 'checkbox';
+
+                    // 3. Selección rápida de cuotas 1..4 cuando está en modal de crédito o con crédito autorizado (sin estar escribiendo en un input)
+                    if (!enInput && ['1', '2', '3', '4'].includes(e.key)) {
+                        if (this.modalCredito || (this.esCredito && this.clienteSeleccionado && !this.modalExito && !this.modalCobro)) {
+                            e.preventDefault();
+                            this.seleccionarCuotaPlan(parseInt(e.key, 10));
+                            return;
+                        }
+                    }
+
+                    // 4. Enter en Modal de Éxito (Paso 5: Imprimir y volver a comenzar)
+                    if (this.modalExito && e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!this.yaImprimioExito) {
+                            this.imprimirComprobanteExito(this.esTrelew);
+                        } else {
+                            this.cerrarModalExito();
+                        }
+                        return;
+                    }
+
+                    // 5. Enter en Modal de Crédito Personal (Paso 3: Autorizar si está aprobado)
+                    if (this.modalCredito && e.key === 'Enter' && !enInput) {
+                        e.preventDefault();
+                        if (this.puedeAutorizarCredito) {
+                            this.confirmarAutorizacionCredito();
+                        }
+                        return;
+                    }
+
+                    // 6. Enter en pantalla principal cuando no hay foco en un input ni botón específico
+                    if (!this.modalCredito && !this.modalCobro && !this.modalExito && !this.modalRecuento && !this.modalFichaCliente) {
+                        if (e.key === 'Enter' && !enInput && tag !== 'BUTTON' && tag !== 'A') {
+                            e.preventDefault();
+                            this.avanzarPasoFlujo();
+                            return;
+                        }
+                    }
+                },
+
+                focusInicialSegunModo() {
+                    if (this.esTrelew) {
+                        if (!this.clienteSeleccionado) {
+                            this.focusCliente();
+                        } else if (this.items.length === 0) {
+                            this.focusMontoGenerico();
+                        } else if (!this.creditoAutorizado) {
+                            this.abrirModalCredito();
+                        } else {
+                            this.focusBtnFacturar();
+                        }
+                    } else {
+                        this.focusBarcode();
+                    }
+                },
+
+                focusCliente() {
+                    this.$nextTick(() => {
+                        if (this.$refs.clienteInput) {
+                            this.$refs.clienteInput.focus();
+                            this.$refs.clienteInput.select?.();
+                        }
+                        setTimeout(() => {
+                            if (this.$refs.clienteInput && document.activeElement !== this.$refs.clienteInput) {
+                                this.$refs.clienteInput.focus();
+                            }
+                        }, 60);
+                    });
+                },
+
+                focusMontoGenerico() {
+                    this.$nextTick(() => {
+                        if (this.$refs.montoGenericoInput && document.activeElement !== this.$refs.montoGenericoInput) {
+                            this.$refs.montoGenericoInput.focus();
+                            this.$refs.montoGenericoInput.select?.();
+                        }
+                        setTimeout(() => {
+                            if (this.$refs.montoGenericoInput && document.activeElement !== this.$refs.montoGenericoInput) {
+                                this.$refs.montoGenericoInput.focus();
+                            }
+                        }, 50);
+                    });
+                },
+
+                focusBtnAutorizarCredito() {
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            if (!this.modalCredito) return;
+                            if (this.puedeAutorizarCredito && this.$refs.btnAutorizarCreditoModal) {
+                                this.$refs.btnAutorizarCreditoModal.focus();
+                            } else if (!this.puedeAutorizarCredito && this.$refs.chkAutorizarVendedor) {
+                                this.$refs.chkAutorizarVendedor.focus();
+                            }
+                        }, 50);
+                    });
+                },
+
+                focusBtnFacturar() {
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            if (this.$refs.btnFacturarPrincipal) {
+                                this.$refs.btnFacturarPrincipal.focus();
+                            }
+                        }, 50);
+                    });
+                },
+
+                focusBtnImprimirExito() {
+                    this.$nextTick(() => {
+                        setTimeout(() => {
+                            if (this.modalExito && this.$refs.btnImprimirExito) {
+                                this.$refs.btnImprimirExito.focus();
+                            }
+                        }, 60);
                     });
                 },
 
@@ -2124,6 +2601,7 @@
                 },
 
                 agregarItem(prod, cantidad = 1) {
+                    this.creditoAutorizado = false;
                     let exist = this.items.find(it => it.id_producto === prod.id);
                     if (exist) {
                         exist.cantidad += cantidad;
@@ -2143,13 +2621,14 @@
                     }
                 },
 
-                agregarArticuloGenerico() {
+                agregarArticuloGenerico(enfocar = true) {
                     let monto = parseFloat(this.montoGenerico);
                     if (isNaN(monto) || monto <= 0) {
                         alert('Ingrese un monto válido para el artículo varios.');
-                        return;
+                        return false;
                     }
 
+                    this.creditoAutorizado = false;
                     this.items.push({
                         id_producto: {{ $productoGenerico->id ?? 'null' }},
                         codigo_producto: '{{ $productoGenerico->codigo ?? '1' }}',
@@ -2163,7 +2642,43 @@
                     });
 
                     this.montoGenerico = '';
-                    this.focusBarcode();
+                    if (enfocar) {
+                        this.focusBarcode();
+                    }
+                    return true;
+                },
+
+                async procesarMontoGenericoEnter() {
+                    let monto = parseFloat(this.montoGenerico);
+                    if (!isNaN(monto) && monto > 0) {
+                        this.agregarArticuloGenerico(false);
+                        if (this.esTrelew || this.esCredito) {
+                            if (!this.clienteSeleccionado) {
+                                this.focusCliente();
+                            } else {
+                                await this.abrirModalCredito();
+                            }
+                        } else {
+                            this.focusBarcode();
+                        }
+                        return;
+                    }
+
+                    if (this.items.length > 0) {
+                        if (this.esTrelew || this.esCredito) {
+                            if (!this.clienteSeleccionado) {
+                                this.focusCliente();
+                            } else {
+                                await this.abrirModalCredito();
+                            }
+                        } else {
+                            this.abrirModalPago();
+                        }
+                        return;
+                    }
+
+                    alert('Ingrese un monto válido para continuar.');
+                    this.focusMontoGenerico();
                 },
 
                 cambiarCantidad(index, delta) {
@@ -2179,6 +2694,7 @@
                         this.abrirModalRecuento(item, nueva, faltante);
                         return;
                     }
+                    this.creditoAutorizado = false;
                     item.cantidad = nueva;
                 },
 
@@ -2187,6 +2703,7 @@
                     let item = this.items[index];
                     if (item.cantidad <= 0) item.cantidad = 1;
                     if (item.precio_unitario < 0) item.precio_unitario = 0;
+                    this.creditoAutorizado = false;
                     if (item.controla_stock && item.cantidad > (Number(item.stock) || 0)) {
                         let solicitada = item.cantidad;
                         let faltante = solicitada - Math.max(0, Number(item.stock) || 0);
@@ -2197,7 +2714,8 @@
 
                 quitarItem(index) {
                     this.items.splice(index, 1);
-                    this.focusBarcode();
+                    this.creditoAutorizado = false;
+                    this.focusInicialSegunModo();
                 },
 
                 limpiarVenta() {
@@ -2205,7 +2723,8 @@
                         return;
                     }
                     this.items = [];
-                    this.focusBarcode();
+                    this.creditoAutorizado = false;
+                    this.focusInicialSegunModo();
                 },
 
                 // Búsqueda y selección de clientes
@@ -2213,15 +2732,46 @@
                     let q = this.clienteQuery.trim();
                     if (q.length < 2) {
                         this.sugerenciasClientes = [];
-                        return;
+                        this.indiceSugerenciaCliente = 0;
+                        return [];
                     }
 
                     try {
                         let res = await fetch(`{{ route('clientes.buscar') }}?q=${encodeURIComponent(q)}`);
                         let data = await res.json();
                         this.sugerenciasClientes = data || [];
+                        this.indiceSugerenciaCliente = 0;
+                        return this.sugerenciasClientes;
                     } catch (e) {
                         console.error('Error buscando clientes:', e);
+                        return [];
+                    }
+                },
+
+                moverSugerenciaCliente(delta) {
+                    if (!this.sugerenciasClientes || this.sugerenciasClientes.length === 0) return;
+                    let max = this.sugerenciasClientes.length - 1;
+                    let next = this.indiceSugerenciaCliente + delta;
+                    if (next < 0) next = max;
+                    if (next > max) next = 0;
+                    this.indiceSugerenciaCliente = next;
+                },
+
+                async confirmarClienteEnter() {
+                    if (this.sugerenciasClientes && this.sugerenciasClientes.length > 0) {
+                        let elegido = this.sugerenciasClientes[this.indiceSugerenciaCliente] || this.sugerenciasClientes[0];
+                        await this.seleccionarCliente(elegido);
+                        return;
+                    }
+
+                    let q = this.clienteQuery.trim();
+                    if (q.length >= 2) {
+                        let lista = await this.buscarClientes();
+                        if (lista && lista.length > 0) {
+                            await this.seleccionarCliente(lista[0]);
+                            return;
+                        }
+                        alert(`No se encontró ningún cliente con "${q}".`);
                     }
                 },
 
@@ -2229,7 +2779,20 @@
                     this.clienteSeleccionado = cli;
                     this.sugerenciasClientes = [];
                     this.clienteQuery = '';
+                    this.indiceSugerenciaCliente = 0;
+                    this.creditoAutorizado = false;
+                    this.autorizadoPorVendedor = false;
+
+                    if (this.esTrelew) {
+                        this.medioPago = 'credito_personal';
+                        this.focusMontoGenerico();
+                    }
+
                     await this.consultarInfoCredito(cli.id);
+
+                    if (this.esTrelew && this.items.length === 0) {
+                        this.focusMontoGenerico();
+                    }
                 },
 
                 deseleccionarCliente() {
@@ -2237,18 +2800,31 @@
                     this.infoCredito = null;
                     this.creditoAutorizado = false;
                     this.autorizadoPorVendedor = false;
-                    if (this.esCredito) {
+                    if (!this.esTrelew && this.esCredito) {
                         this.medioPago = 'efectivo';
                     }
-                    this.focusBarcode();
+                    this.focusInicialSegunModo();
+                },
+
+                seleccionarCuotaPlan(n) {
+                    if (this.infoCredito && this.infoCredito.estado_crediticio && n > this.infoCredito.estado_crediticio.max_cuotas) {
+                        return;
+                    }
+                    this.cuotasPlan = n;
+                    if (this.modalCredito) {
+                        this.focusBtnAutorizarCredito();
+                    } else if (this.creditoAutorizado) {
+                        this.focusBtnFacturar();
+                    }
                 },
 
                 async abrirModalCredito() {
                     if (!this.clienteSeleccionado) {
                         alert('Para operar con Crédito Personal debe seleccionar un cliente primero.');
-                        this.abrirBuscadorCliente();
+                        this.focusCliente();
                         return;
                     }
+                    this.medioPago = 'credito_personal';
                     await this.consultarInfoCredito(this.clienteSeleccionado.id);
                     if (this.infoCredito && this.infoCredito.detalle_compras) {
                         this.nuevoLimiteInput = this.infoCredito.detalle_compras.limite_total;
@@ -2259,6 +2835,20 @@
                         this.autorizadoPorVendedor = false;
                     }
                     this.modalCredito = true;
+                    this.focusBtnAutorizarCredito();
+                },
+
+                cerrarModalCredito() {
+                    this.modalCredito = false;
+                    if (this.esTrelew) {
+                        if (this.items.length === 0) {
+                            this.focusMontoGenerico();
+                        } else {
+                            this.focusBtnFacturar();
+                        }
+                    } else {
+                        this.focusBarcode();
+                    }
                 },
 
                 async guardarNuevoLimite() {
@@ -2285,6 +2875,7 @@
                         }
                         await this.consultarInfoCredito(this.clienteSeleccionado.id);
                         alert('✓ Límite de crédito actualizado correctamente a $ ' + this.formatDinero(nuevo));
+                        this.focusBtnAutorizarCredito();
                     } catch (e) {
                         alert('Error: ' + e.message);
                     } finally {
@@ -2317,6 +2908,7 @@
                         }
                         this.infoCredito.novedades.unshift(data.novedad);
                         this.nuevoComentarioInput = '';
+                        this.focusBtnAutorizarCredito();
                     } catch (e) {
                         alert('Error: ' + e.message);
                     } finally {
@@ -2339,7 +2931,24 @@
                     this.medioPago = 'credito_personal';
                     this.creditoAutorizado = true;
                     this.modalCredito = false;
-                    this.focusBarcode();
+                    if (this.items.length > 0) {
+                        this.focusBtnFacturar();
+                    } else if (this.esTrelew) {
+                        this.focusMontoGenerico();
+                    } else {
+                        this.focusBarcode();
+                    }
+                },
+
+                autorizarYFacturarDirecto() {
+                    if (!this.puedeAutorizarCredito) {
+                        alert('No es posible autorizar el crédito sin la habilitación correspondiente.');
+                        return;
+                    }
+                    this.medioPago = 'credito_personal';
+                    this.creditoAutorizado = true;
+                    this.modalCredito = false;
+                    this.abrirModalPago();
                 },
 
                 async consultarInfoCredito(clienteId) {
@@ -2362,7 +2971,12 @@
 
                 abrirModalPago() {
                     if (this.items.length === 0) {
-                        alert('Cargue al menos un artículo en la factura para continuar.');
+                        alert('Cargue al menos un artículo o monto en la factura para continuar.');
+                        if (this.esTrelew) {
+                            this.focusMontoGenerico();
+                        } else {
+                            this.focusBarcode();
+                        }
                         return;
                     }
 
@@ -2379,6 +2993,7 @@
                     if (this.esCredito) {
                         if (!this.clienteSeleccionado) {
                             alert('Para pagar a crédito debe seleccionar un cliente registrado.');
+                            this.focusCliente();
                             return;
                         }
                         // Si el crédito ya fue verificado y autorizado, emitir la factura directamente
@@ -2610,6 +3225,9 @@
                         this.modalCobro = false;
                         this.creditoAutorizado = false;
                         this.autorizadoPorVendedor = false;
+                        this.yaImprimioExito = false;
+                        this.iframeExitoCargado = false;
+                        this.impresionPendienteExito = false;
                         this.ventaExitosa = {
                             id: data.venta_id,
                             comprobante: data.comprobante,
@@ -2622,6 +3240,7 @@
                         };
                         this.documentoExitoTipo = (data.id_credito && data.pagare_url) ? 'pagare' : 'ticket';
                         this.modalExito = true;
+                        this.focusBtnImprimirExito();
                     } catch (e) {
                         console.error('Error al enviar venta:', e);
                         alert('Error de conexión al emitir la factura.');
@@ -2633,13 +3252,19 @@
                 iniciarNuevaVenta() {
                     this.items = [];
                     this.clienteSeleccionado = null;
+                    this.clienteQuery = '';
+                    this.sugerenciasClientes = [];
+                    this.indiceSugerenciaCliente = 0;
                     this.infoCredito = null;
-                    this.medioPago = 'efectivo';
+                    this.medioPago = this.esTrelew ? 'credito_personal' : 'efectivo';
                     this.referenciaPago = '';
                     this.cuotasPlan = 1;
                     this.creditoAutorizado = false;
                     this.autorizadoPorVendedor = false;
                     this.modalExito = false;
+                    this.yaImprimioExito = false;
+                    this.iframeExitoCargado = false;
+                    this.impresionPendienteExito = false;
                     this.documentoExitoTipo = 'ticket';
                     this.ventaExitosa = {
                         id: null,
@@ -2651,7 +3276,7 @@
                         id_credito: null,
                         pagare_url: null
                     };
-                    this.focusBarcode();
+                    this.focusInicialSegunModo();
                 }
             };
         }

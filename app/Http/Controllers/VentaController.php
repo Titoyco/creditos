@@ -215,13 +215,16 @@ class VentaController extends Controller
         $sucursalActiva = config('app.sucursal_activa') ?? Sucursal::first();
         $sucursalId = $sucursalActiva?->id ?? 1;
 
+        $esTdf = $sucursalActiva ? $sucursalActiva->isTdf() : true;
+        $esChubut = $sucursalActiva ? $sucursalActiva->isChubut() : false;
+
         // Cliente preseleccionado si viene redirigido desde el módulo de clientes o créditos
         $clienteInicial = null;
         $clienteId = $request->get('id_cliente') ?? $request->get('cliente_id');
         if ($clienteId) {
             $clienteInicial = Cliente::find($clienteId);
         }
-        $medioPagoInicial = $request->get('medio_pago', 'efectivo');
+        $medioPagoInicial = $request->get('medio_pago', $esTdf ? 'efectivo' : 'credito_personal');
 
         // Presentación activa para la sucursal y su tasa de interés vigente normalizada (ej: 6.0%)
         $presentacion = Presentacion::activaParaSucursal($sucursalId);
