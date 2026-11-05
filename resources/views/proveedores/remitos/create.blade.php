@@ -35,6 +35,18 @@
                 modalNuevo: false,
                 guardandoNuevo: false,
                 nuevoProdError: '',
+                nuevoProd: {
+                    descripcion: '',
+                    codigo: '',
+                    codigo_barra: '',
+                    codigo_proveedor: '',
+                    talle: '',
+                    color: '',
+                    categoria_id: '',
+                    subcategoria_id: '',
+                    precio_costo: 0,
+                    precio_venta: 0
+                },
                 modalProveedorAbierto: false,
                 guardandoProv: false,
                 errorProv: '',
