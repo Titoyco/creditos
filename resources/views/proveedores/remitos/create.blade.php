@@ -64,24 +64,25 @@
                 },
 
                 onCambioProveedor() {
+                    this.busqueda = '';
                     this.resultados = [];
                     this.busquedaRealizada = false;
-                    if (this.busqueda.trim().length > 0) {
+                    if (this.proveedorId) {
                         this.buscarProductos();
                     }
                 },
 
-                buscarProductos(forzarTodos = false) {
-                    const term = this.busqueda.trim();
-                    if (!forzarTodos && term.length < 1 && !this.proveedorId) {
+                buscarProductos() {
+                    if (!this.proveedorId) {
                         this.resultados = [];
                         this.busquedaRealizada = false;
                         return;
                     }
+                    const term = this.busqueda.trim();
                     this.buscando = true;
                     this.busquedaRealizada = true;
 
-                    const url = `${config.searchUrl}?q=${encodeURIComponent(term)}&sucursal_id=${this.sucursalId}&proveedor_id=${this.proveedorId || ''}&todos=${forzarTodos ? 1 : 0}`;
+                    const url = `${config.searchUrl}?q=${encodeURIComponent(term)}&sucursal_id=${this.sucursalId}&proveedor_id=${this.proveedorId}`;
 
                     fetch(url)
                         .then(res => res.json())
@@ -96,6 +97,10 @@
                 },
 
                 onEnterBusqueda() {
+                    if (!this.proveedorId) {
+                        alert('Selecciona primero un proveedor en el Paso 1 para cargar o buscar artículos.');
+                        return;
+                    }
                     const term = this.busqueda.trim();
                     if (term.length === 0) return;
 
@@ -124,7 +129,7 @@
 
                     // Si no había resultados aún (por debounce), buscar de inmediato
                     this.buscando = true;
-                    fetch(`${config.searchUrl}?q=${encodeURIComponent(term)}&sucursal_id=${this.sucursalId}&proveedor_id=${this.proveedorId || ''}`)
+                    fetch(`${config.searchUrl}?q=${encodeURIComponent(term)}&sucursal_id=${this.sucursalId}&proveedor_id=${this.proveedorId}`)
                         .then(res => res.json())
                         .then(data => {
                             this.buscando = false;
@@ -562,51 +567,51 @@
 
                 <!-- Buscador de Artículos Existentes -->
                 <div class="relative mb-5" @click.away="resultados = []; busquedaRealizada = false">
-                    <div class="flex items-center gap-2">
-                        <div class="relative flex-1">
-                            <input type="text" id="input_busqueda_articulo"
-                                   x-model="busqueda" 
-                                   @input.debounce.200ms="buscarProductos()"
-                                   @keydown.enter.prevent="onEnterBusqueda()"
-                                   @keydown.escape="resultados = []; busquedaRealizada = false"
-                                   :placeholder="proveedorId ? 'Buscar por Código de Barra, Código de Fábrica (ej: 755), Talle o Descripción...' : 'Buscar artículo por código de barra, fábrica o descripción (o seleccione proveedor arriba)...'"
-                                   class="w-full text-xs py-2.5 pl-10 pr-10 rounded-2xl border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium shadow-inner focus:ring-2 focus:ring-blue-500">
+                    <div class="relative">
+                        <input type="text" id="input_busqueda_articulo"
+                               x-model="busqueda" 
+                               @input.debounce.200ms="buscarProductos()"
+                               @focus="if (proveedorId && resultados.length === 0) buscarProductos()"
+                               @keydown.enter.prevent="onEnterBusqueda()"
+                               @keydown.escape="resultados = []; busquedaRealizada = false"
+                               :disabled="!proveedorId"
+                               :placeholder="proveedorId ? 'Buscar por Código de Barra, Código de Fábrica (ej: 755), Talle o Descripción de este proveedor...' : '⚠️ Seleccione primero un proveedor arriba para buscar o cargar artículos...'"
+                               class="w-full text-xs py-2.5 pl-10 pr-10 rounded-2xl border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-medium shadow-inner focus:ring-2 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
 
-                            <!-- Icono Búsqueda o Spinner de Carga -->
-                            <div class="absolute left-3.5 top-3 text-slate-400">
-                                <template x-if="!buscando">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </template>
-                                <template x-if="buscando">
-                                    <svg class="animate-spin w-4 h-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                                    </svg>
-                                </template>
-                            </div>
-
-                            <!-- Botón Limpiar Búsqueda -->
-                            <button type="button" x-show="busqueda.length > 0" 
-                                    @click="busqueda = ''; resultados = []; busquedaRealizada = false; document.getElementById('input_busqueda_articulo')?.focus()"
-                                    class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-1">
-                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        <!-- Icono Búsqueda o Spinner de Carga -->
+                        <div class="absolute left-3.5 top-3 text-slate-400">
+                            <template x-if="!buscando">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
-                            </button>
+                            </template>
+                            <template x-if="buscando">
+                                <svg class="animate-spin w-4 h-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                                </svg>
+                            </template>
                         </div>
 
-                        <!-- Botón Ver Catálogo Completo del Proveedor -->
-                        <button type="button" x-show="proveedorId" @click="buscarProductos(true)"
-                                class="px-3 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-2xl shadow-2xs transition flex items-center gap-1.5 shrink-0"
-                                title="Ver artículos cargados de este proveedor">
-                            <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                        <!-- Botón Limpiar Búsqueda -->
+                        <button type="button" x-show="busqueda.length > 0" 
+                                @click="busqueda = ''; if(proveedorId) { buscarProductos(); } else { resultados = []; busquedaRealizada = false; } document.getElementById('input_busqueda_articulo')?.focus()"
+                                class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 p-1">
+                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                             </svg>
-                            <span class="hidden sm:inline">Ver Artículos del Proveedor</span>
                         </button>
                     </div>
+
+                    <!-- Mensaje indicativo si no seleccionó proveedor -->
+                    <template x-if="!proveedorId">
+                        <p class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-1.5 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                            Selecciona el proveedor en el Paso 1 para habilitar la búsqueda y ver únicamente sus artículos.
+                        </p>
+                    </template>
 
                     <!-- Dropdown de Resultados Encontrados -->
                     <div x-show="resultados.length > 0" 

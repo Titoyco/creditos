@@ -450,15 +450,15 @@ class RemitoProveedorController extends Controller
 
     /**
      * Endpoint API para buscar productos dinámicamente en el formulario de remito.
+     * Filtra estrictamente por el proveedor seleccionado.
      */
     public function buscarProductos(Request $request)
     {
         $term = trim((string)$request->input('q', ''));
         $proveedorId = $request->filled('proveedor_id') ? (int)$request->input('proveedor_id') : null;
-        $verTodos = $request->boolean('todos', false);
 
-        // Si no hay término y no se solicitó catálogo del proveedor, retornar vacío
-        if (strlen($term) < 1 && !$proveedorId && !$verTodos) {
+        // En remitos de proveedor, el proveedor es obligatorio para filtrar y mostrar artículos
+        if (!$proveedorId) {
             return response()->json([]);
         }
 
@@ -472,20 +472,10 @@ class RemitoProveedorController extends Controller
             }, 'proveedor', 'categoria'])
             ->where('activo', true);
 
-        // Filtrado por Proveedor si fue seleccionado
-        if ($proveedorId) {
-            $prov = Proveedor::find($proveedorId);
-            $legajo = $prov?->legajo;
-            $query->where(function ($q) use ($proveedorId, $legajo) {
-                $q->where('proveedor_id', $proveedorId);
-                // Si el legajo tiene 2 o más caracteres, incluir también coincidencias por prefijo de código
-                if ($legajo && strlen($legajo) >= 2) {
-                    $q->orWhere('codigo', 'like', $legajo . '%');
-                }
-            });
-        }
+        // Filtrado ESTRICTO por Proveedor: únicamente artículos cargados a nombre de este proveedor
+        $query->where('proveedor_id', $proveedorId);
 
-        // Búsqueda inteligente por términos (múltiples palabras, código de fábrica con/sin ceros, barra y descripción)
+        // Búsqueda inteligente por términos dentro de este proveedor
         if (strlen($term) > 0) {
             $tokens = array_filter(preg_split('/\s+/', $term), fn($w) => strlen($w) > 0);
 
@@ -510,7 +500,7 @@ class RemitoProveedorController extends Controller
             }
         }
 
-        $limite = strlen($term) > 0 ? 30 : 50;
+        $limite = strlen($term) > 0 ? 30 : 60;
 
         $productos = $query->orderBy('descripcion', 'asc')
             ->take($limite)
