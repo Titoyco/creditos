@@ -11,6 +11,16 @@
                     <span class="text-xs font-bold font-mono px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
                         {{ $producto->codigo }}
                     </span>
+                    @if($producto->talle)
+                        <span class="text-xs font-bold font-mono px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
+                            Talle: {{ $producto->talle }}
+                        </span>
+                    @endif
+                    @if($producto->color)
+                        <span class="text-xs font-bold px-2 py-0.5 rounded bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-700">
+                            Color: {{ $producto->color }}
+                        </span>
+                    @endif
                     @if(!$producto->controla_stock)
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                             Genérico / Sin control de stock
@@ -23,7 +33,12 @@
                             <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                             </svg>
-                            EAN: <strong>{{ $producto->codigo_barra }}</strong>
+                            CODE128: <strong>{{ $producto->codigo_barra }}</strong>
+                        </span>
+                    @endif
+                    @if($producto->codigo_proveedor)
+                        <span class="font-mono flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                            • Cód. Fábrica: <strong>{{ $producto->codigo_proveedor }}</strong>
                         </span>
                     @endif
                     @if($producto->categoria)

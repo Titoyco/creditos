@@ -144,6 +144,37 @@
                 </div>
             </a>
 
+            {{-- 2.B. Compras y Remitos (Recepción de Facturas y Stock) --}}
+            <a href="{{ route('remitos.index') }}"
+               class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-indigo-400 dark:hover:border-indigo-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            Proveedores
+                        </span>
+                    </div>
+                    <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">
+                        Compras y Remitos
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-snug font-medium">
+                        Carga de facturas de proveedores en etapas, altas automáticas CODE128 y actualización de stock por diferencia.
+                    </p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Ingreso de Mercadería</span>
+                    <span class="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white dark:group-hover:bg-indigo-500 transition-all duration-200 flex items-center justify-center shrink-0">
+                        <svg class="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </span>
+                </div>
+            </a>
+
             {{-- 3. Padrón de Clientes --}}
             <a href="{{ route('clientes.index') }}"
                class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">

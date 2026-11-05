@@ -592,3 +592,49 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
    - Los medios inactivos no se renderizan en el mostrador POS ni en los selectores de cobranza, pero sus estadísticas históricas continúan disponibles en el Resumen de Caja y reportes.
 3. **Exportación e Importación:**
    - Se actualizó `app:export-cajas-sql` para exportar la tabla `medios_pago` junto a las sesiones de caja y movimientos hacia `database/data/cajas_historicas.sql`.
+
+---
+
+## 10. Módulo Catálogo, Variantes (Talle y Color), Recepción Ágil y Código de Barras (CODE128)
+
+### 10.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/productos` | `productos.index` | `ProductoController@index` | `auth` | Catálogo maestro unificado con filtros por talle, color, proveedor y stock |
+| GET | `/productos/nuevo` | `productos.create` | `ProductoController@create` | `auth` | Pantalla ágil de recepción de mercadería y alta de producto |
+| POST | `/productos` | `productos.store` | `ProductoController@store` | `auth` | Almacena nuevo producto unificando código interno y código de barras CODE128 |
+| GET | `/productos/buscar-por-proveedor` | `productos.buscar-por-proveedor` | `ProductoController@buscarPorProveedor` | `auth` | Búsqueda dinámica de artículos por proveedor, código fábrica o descripción (AJAX) |
+| GET | `/productos/verificar-codigo` | `productos.verificar-codigo` | `ProductoController@verificarCodigo` | `auth` | Verificación en tiempo real de disponibilidad del código CODE128 (AJAX) |
+| POST | `/productos/ingreso-mercaderia` | `productos.ingreso-mercaderia` | `ProductoController@ingresoMercaderiaRapido` | `auth` | Ingreso ultra-rápido: suma stock si el código existe o da de alta nueva variante automáticamente |
+| POST | `/productos/ingreso-stock-rapido` | `productos.ingreso-stock-rapido` | `ProductoController@ingresoStockRapido` | `auth` | Ingreso de unidades a artículo existente y disparo de impresión térmica |
+| GET | `/productos/traslado` | `productos.traslado` | `StockMovimientoController@trasladoForm` | `auth` | Formulario de traslado entre sucursales con edición de variantes |
+| POST | `/productos/traslado` | `productos.traslado.store` | `StockMovimientoController@trasladoStore` | `auth` | Registra traslado, actualiza talle/color/fábrica y regenera barcode opcional |
+| GET | `/productos/buscar-traslado` | `productos.buscar.traslado` | `StockMovimientoController@buscarParaTraslado` | `auth` | Búsqueda asistida de productos para traslado |
+| POST | `/productos/verificar-stock-traslado` | `productos.verificar.stock.traslado` | `StockMovimientoController@verificarStock` | `auth` | Validación de disponibilidad física en sucursal origen |
+| GET | `/productos/movimientos` | `productos.movimientos` | `StockMovimientoController@index` | `auth` | Historial de auditoría de movimientos y reemisión de etiquetas |
+| GET | `/productos/{producto}` | `productos.show` | `ProductoController@show` | `auth` | Ficha técnica del producto, stock multi-sucursal y variantes |
+| GET | `/productos/{producto}/editar` | `productos.edit` | `ProductoController@edit` | `auth` | Formulario de edición de datos maestros del producto |
+| PUT | `/productos/{producto}` | `productos.update` | `ProductoController@update` | `auth` | Actualización de datos maestros y variantes |
+| DELETE | `/productos/{producto}` | `productos.destroy` | `ProductoController@destroy` | `auth` | Eliminación lógica (SoftDeletes) |
+| POST | `/productos/{producto}/ajuste` | `productos.ajuste` | `ProductoController@ajusteStock` | `auth` | Ajuste directo de existencias físicas por recuento |
+| GET | `/productos/{producto}/etiqueta` | `productos.etiqueta` | `ProductoController@imprimirEtiqueta` | `auth` | Generación de etiqueta térmica (50×25mm) en SVG CODE128 con `autoprint` |
+
+### 10.2 Flujo Operativo de Recepción Ágil en `/productos/nuevo`
+1. **Unificación de Código:** No existe código interno independiente. Se utiliza el código de barras en simbología CODE128 como identificador maestro (`codigo = codigo_barra`).
+2. **Selección del Proveedor:** Al seleccionar el proveedor (o darlo de alta en el modal emergente asistido), su legajo define los primeros 3 dígitos del código (`prov(3)`).
+3. **Búsqueda Dinámica:** Filtra en tiempo real los artículos cargados del proveedor por código de fábrica, código de barra, descripción, talle o color.
+4. **Bifurcación del Flujo:**
+   - **Artículo Existente:** Si la prenda ya existe en el catálogo, se cargan las unidades que ingresan físicamente, se actualiza el stock en la sucursal activa y, si está tildada la opción, se imprimen automáticamente las etiquetas térmicas con `autoprint=1`.
+   - **Nuevo Artículo:** Si no existe, se cargan descripción, código de fábrica, talle (2 caracteres normalizados) y color (2 caracteres normalizados). El visor en tiempo real compone el código `prov(3) + talle(2) + color(2) + fab(...)`, verifica que no esté asignado a otra prenda, registra el artículo con stock inicial e imprime las etiquetas.
+
+### 10.3 Traslados Inter-Sucursales y Regeneración de Etiquetas
+1. Al trasladar mercadería entre sucursales, el operador puede completar variantes faltantes (`codigo_proveedor`, `talle`, `color`).
+2. Puede optar por **mantener el código original** o marcar **"Generar / Actualizar Código de Barra (CODE128)"** para recalcular la estructura.
+3. Si el código de barras cambia, el sistema emite una notificación destacada en la pantalla de movimientos con acceso directo para reimprimir las etiquetas térmicas de las prendas trasladadas.
+
+### 10.4 Comando de Consolidación e Importación de Proveedores
+- **Firma:** `php artisan app:consolidar-proveedores-productos`
+- **Funcionalidad:**
+  1. Extrae de `creditos/db.mdb` (tabla `PERSONAS`) los proveedores faltantes con saneamiento de caracteres UTF-8 e inserción directa en `proveedores`.
+  2. Lee la tabla `PRODUCTOS` de Access y actualiza en un solo paso masivo indexado el campo `proveedor_id` de los 15.138 productos en MySQL `lamarina_v4`.

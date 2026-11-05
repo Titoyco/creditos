@@ -446,15 +446,51 @@ protected $fillable = [
 
 ---
 
-## 9. Modelos de Stock: `Producto`, `ProductoSucursal`, `ProductoStock` y `StockMovimiento`
+## 9. Modelos de Catálogo, Proveedores y Stock: `Producto`, `Proveedor`, `ProductoStock` y `StockMovimiento`
 
-- **Clases**: `App\Models\Producto`, `App\Models\ProductoStock`, `App\Models\StockMovimiento`
-- **Tablas**: `productos`, `productos_sucursales` / `productos_stock`, `stock_movimientos`
+- **Clases**: `App\Models\Producto`, `App\Models\Proveedor`, `App\Models\ProductoStock`, `App\Models\StockMovimiento`, `App\Models\ProductoCategoria`, `App\Models\ProductoSubcategoria`
+- **Tablas**: `productos`, `proveedores`, `productos_stock`, `productos_movimientos`, `productos_categorias`, `productos_subcategorias`
+- **Migración Clave de Variantes**: `database/migrations/2026_11_03_100000_add_codigo_proveedor_talle_color_to_productos_table.php`
 
-### 9.1 Control de Stock por Sucursal y Prevención de Stock Negativo
-- Cada producto registra stock diferenciado por sucursal (`id_sucursal`, `id_producto`, `stock_actual`, `stock_minimo`).
+### 9.1 Atributos Maestros del Producto y Variantes
+- **`codigo`**: VARCHAR(50) UNIQUE. Código unificado de producto. En el nuevo flujo de recepción, **el código de barra actúa como código interno único** (`codigo = codigo_barra`).
+- **`codigo_barra`**: VARCHAR(50) INDEXED. Código en simbología **CODE128** que permite incorporar caracteres alfanuméricos completos de fabricante.
+- **`codigo_proveedor`**: VARCHAR(100) INDEXED. Código asignado por el fabricante o proveedor según figura en la factura / remito de compra (ej: `7040`, `FAB-105`).
+- **`talle`**: VARCHAR(20) INDEXED. Talle de la prenda o calzado:
+  - Rangos numéricos del **1 al 70** (bebés, niños, calzado y pantalones de adultos).
+  - Talles por letra: **XS, S, M, L, XL, XXL/2XL, XXXL/3XL, 4XL, 5XL, 6XL, 7XL, 8XL**, y talles especiales (`UNICO`, `ESPECIAL`).
+- **`color`**: VARCHAR(50) INDEXED. Denominación del color / tono (ej: `NEGRO`, `BLANCO`, `AZUL`, `AZUL MARINO`, `ROJO`, `BORDO`, `VERDE`, `GRIS`, etc.).
+- **`proveedor_id`**: Foreign Key hacia `proveedores.id` (ON DELETE SET NULL). Representa la empresa fabricante/proveedora asignada al producto.
+- **`precio_costo`**: DECIMAL(12, 2). Costo de adquisición unitario.
+- **`precio_venta`**: DECIMAL(12, 2). Precio unitario final de venta al público en mostrador.
+- **`controla_stock`**: BOOLEAN. Si es `true`, requiere existencia física en la sucursal emisora para facturar. Si es `false`, es un ítem genérico/servicio sin control de existencias.
+
+### 9.2 Estructura del Código de Barras CODE128 Unificado
+El código de barras generado por el sistema se estructura de forma continua bajo el estándar:
+$$\mathbf{CODE128} = \underbrace{\text{cod.prov}}_{3\text{ dígitos}} + \underbrace{\text{talle}}_{2\text{ caracteres}} + \underbrace{\text{color}}_{2\text{ caracteres}} + \underbrace{\text{código artículo fabricante}}_{\text{alfanumérico sin espacios}}$$
+
+1. **Código de Empresa Proveedora (3 dígitos):** Legajo del proveedor con padding de ceros a la izquierda (ej: Legajo 14 &rarr; `014`; si no tiene proveedor &rarr; `000`).
+2. **Código de Talle normalizado a 2 caracteres (`normalizarTalle2Char`):**
+   - Números 1 a 9 &rarr; `01` a `09`; Números 10 a 70 &rarr; `10` a `70`.
+   - Letras simples &rarr; `0S`, `0M`, `0L`, `0U`.
+   - Compuestos &rarr; `XS`, `XL`, `2X`, `3X`, `4X`, `5X`, `6X`, `7X`, `8X`.
+3. **Código de Color normalizado a 2 caracteres (`normalizarColor2Char`):**
+   - Mapeo nemotécnico estándar: `NEGRO` &rarr; `NE`, `BLANCO` &rarr; `BL`, `AZUL` &rarr; `AZ`, `AZUL MARINO` &rarr; `AM`, `ROJO` &rarr; `RO`, `VERDE` &rarr; `VE`, `AMARILLO` &rarr; `AM`, `GRIS` &rarr; `GR`, `ROSA` &rarr; `RS`, `CELESTE` &rarr; `CE`, `BEIGE` &rarr; `BE`, `BORDO` &rarr; `BO`, etc.
+4. **Código de Artículo según Proveedor:** Código original del fabricante en mayúsculas (ej: `7040`, `REM102`).
+
+*Ejemplo integrado:* Proveedor 14 + Talle 42 + Color Negro + Fábrica 7040 &rarr; **`01442NE7040`**.
+
+### 9.3 Consolidación e Integración de Proveedores desde Access (`db.mdb`)
+- **Origen de Datos:** En el sistema anterior (Access `creditos/db.mdb`), los 15.142 registros de la tabla `PRODUCTOS` contenían el campo `proveedor` referenciando a `IDPERSONA` de la tabla `PERSONAS`.
+- **Comando de Migración y Consolidación:** `php artisan app:consolidar-proveedores-productos`
+  - Sincroniza y consolida 95 proveedores históricos faltantes desde `PERSONAS` con codificación limpia UTF-8.
+  - Vincula el 100% de los 15.138 productos de MySQL `lamarina_v4` asignando su `proveedor_id` correspondiente sin pérdida de integridad referencial.
+
+### 9.4 Control de Stock por Sucursal y Prevención de Stock Negativo
+- Cada producto registra stock diferenciado por sucursal (`sucursal_id`, `producto_id`, `stock`, `stock_minimo`, `precio_venta` específico opcional).
 - **Validación en Facturación:** Si el producto tiene habilitado `controla_stock = true` y su stock disponible en la sucursal es `0` (o inferior a la cantidad solicitada), el sistema bloquea la emisión para evitar saldos negativos.
 - **Corrección Rápida por Recuento Físico:** El POS permite que el operador, previa confirmación por recuento en mostrador, ejecute una corrección en el acto registrando un `StockMovimiento` de tipo `recuento_fisico` para regularizar el inventario y continuar con la venta.
+- **Etiquetas Térmicas (50×25mm):** Impresión directa con cabecera de variantes (`T: [Talle] • C: [Color] • Fab: [Cód. Fab]`), código de barras en formato SVG CODE128 e impresión automática (`autoprint=1`).
 
 ---
 

@@ -211,11 +211,19 @@
                                     @endif
                                 </td>
                                 <td class="py-3 px-4 text-right">
-                                    <a href="{{ route('remitos.show', $rem->id) }}" 
-                                       class="inline-flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
-                                        <span>Ver Detalle</span>
-                                        <span aria-hidden="true">&rarr;</span>
-                                    </a>
+                                    <div class="flex items-center justify-end gap-2">
+                                        @if($rem->estado === 'parcial')
+                                            <a href="{{ route('remitos.create', ['remito_id' => $rem->id]) }}" 
+                                               class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black text-amber-900 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-700 rounded-lg shadow-2xs transition-all">
+                                                <span>✏️ Continuar Carga</span>
+                                            </a>
+                                        @endif
+                                        <a href="{{ route('remitos.show', $rem->id) }}" 
+                                           class="inline-flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
+                                            <span>Ver</span>
+                                            <span aria-hidden="true">&rarr;</span>
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         @empty

@@ -69,7 +69,7 @@ class StockMovimientoController extends Controller
 
         $productoSeleccionado = null;
         if ($request->filled('producto_id')) {
-            $p = Producto::with(['categoria', 'subcategoria', 'stocks' => function ($q) use ($sucursalActivaId) {
+            $p = Producto::with(['categoria', 'subcategoria', 'proveedor', 'stocks' => function ($q) use ($sucursalActivaId) {
                 $q->where('sucursal_id', $sucursalActivaId);
             }])->find($request->producto_id);
 
@@ -78,12 +78,20 @@ class StockMovimientoController extends Controller
                     'id' => $p->id,
                     'codigo' => $p->codigo,
                     'codigo_barra' => $p->codigo_barra,
+                    'codigo_proveedor' => $p->codigo_proveedor,
+                    'talle' => $p->talle,
+                    'color' => $p->color,
                     'descripcion' => $p->descripcion,
                     'categoria' => $p->categoria?->nombre ?? 'GENERAL',
                     'subcategoria' => $p->subcategoria?->nombre ?? null,
+                    'proveedor' => $p->proveedor?->nombre ?? 'N/A',
+                    'proveedor_id' => $p->proveedor_id,
+                    'proveedor_legajo' => $p->proveedor?->legajo,
                     'unidad_medida' => $p->unidad_medida ?? 'UN',
                     'stock_origen' => (float)($p->stocks->first()?->stock ?? 0),
                     'cantidad' => 1,
+                    'actualizar_codigo_barra' => false,
+                    'nuevo_codigo_barra' => '',
                 ];
             }
         }
@@ -108,11 +116,17 @@ class StockMovimientoController extends Controller
             ->where(function ($q) use ($term) {
                 $q->where('codigo_barra', $term)
                   ->orWhere('codigo', $term)
+                  ->orWhere('codigo_proveedor', $term)
+                  ->orWhere('talle', $term)
+                  ->orWhere('color', $term)
                   ->orWhere('codigo', 'like', "%{$term}%")
                   ->orWhere('codigo_barra', 'like', "%{$term}%")
+                  ->orWhere('codigo_proveedor', 'like', "%{$term}%")
+                  ->orWhere('talle', 'like', "%{$term}%")
+                  ->orWhere('color', 'like', "%{$term}%")
                   ->orWhere('descripcion', 'like', "%{$term}%");
             })
-            ->with(['categoria', 'subcategoria', 'stocks' => function ($sq) use ($sucursalId) {
+            ->with(['categoria', 'subcategoria', 'proveedor', 'stocks' => function ($sq) use ($sucursalId) {
                 $sq->where('sucursal_id', $sucursalId);
             }])
             ->limit(20)
@@ -122,16 +136,23 @@ class StockMovimientoController extends Controller
             $stockOrigen = (float)($p->stocks->first()?->stock ?? 0);
             $esExacto = (
                 strcasecmp($p->codigo_barra ?? '', $term) === 0 || 
-                strcasecmp($p->codigo, $term) === 0
+                strcasecmp($p->codigo, $term) === 0 ||
+                strcasecmp($p->codigo_proveedor ?? '', $term) === 0
             );
 
             return [
                 'id' => $p->id,
                 'codigo' => $p->codigo,
                 'codigo_barra' => $p->codigo_barra,
+                'codigo_proveedor' => $p->codigo_proveedor,
+                'talle' => $p->talle,
+                'color' => $p->color,
                 'descripcion' => $p->descripcion,
                 'categoria' => $p->categoria?->nombre ?? 'GENERAL',
                 'subcategoria' => $p->subcategoria?->nombre ?? null,
+                'proveedor' => $p->proveedor?->nombre ?? 'N/A',
+                'proveedor_id' => $p->proveedor_id,
+                'proveedor_legajo' => $p->proveedor?->legajo,
                 'unidad_medida' => $p->unidad_medida ?? 'UN',
                 'precio_venta' => (float)$p->precio_venta,
                 'stock_origen' => $stockOrigen,
@@ -175,9 +196,19 @@ class StockMovimientoController extends Controller
             'items' => 'nullable|array',
             'items.*.producto_id' => 'required_with:items|exists:productos,id',
             'items.*.cantidad' => 'required_with:items|numeric|min:0.01',
+            'items.*.codigo_proveedor' => 'nullable|string|max:100',
+            'items.*.talle' => 'nullable|string|max:20',
+            'items.*.color' => 'nullable|string|max:50',
+            'items.*.actualizar_codigo_barra' => 'nullable|boolean',
+            'items.*.nuevo_codigo_barra' => 'nullable|string|max:100',
             // Soporta artículo individual (compatibilidad retroactiva)
             'producto_id' => 'nullable|exists:productos,id',
             'cantidad' => 'nullable|numeric|min:0.01',
+            'codigo_proveedor' => 'nullable|string|max:100',
+            'talle' => 'nullable|string|max:20',
+            'color' => 'nullable|string|max:50',
+            'actualizar_codigo_barra' => 'nullable|boolean',
+            'nuevo_codigo_barra' => 'nullable|string|max:100',
         ], [
             'sucursal_destino_id.different' => 'La sucursal de destino no puede ser la misma que la sucursal de origen.',
         ]);
@@ -188,7 +219,7 @@ class StockMovimientoController extends Controller
         $motivo = trim($validated['motivo'] ?? '') ?: 'Traslado inter-sucursal de mercadería';
         $usuarioId = Auth::id();
 
-        // Consolidar lista de items a trasladar
+        // Consolidar lista de items a trasladar con campos de talle/color/código de fábrica
         $itemsATrasladar = [];
         if (!empty($validated['items'])) {
             foreach ($validated['items'] as $it) {
@@ -197,6 +228,11 @@ class StockMovimientoController extends Controller
                     $itemsATrasladar[] = [
                         'producto_id' => (int)$it['producto_id'],
                         'cantidad' => $cant,
+                        'codigo_proveedor' => $it['codigo_proveedor'] ?? null,
+                        'talle' => $it['talle'] ?? null,
+                        'color' => $it['color'] ?? null,
+                        'actualizar_codigo_barra' => !empty($it['actualizar_codigo_barra']),
+                        'nuevo_codigo_barra' => $it['nuevo_codigo_barra'] ?? null,
                     ];
                 }
             }
@@ -204,6 +240,11 @@ class StockMovimientoController extends Controller
             $itemsATrasladar[] = [
                 'producto_id' => (int)$validated['producto_id'],
                 'cantidad' => (float)$validated['cantidad'],
+                'codigo_proveedor' => $validated['codigo_proveedor'] ?? null,
+                'talle' => $validated['talle'] ?? null,
+                'color' => $validated['color'] ?? null,
+                'actualizar_codigo_barra' => !empty($validated['actualizar_codigo_barra']),
+                'nuevo_codigo_barra' => $validated['nuevo_codigo_barra'] ?? null,
             ];
         }
 
@@ -213,11 +254,77 @@ class StockMovimientoController extends Controller
 
         $sucursalOrigen = Sucursal::findOrFail($sucursalOrigenId);
         $sucursalDestino = Sucursal::findOrFail($sucursalDestinoId);
+        $barcodesActualizados = [];
 
         try {
-            DB::transaction(function () use ($itemsATrasladar, $sucursalOrigenId, $sucursalDestinoId, $usuarioId, $comprobante, $motivo) {
+            DB::transaction(function () use ($itemsATrasladar, $sucursalOrigenId, $sucursalDestinoId, $usuarioId, $comprobante, $motivo, &$barcodesActualizados) {
                 foreach ($itemsATrasladar as $it) {
-                    $producto = Producto::findOrFail($it['producto_id']);
+                    $producto = Producto::with('proveedor')->findOrFail($it['producto_id']);
+
+                    // Actualizar campos faltantes de fábrica, talle y color si fueron informados
+                    $modificoDatos = false;
+                    if (array_key_exists('codigo_proveedor', $it) && $it['codigo_proveedor'] !== null && trim($it['codigo_proveedor']) !== '') {
+                        $nuevoCodFab = strtoupper(trim($it['codigo_proveedor']));
+                        if ($nuevoCodFab !== $producto->codigo_proveedor) {
+                            $producto->codigo_proveedor = $nuevoCodFab;
+                            $modificoDatos = true;
+                        }
+                    }
+
+                    if (array_key_exists('talle', $it) && $it['talle'] !== null && trim($it['talle']) !== '') {
+                        $nuevoTalle = strtoupper(trim($it['talle']));
+                        if ($nuevoTalle !== $producto->talle) {
+                            $producto->talle = $nuevoTalle;
+                            $modificoDatos = true;
+                        }
+                    }
+
+                    if (array_key_exists('color', $it) && $it['color'] !== null && trim($it['color']) !== '') {
+                        $nuevoColor = strtoupper(trim($it['color']));
+                        if ($nuevoColor !== $producto->color) {
+                            $producto->color = $nuevoColor;
+                            $modificoDatos = true;
+                        }
+                    }
+
+                    // Actualización de código de barras (si se solicitó explícitamente o vino nuevo código)
+                    $actualizarBarra = !empty($it['actualizar_codigo_barra']);
+                    $nuevoBarraCustom = !empty($it['nuevo_codigo_barra']) ? trim($it['nuevo_codigo_barra']) : null;
+
+                    if ($actualizarBarra || $nuevoBarraCustom) {
+                        $barcodeAnterior = $producto->codigo_barra;
+                        if ($nuevoBarraCustom) {
+                            $producto->codigo_barra = $nuevoBarraCustom;
+                        } else {
+                            $producto->codigo_barra = Producto::generarCodigoBarraSugerido(
+                                $producto->talle,
+                                $producto->color,
+                                $producto->proveedor,
+                                $producto->codigo
+                            );
+                        }
+
+                        if ($barcodeAnterior !== $producto->codigo_barra) {
+                            $modificoDatos = true;
+                            $barcodesActualizados[] = [
+                                'producto_id' => $producto->id,
+                                'codigo' => $producto->codigo,
+                                'descripcion' => $producto->descripcion,
+                                'talle' => $producto->talle,
+                                'color' => $producto->color,
+                                'codigo_barra_anterior' => $barcodeAnterior,
+                                'codigo_barra_nuevo' => $producto->codigo_barra,
+                                'cantidad' => $it['cantidad'],
+                            ];
+                        }
+                    }
+
+                    if ($modificoDatos) {
+                        $producto->fecha_modificacion = now();
+                        $producto->save();
+                    }
+
+                    // Ejecutar el traslado atómico de existencias
                     $producto->trasladar(
                         $sucursalOrigenId,
                         $sucursalDestinoId,
@@ -230,6 +337,16 @@ class StockMovimientoController extends Controller
             });
 
             $totalArticulos = count($itemsATrasladar);
+            $totalUnidades = array_sum(array_column($itemsATrasladar, 'cantidad'));
+
+            $redirect = redirect()->route('stock.movimientos')
+                                 ->with('success', "Lote de traslado completado exitosamente: {$totalArticulos} artículos ({$totalUnidades} unidades) trasladados de {$sucursalOrigen->nombre} a {$sucursalDestino->nombre} bajo comprobante {$comprobante}.");
+
+            if (!empty($barcodesActualizados)) {
+                $redirect->with('barcodes_actualizados', $barcodesActualizados);
+            }
+
+            return $redirect;
             $totalUnidades = array_sum(array_column($itemsATrasladar, 'cantidad'));
 
             return redirect()->route('stock.movimientos')

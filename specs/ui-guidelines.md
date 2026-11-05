@@ -337,6 +337,34 @@ Toda pantalla operativa (`clientes/*`, `creditos/*`, `sistema/presentaciones`) s
 - Botón de exportación (créditos): `bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md text-xs font-bold shadow-sm`.
 - Botón "Reimprimir Pagaré": variante neutra `bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-md text-xs font-bold shadow-sm hover:bg-slate-50 uppercase`.
 
+### 5.6 Flujo de Recepción e Ingreso de Mercadería
+
+El sistema provee dos modalidades complementarias y conectadas entre sí:
+
+#### A. Recepción Unitaria / Prenda a Prenda (`/productos/nuevo`)
+- **Objetivo**: Máxima velocidad de tipeo al etiquetar o incorporar prendas individuales o variantes.
+- **Sin AJAX continuo**: Al escribir talle, color o código de fábrica no se disparan peticiones de red ni banners invasivos. La concatenación CODE128 (`Prov(3c) + Talle(2c) + Color(2c) + Fabrica`) se proyecta localmente en un visor segmentado.
+- **Validación al Continuar**:
+  1. Si se seleccionó una prenda base y **no se modificaron** sus atributos (mismo talle, color y código de fábrica): se incrementa el stock de forma directa e inmediata sin modales.
+  2. Si se modificó algún atributo o es un artículo nuevo: al pulsar "Continuar", se efectúa una única consulta AJAX:
+     - **Código Libre**: abre modal de confirmación mostrando el código CODE128 resultante, talle, color, fábrica y unidades a ingresar.
+     - **Código Ocupado**: abre modal exhibiendo los datos del artículo existente (descripción, talle, color, stock actual) y consulta si se desea sumar las unidades a este o cancelar para modificar.
+
+#### B. Carga por Factura / Remito del Proveedor (`/remitos/nuevo`)
+- **Objetivo**: Carga estructurada de facturas o remitos de proveedores con múltiples ítems.
+- **Acceso Directo desde Productos**: En el índice de productos (`/productos`), junto a `+ NUEVO ARTÍCULO`, se ubica el botón destacado `INGRESO DE MERCADERÍA` (verde esmeralda) que conduce directamente a esta pantalla.
+- **Encabezado**: Fecha de recepción, Número de Remito/Factura, Proveedor emisor y Sucursal destino.
+- **Carga en Etapas (Facturas Parciales)**:
+  - En el encabezado se dispone de un selector dinámico con las facturas/remitos con estado `parcial` pendientes.
+  - Al seleccionar una (o ingresar desde el botón `✏️ Continuar Carga` en el listado o detalle del remito), se precargan los datos de cabecera y la totalidad de los renglones previamente guardados.
+  - **Ajuste de Stock por Diferencia (Delta)**: Cada renglón visualiza la cantidad guardada previamente y el delta en vivo. Al guardar la modificación o completar el comprobante, el controlador calcula la diferencia exacta ($\Delta = Q_{\text{nueva}} - Q_{\text{previa}}$) por cada producto, incrementando o reduciendo el stock físico únicamente por la variación y registrando el movimiento de auditoría correspondiente sin duplicar unidades.
+- **Búsqueda Estricta por Proveedor**: La búsqueda de artículos filtra exclusivamente dentro del catálogo del proveedor seleccionado (por código interno/barra, código de fabricante o descripción).
+- **Altas Dinámicas sin perder renglones**:
+  - **Artículo Nuevo**: botón "+ Nuevo Artículo en Catálogo" abre un modal para dar de alta el producto con talle, color y código de fábrica (generando el código estructurado CODE128) y lo agrega automáticamente a la tabla del remito.
+  - **Proveedor Nuevo**: botón "+ Alta Rápida de Proveedor" abre un modal para registrar el proveedor con su legajo correlativo vía AJAX, incorporándolo a la lista y seleccionándolo sin recargar la página ni perder renglones ingresados.
+
+---
+
 ### 5.2 Ribbon de búsqueda y filtros
 
 ```html
@@ -1058,3 +1086,52 @@ La vista `cajas/comprobante.blade.php` soporta impresión dual mediante directiv
 - **Listado de Respaldos:** Grilla con nombre de archivo, tamaño en MB, fecha y hora de creación, botón de descarga directa en `.zip` y botón de restauración.
 - **Botón `[💾 Crear Copia de Seguridad Ahora]`:** Genera el dump completo de la BD de forma inmediata.
 - **Modal de Confirmación de Restauración:** Diálogo de máxima advertencia que aclara que el sistema creará automáticamente un auto-backup preventivo antes de reemplazar la base de datos, solicitando confirmación explícita del administrador.
+
+---
+
+## 20. Componentes de UI: Recepción de Mercadería, Catálogo de Productos y Etiquetas Térmicas (50×25mm)
+
+### 20.1 Pantalla de Recepción y Alta de Mercadería (`productos/create.blade.php`)
+- **Aislamiento Mandatorio de Alpine.js en `<script>`:**
+  - Toda la lógica reactiva, normalización de talles/colores, búsquedas fetch y validaciones asíncronas deben declararse dentro de una función JavaScript en un bloque `<script>` dedicado (ej: `function ingresoMercaderia() { return { ... }; }`) e instanciarse como `x-data="ingresoMercaderia()"`.
+  - **Prohibido:** Declarar lógica extensa con operadores relacionales (`<`, `>`, `=>`) dentro de atributos HTML directos (`x-data="{ ... }"`), ya que el tokenizador HTML del navegador interpreta el caracter `>` como el cierre prematuro de la etiqueta `<div>` y expone el código como texto plano visible.
+- **Flujo Ágil de Variantes y Aviso en Tiempo Real:**
+  - Al seleccionar un artículo base del proveedor (ej: `010001200755` GUARDAPOLVO ALFORZADO T. 12 SARMIENTO), si sus columnas de talle, color o código de fábrica estaban vacías en la base de datos histórica, el sistema los desglosa automáticamente desde el código de barras (`010` = prov, `00` = talle, `12` = color/segmento, `00755` = código fábrica 5 dígitos) y precarga todos los campos.
+  - **Preservación de Identidad Base:** Mientras el usuario no modifique los atributos de variante, el sistema conserva exactamente el código de barras original (`010001200755`) y muestra el aviso verde `🟢 AVISO: Prenda / Variante Existente en Catálogo`, permitiendo **sumar unidades directamente al stock de la prenda seleccionada**.
+  - **Detección Dinámica de Nueva Variante:** Al cambiar el talle o el color (ej: a talle 14 o color verde), se activa en tiempo real el cálculo del nuevo código CODE128 y se verifica asíncronamente:
+    - **Variante Existente:** Si la nueva combinación ya existía previamente en catálogo, se mantiene en verde para sumar stock.
+    - **Nueva Variante / Producto:** Si la combinación es nueva, se despliega el aviso azul (`✨ AVISO: Nueva Prenda / Variante No Existente`) y el botón conmuta a azul para dar de alta el nuevo artículo.
+  - El botón de envío adapta su texto, ícono y color en tiempo real según el caso.
+- **Visor Interactivo CODE128 en Tiempo Real:**
+  - Desglosa visualmente los 4 segmentos del código continuo:
+    `[Prov: 3c]` + `[Talle: 2c]` + `[Color: 2c]` + `[Fábrica]` = `[Código Resultante]`.
+  - Normaliza reactivamente los talles numéricos (01 a 70) o letras (0S, 0M, 0L, XL, 2X, etc.) y los colores a 2 caracteres representativos.
+- **Verificación Asíncrona de Unicidad:**
+  - Monitorea el código generado contra `/productos/verificar-codigo`. Si el código ya existe en otra prenda, deshabilita el botón de alta y muestra un banner rojo con el nombre de la prenda existente y un botón de redirección para sumar stock a ese artículo.
+- **Búsqueda Dinámica de Existentes:**
+  - Si el operador escribe en el buscador de artículos del proveedor, se listan los productos coincidentes mostrando stock local, talle, color y precio, permitiendo con un clic ingresar unidades y emitir etiquetas térmicas sin duplicar el registro.
+
+### 20.2 Catálogo y Grilla de Stock (`productos/index.blade.php`)
+- Cada fila del catálogo renderiza badges compactos con la tríada de variantes:
+  - `Talle: [Talle]` (badge color ámbar)
+  - `Color: [Color]` (badge color violeta)
+  - `Fab: [Cód. Fábrica]` (badge color azul / monoespaciado)
+- La barra de filtros incorpora selectores específicos por Talle y por Color, además del filtro consolidado por Proveedor.
+
+### 20.3 Traslados entre Sucursales (`productos/traslado.blade.php`)
+- Cada renglón de mercadería seleccionada para traslado dispone de un panel desplegable **"Completar / Modificar datos"** para cargar `codigo_proveedor`, `talle` y `color` faltantes.
+- Incorpora el checkbox **"Generar / Actualizar Código de Barra (CODE128)"**:
+  - Si no está marcado: conserva estrictamente el código de barras preexistente de la prenda.
+  - Si está marcado: recalcula el código continuo CODE128 con los 2 caracteres de talle y 2 de color sin perder la identidad del artículo.
+- Si se alteró algún código de barras, la pantalla de movimientos ([`productos/movimientos.blade.php`](file:///c:/wamp64/www/laravel/creditos/resources/views/productos/movimientos.blade.php)) presenta un aviso con acceso directo para reimprimir las etiquetas de los productos trasladados.
+
+### 20.4 Estándar Físico de Etiqueta Térmica 50mm × 25mm (`productos/etiqueta.blade.php`)
+La vista de etiquetas térmicas respeta una geometría milimétrica para impresoras Zebra / Xprinter:
+- **Directiva CSS de Página:** `@page { size: 50mm 25mm; margin: 0; }`
+- **Contenedor:** Ancho `50mm`, alto `25mm`, sin márgenes externos y con `page-break-after: always`.
+- **Cabecera Institucional:** Nombre de la tienda / sucursal y precio de venta destacado en negrita.
+- **Descripción:** Limitada tipográficamente para evitar desbordes físicos.
+- **Variantes:** Fila compacta `T: [Talle] • C: [Color] • Fab: [Cód. Fab]`.
+- **Código de Barras:** Generado en SVG mediante `Picqer\Barcode\BarcodeGeneratorSVG` bajo la simbología `TYPE_CODE_128` (con fallback a `TYPE_CODE_39`).
+- **Pie:** Código alfanumérico visible con asteriscos `* [CODIGO] *`.
+- **Disparo Automático:** Si la URL recibe `autoprint=1`, ejecuta automáticamente `window.print()` tras 400ms de renderizado.

@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('app.name', 'LaMarina Créditos') }}</title>
     <link rel="icon" type="image/x-icon" href="{{ asset('img/favicon.ico') }}">
     
@@ -84,6 +85,10 @@
                         <a href="{{ route('productos.index') }}" 
                            class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('productos.*') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
                             <span>📦 Stock</span>
+                        </a>
+                        <a href="{{ route('remitos.index') }}" 
+                           class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase transition flex items-center gap-1 {{ request()->routeIs('remitos.*') ? 'bg-blue-900 text-white shadow-inner' : 'text-blue-100 hover:bg-blue-700/60 dark:hover:bg-slate-800' }}">
+                            <span>📄 Compras</span>
                         </a>
                     </div>
 

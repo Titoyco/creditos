@@ -78,9 +78,16 @@ La documentación técnica detallada se encuentra en la carpeta [`specs/`](specs
 
 ---
 
-## 💻 Despliegue en Servidor
+## 💻 Despliegue en Servidor de Producción
 
-Para sincronizar los cambios locales con el servidor de producción:
+### Datos de Conexión del Servidor
+- **Acceso SSH / SCP:** `root@app.tiendaslamarina.com.ar` (Host VPS interno: `vps-4866941-x`)
+- **Ruta de la Aplicación:** `/var/www/html/app`
+- **Dominio de Producción:** [https://app.tiendaslamarina.com.ar](https://app.tiendaslamarina.com.ar)
+
+---
+
+### Procedimiento de Despliegue y Sincronización
 
 1. **En la máquina de desarrollo (Local):**
    ```bash
@@ -89,9 +96,39 @@ Para sincronizar los cambios locales con el servidor de producción:
    git push origin main
    ```
 
-2. **En el servidor de producción (`app.tiendaslamarina.com.ar`):**
+2. **En el servidor de producción (`root@app.tiendaslamarina.com.ar`):**
    ```bash
+   # Conexión SSH
+   ssh root@app.tiendaslamarina.com.ar
+
+   # Ingresar al directorio de la aplicación
+   cd /var/www/html/app
+
+   # Actualizar código y optimizaciones
    git pull origin main
+   composer install --no-dev --optimize-autoloader
    php artisan migrate --force
    php artisan optimize:clear
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   ```
+
+3. **Generación, Subida y Restauración de Base de Datos:**
+   ```powershell
+   # Desde local (PowerShell) generar el dump en UTF-8 puro (usando --result-file para evitar UTF-16LE):
+   & "C:\wamp64\bin\mysql\mysql8.3.0\bin\mysqldump.exe" -u root -h 127.0.0.1 --default-character-set=utf8mb4 --single-transaction --quick --routines --triggers --result-file="c:\wamp64\www\laravel\creditos\database\backups\lamarina_v4_prod.sql" lamarina_v4
+
+   # Comprimir a ZIP
+   Compress-Archive -Path "c:\wamp64\www\laravel\creditos\database\backups\lamarina_v4_prod.sql" -DestinationPath "c:\wamp64\www\laravel\creditos\database\backups\lamarina_v4_prod.zip" -Force
+
+   # Subir por SCP al servidor
+   scp c:\wamp64\www\laravel\creditos\database\backups\lamarina_v4_prod.zip root@app.tiendaslamarina.com.ar:/var/www/html/app
+   ```
+   ```bash
+   # En el servidor (SSH)
+   cd /var/www/html/app
+   unzip lamarina_v4_prod.zip
+   mysql -u root -p lamarina_v4 < lamarina_v4_prod.sql
+   rm lamarina_v4_prod.zip lamarina_v4_prod.sql
    ```

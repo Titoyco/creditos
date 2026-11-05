@@ -297,6 +297,7 @@ class ImportFromMdbCommand extends Command
 
             $catId = (int)($rsProd->Fields("Categoria")->Value ?? 1);
             $subId = (int)($rsProd->Fields("Subcategoria")->Value ?? 1);
+            $provId = (int)($rsProd->Fields("proveedor")->Value ?? 0);
             $costo = (float)($rsProd->Fields("Costo")->Value ?? 0);
             $precio = (float)($rsProd->Fields("lista1")->Value ?? 0);
             $obs = $this->cleanUtf8($rsProd->Fields("Obs")->Value ?? '');
@@ -313,7 +314,7 @@ class ImportFromMdbCommand extends Command
                 'descripcion'              => $descripcion,
                 'categoria_id'             => $catId > 0 ? $catId : 1,
                 'subcategoria_id'          => $subId > 0 ? $subId : 1,
-                'proveedor_id'             => null,
+                'proveedor_id'             => $provId > 0 ? $provId : null,
                 'precio_costo'             => $costo,
                 'precio_venta'             => $precio,
                 'stock_minimo'             => 5.00,
@@ -334,7 +335,7 @@ class ImportFromMdbCommand extends Command
 
             if (count($batch) >= 1000) {
                 DB::table('productos')->upsert($batch, ['codigo'], [
-                    'codigo_barra', 'descripcion', 'categoria_id', 'subcategoria_id', 
+                    'codigo_barra', 'descripcion', 'categoria_id', 'subcategoria_id', 'proveedor_id',
                     'precio_costo', 'precio_venta', 'observaciones', 'controla_stock', 
                     'fecha_alta', 'fecha_ultima_venta', 'fecha_ultima_compra', 'fecha_modificacion', 'updated_at'
                 ]);
@@ -348,7 +349,7 @@ class ImportFromMdbCommand extends Command
 
         if (!empty($batch)) {
             DB::table('productos')->upsert($batch, ['codigo'], [
-                'codigo_barra', 'descripcion', 'categoria_id', 'subcategoria_id', 
+                'codigo_barra', 'descripcion', 'categoria_id', 'subcategoria_id', 'proveedor_id',
                 'precio_costo', 'precio_venta', 'observaciones', 'controla_stock', 
                 'fecha_alta', 'fecha_ultima_venta', 'fecha_ultima_compra', 'fecha_modificacion', 'updated_at'
             ]);

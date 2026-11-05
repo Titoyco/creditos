@@ -81,6 +81,19 @@ class ProveedorController extends Controller
             'activo' => true,
         ]);
 
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'proveedor' => [
+                    'id' => $proveedor->id,
+                    'nombre' => $proveedor->nombre,
+                    'legajo' => $proveedor->legajo,
+                    'legajo_formateado' => $proveedor->legajo_formateado ?? str_pad($proveedor->legajo, 3, '0', STR_PAD_LEFT),
+                ],
+                'message' => "Proveedor '{$proveedor->nombre}' registrado correctamente con Legajo [{$proveedor->legajo}]."
+            ]);
+        }
+
         return redirect()->route('proveedores.show', $proveedor->id)
                          ->with('success', "Proveedor '{$proveedor->nombre}' registrado correctamente con Legajo [{$proveedor->legajo}].");
     }

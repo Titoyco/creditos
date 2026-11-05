@@ -197,13 +197,24 @@
             text-transform: uppercase;
             color: #000;
             text-align: center;
-            line-height: 1.15;
-            height: 4mm;
+            line-height: 1.1;
+            max-height: 3.6mm;
             overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            word-break: break-word;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        /* Variantes de Talle, Color y Fabricante */
+        .etiqueta-variantes {
+            font-size: 6pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #000;
+            text-align: center;
+            line-height: 1;
+            height: 2.5mm;
+            overflow: hidden;
+            white-space: nowrap;
         }
 
         /* Contenedor del Código de Barras SVG */
@@ -212,14 +223,14 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: 8.8mm;
+            height: 8.2mm;
             overflow: hidden;
         }
 
         .etiqueta-barcode svg {
             width: 100% !important;
             height: 100% !important;
-            max-height: 8.8mm;
+            max-height: 8.2mm;
             display: block;
         }
 
@@ -372,6 +383,15 @@
                 <div class="etiqueta-desc">
                     {{ $producto->descripcion }}
                 </div>
+
+                <!-- 2b. Talle, Color y Cód. Fabricante -->
+                @if($producto->talle || $producto->color || $producto->codigo_proveedor)
+                    <div class="etiqueta-variantes">
+                        @if($producto->talle)<strong>T: {{ $producto->talle }}</strong>@endif
+                        @if($producto->color)@if($producto->talle) • @endif<strong>C: {{ Str::limit($producto->color, 12) }}</strong>@endif
+                        @if($producto->codigo_proveedor)@if($producto->talle || $producto->color) • @endif<span>Fab: {{ Str::limit($producto->codigo_proveedor, 10) }}</span>@endif
+                    </div>
+                @endif
 
                 <!-- 3. Código de Barras (SVG Code128 / Code39) -->
                 <div class="etiqueta-barcode">

@@ -23,14 +23,24 @@ class ImportTrelewDataCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Importa clientes, créditos (T e I), cuotas y recibos históricos desde la base lamarina hacia lamarina_v4';
+    protected $description = 'Concilia localidades, clientes, autorizados, créditos, cuotas, novedades y recibos de Trelew e Interior desde lamarina hacia lamarina_v4';
+
+    /**
+     * Mapeo de conflicto de ID_LOC de Chubut con IDs reservados en Ushuaia/TDF/CABA
+     */
+    protected array $conflictMap = [
+        310 => 351, // UZCUDUN (en v4 310 es USHUAIA)
+        311 => 352, // VALLE DEL RIO CHUBUT (en v4 311 es TOLHUIN)
+        313 => 353, // VALLE FRIO (en v4 313 es RIO GRANDE)
+        314 => 354, // VALLE GARIN (en v4 314 es CABA)
+    ];
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        ini_set('memory_limit', '1024M');
+        ini_set('memory_limit', '1536M');
         set_time_limit(0);
 
         $startTime = microtime(true);
@@ -38,7 +48,7 @@ class ImportTrelewDataCommand extends Command
         $limit = $this->option('limit') ? (int) $this->option('limit') : null;
 
         $this->info("==================================================================");
-        $this->info("   MIGRACIÓN INTEGRAL TRELEW / INTERIOR: {$sourceDb} -> lamarina_v4   ");
+        $this->info("   CONCILIACIÓN INTEGRAL CHUBUT: {$sourceDb} -> lamarina_v4   ");
         $this->info("==================================================================");
 
         // 1. Conexión a la base de origen (lamarina)
@@ -58,76 +68,160 @@ class ImportTrelewDataCommand extends Command
             return 1;
         }
 
-        // 2. Asegurar presentaciones de Chubut (1 a 106)
-        $this->info("Verificando presentaciones de Chubut (id_provincia = 1)...");
-        $this->asegurarPresentacionesChubut();
+        // 2. Sincronizar Localidades de Chubut
+        $this->info("\n--- PASO 0: Sincronizando Localidades de Chubut (320 localidades) ---");
+        $locMapping = $this->sincronizarLocalidadesChubut($sourcePdo);
 
-        // Presentación 105 como presentación de Chubut activa por defecto
-        $presChubutDefaultId = DB::table('presentaciones')
-            ->where('id_provincia', 1)
-            ->where('numero', 105)
-            ->value('id') ?? DB::table('presentaciones')->where('id_provincia', 1)->value('id') ?? 1;
+        // 3. Sincronizar Presentaciones de Chubut
+        $this->info("\n--- PASO 1: Sincronizando Presentaciones de Chubut (1 a 125, actual: 106) ---");
+        $presMap = $this->sincronizarPresentacionesChubut($sourcePdo);
 
-        // 3. Importar Clientes de Trelew
-        $this->info("\n--- PASO 1: Importando Clientes y Autorizados ---");
-        $dniToClienteId = $this->importarClientes($sourcePdo, $limit);
+        // 4. Conciliar Clientes de Trelew e Interior con sus contactos y localidades
+        $this->info("\n--- PASO 2: Conciliando Clientes, Domicilios, Localidades y Teléfonos ---");
+        $dniToClienteId = $this->conciliarClientesChubut($sourcePdo, $locMapping, $limit);
 
-        // 4. Importar Créditos / Ventas
-        $this->info("\n--- PASO 2: Importando Créditos (T, I, RE, DE) ---");
-        $ventaMap = $this->importarCreditos($sourcePdo, $dniToClienteId, $presChubutDefaultId, $limit);
+        // 5. Sincronizar Autorizados (Titulares y Adicionales)
+        $this->info("\n--- PASO 3: Sincronizando Autorizados y Familiares ---");
+        $autLookup = $this->sincronizarAutorizados($sourcePdo, $dniToClienteId);
 
-        // 5. Importar Cuotas
-        $this->info("\n--- PASO 3: Importando Cuotas ---");
-        $cuotaMap = $this->importarCuotas($sourcePdo, $ventaMap, $limit);
+        // 6. Sincronizar Créditos / Ventas
+        $this->info("\n--- PASO 4: Sincronizando Créditos (Terminales T e I) ---");
+        $ventaMap = $this->sincronizarCreditos($sourcePdo, $dniToClienteId, $autLookup, $presMap, $limit);
 
-        // 6. Importar Recibos y Detalles
-        $this->info("\n--- PASO 4: Importando Recibos de Cobranza ---");
-        $this->importarRecibos($sourcePdo, $dniToClienteId, $ventaMap, $cuotaMap, $limit);
+        // 7. Sincronizar Cuotas
+        $this->info("\n--- PASO 5: Sincronizando Cuotas y Estados de Cobro ---");
+        $cuotaMap = $this->sincronizarCuotas($sourcePdo, $ventaMap, $limit);
 
-        // 7. Ajustar correlativos finales
-        $this->info("\n--- PASO 5: Actualizando Correlativos e Índices ---");
+        // 8. Sincronizar Recibos y Detalles
+        $this->info("\n--- PASO 6: Sincronizando Recibos de Cobranza Históricos ---");
+        $this->sincronizarRecibos($sourcePdo, $dniToClienteId, $ventaMap, $cuotaMap, $limit);
+
+        // 9. Sincronizar Novedades de Clientes
+        $this->info("\n--- PASO 7: Sincronizando Novedades y Comentarios de Clientes ---");
+        $this->sincronizarNovedades($sourcePdo, $dniToClienteId);
+
+        // 10. Ajustar correlativos finales
+        $this->info("\n--- PASO 8: Actualizando Correlativos e Índices Finales ---");
         $this->actualizarCorrelativosFinales($sourcePdo);
 
         $elapsed = round(microtime(true) - $startTime, 2);
         $this->newLine();
         $this->info("==================================================================");
-        $this->info("   MIGRACIÓN DE TRELEW COMPLETADA CON ÉXITO EN {$elapsed} SEGUNDOS   ");
+        $this->info("   CONCILIACIÓN Y ACTUALIZACIÓN COMPLETADA CON ÉXITO EN {$elapsed}s   ");
         $this->info("==================================================================");
 
         return 0;
     }
 
     /**
-     * Asegura las presentaciones de Chubut (id_provincia = 1) del 1 al 106.
+     * Sincroniza las 320 localidades de Chubut evitando colisiones de ID con Ushuaia/TDF/CABA.
      */
-    protected function asegurarPresentacionesChubut(): void
+    protected function sincronizarLocalidadesChubut(PDO $pdo): array
     {
-        $existentes = DB::table('presentaciones')
-            ->where('id_provincia', 1)
-            ->pluck('numero')
-            ->toArray();
-
-        $nuevas = [];
+        $srcLocs = $pdo->query("SELECT * FROM localidades ORDER BY ID_LOC ASC")->fetchAll(PDO::FETCH_ASSOC);
         $now = now();
-        for ($num = 1; $num <= 106; $num++) {
-            if (!in_array($num, $existentes)) {
-                $nuevas[] = [
-                    'id_provincia'    => 1,
-                    'numero'          => $num,
-                    'fecha_inicio'    => $num == 105 ? '2026-09-24' : '2020-01-01',
-                    'fecha_fin'       => $num == 105 ? null : '2026-09-24',
-                    'interes_credito' => 0.06,
-                    'interes_mora'    => 0.06,
-                    'created_at'      => $now,
-                    'updated_at'      => $now,
-                ];
+        $locMapping = [];
+        $inserted = 0;
+        $updated = 0;
+
+        foreach ($srcLocs as $sl) {
+            $srcId = (int)$sl['ID_LOC'];
+            $targetId = $this->conflictMap[$srcId] ?? $srcId;
+            $locMapping[$srcId] = $targetId;
+
+            $nombre = mb_strtoupper(trim($sl['NOMBRE_LOC']), 'UTF-8');
+            $cp = !empty($sl['CP_LOC']) ? (string)$sl['CP_LOC'] : null;
+
+            $existing = DB::table('localidades')->where('id', $targetId)->first();
+            if (!$existing) {
+                DB::table('localidades')->insert([
+                    'id'            => $targetId,
+                    'id_provincia'  => 1, // Chubut
+                    'nombre'        => $nombre,
+                    'codigo_postal' => $cp,
+                    'created_at'    => $now,
+                    'updated_at'    => $now,
+                ]);
+                $inserted++;
+            } else {
+                if ($existing->id_provincia == 1) {
+                    DB::table('localidades')->where('id', $targetId)->update([
+                        'nombre'        => $nombre,
+                        'codigo_postal' => $cp,
+                        'updated_at'    => $now,
+                    ]);
+                    $updated++;
+                }
             }
         }
 
-        if (!empty($nuevas)) {
-            DB::table('presentaciones')->insert($nuevas);
-            $this->info("Se crearon " . count($nuevas) . " presentaciones para Chubut.");
+        $this->info("Localidades sincronizadas: {$inserted} creadas, {$updated} actualizadas.");
+        return $locMapping;
+    }
+
+    /**
+     * Sincroniza presentaciones de Chubut hasta la 125, fijando la 106 como activa.
+     */
+    protected function sincronizarPresentacionesChubut(PDO $pdo): array
+    {
+        $var = $pdo->query("SELECT * FROM variables WHERE ID = 1")->fetch(PDO::FETCH_ASSOC);
+        $presActualChubut = !empty($var['PRESENTACION']) ? (int)$var['PRESENTACION'] : 106;
+        $fechaPresActual = !empty($var['FECHA_PRES']) ? $var['FECHA_PRES'] : '2026-10-23';
+        $interes = !empty($var['INTERES']) ? (float)$var['INTERES'] : 0.06;
+        $interesMora = !empty($var['INTERES_MORA']) ? (float)$var['INTERES_MORA'] : 0.06;
+
+        $now = now();
+
+        // 1. Cerrar presentación 105 si no tiene fecha de fin
+        DB::table('presentaciones')
+            ->where('id_provincia', 1)
+            ->where('numero', 105)
+            ->whereNull('fecha_fin')
+            ->update([
+                'fecha_fin'  => $fechaPresActual,
+                'updated_at' => $now,
+            ]);
+
+        // 2. Crear o actualizar hasta presentación 125 para soportar vencimientos futuros de cuotas
+        $maxNum = max(125, $presActualChubut + 15);
+        $existentes = DB::table('presentaciones')
+            ->where('id_provincia', 1)
+            ->pluck('id', 'numero')
+            ->toArray();
+
+        for ($num = 1; $num <= $maxNum; $num++) {
+            if (!isset($existentes[$num])) {
+                $fIni = ($num === $presActualChubut) ? $fechaPresActual : '2020-01-01';
+                $fFin = ($num === $presActualChubut) ? null : '2026-10-23';
+
+                $id = DB::table('presentaciones')->insertGetId([
+                    'id_provincia'              => 1,
+                    'numero'                    => $num,
+                    'fecha_inicio'              => $fIni,
+                    'fecha_fin'                 => $fFin,
+                    'interes_credito'           => $interes,
+                    'interes_mora'              => $interesMora,
+                    'primera_cuota_sin_interes' => 1,
+                    'created_at'                => $now,
+                    'updated_at'                => $now,
+                ]);
+                $existentes[$num] = $id;
+            } elseif ($num === $presActualChubut) {
+                DB::table('presentaciones')
+                    ->where('id', $existentes[$num])
+                    ->update([
+                        'fecha_inicio'              => $fechaPresActual,
+                        'fecha_fin'                 => null,
+                        'interes_credito'           => $interes,
+                        'interes_mora'              => $interesMora,
+                        'primera_cuota_sin_interes' => 1,
+                        'updated_at'                => $now,
+                    ]);
+            }
         }
+
+        $this->info("Presentaciones de Chubut verificadas (Presentación activa: #{$presActualChubut} desde {$fechaPresActual}).");
+        return $existentes;
     }
 
     /**
@@ -138,174 +232,441 @@ class ImportTrelewDataCommand extends Command
         $term = strtoupper(trim($term));
         if ($term === 'RE' || $term === 'R') return 'R';
         if ($term === 'DE' || $term === 'D') return 'D';
-        return 'C'; // Tanto 'T' (Trelew) como 'I' (Interior) son tipo Crédito 'C'
+        return 'C'; // 'T' (Trelew) e 'I' (Interior) son tipo Crédito 'C'
     }
 
     /**
-     * Importa los clientes de lamarina.clientes y crea sus registros de autorizados.
+     * Concilia los clientes de Chubut con sus domicilios, teléfonos y localidades reales de contactos.
      */
-    protected function importarClientes(PDO $pdo, ?int $limit): array
+    protected function conciliarClientesChubut(PDO $pdo, array $locMapping, ?int $limit): array
     {
-        $countSql = "SELECT count(*) FROM clientes";
-        if ($limit) {
-            $total = $limit;
-        } else {
-            $total = (int)$pdo->query($countSql)->fetchColumn();
+        // 1. Precompilar contactos más recientes/completos por DNI
+        $this->info("Compilando agenda de contactos históricos...");
+        $contactosRaw = $pdo->query("
+            SELECT DNI, DOMICILIO, LOCALIDAD, TEL1, TEL2, MAIL, OBSERVACIONES 
+            FROM contactos 
+            ORDER BY ID_CONTACTO ASC
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+        $contactosMap = [];
+        foreach ($contactosRaw as $c) {
+            $dni = (string)$c['DNI'];
+            if (!isset($contactosMap[$dni])) {
+                $contactosMap[$dni] = [
+                    'domicilio' => null,
+                    'localidad' => null,
+                    'tel1' => null,
+                    'tel2' => null,
+                    'mail' => null,
+                    'obs' => null,
+                ];
+            }
+            $dom = trim($c['DOMICILIO'] ?? '');
+            if ($dom !== '') $contactosMap[$dni]['domicilio'] = $dom;
+
+            $loc = (int)($c['LOCALIDAD'] ?? 0);
+            if ($loc > 0) {
+                $contactosMap[$dni]['localidad'] = $locMapping[$loc] ?? $loc;
+            }
+
+            $t1 = trim($c['TEL1'] ?? '');
+            if ($t1 !== '') $contactosMap[$dni]['tel1'] = $t1;
+
+            $t2 = trim($c['TEL2'] ?? '');
+            if ($t2 !== '') $contactosMap[$dni]['tel2'] = $t2;
+
+            $m = trim($c['MAIL'] ?? '');
+            if ($m !== '') $contactosMap[$dni]['mail'] = $m;
+
+            $o = trim($c['OBSERVACIONES'] ?? '');
+            if ($o !== '') $contactosMap[$dni]['obs'] = $o;
         }
 
-        $this->info("Procesando {$total} clientes...");
-        $bar = $this->output->createProgressBar($total);
+        // 2. Precompilar telefonos_interior
+        $telIntRaw = $pdo->query("SELECT DNI, NOMBRE_LOC, TEL1, TEL2 FROM telefonos_interior")->fetchAll(PDO::FETCH_ASSOC);
+        $locNameToId = DB::table('localidades')
+            ->where('id_provincia', 1)
+            ->pluck('id', 'nombre')
+            ->toArray();
+
+        foreach ($telIntRaw as $ti) {
+            $dni = (string)$ti['DNI'];
+            if (!isset($contactosMap[$dni])) {
+                $contactosMap[$dni] = [
+                    'domicilio' => null,
+                    'localidad' => null,
+                    'tel1' => null,
+                    'tel2' => null,
+                    'mail' => null,
+                    'obs' => null,
+                ];
+            }
+            if (empty($contactosMap[$dni]['tel1']) && !empty(trim($ti['TEL1'] ?? ''))) {
+                $contactosMap[$dni]['tel1'] = trim($ti['TEL1']);
+            }
+            if (empty($contactosMap[$dni]['tel2']) && !empty(trim($ti['TEL2'] ?? ''))) {
+                $contactosMap[$dni]['tel2'] = trim($ti['TEL2']);
+            }
+            if (empty($contactosMap[$dni]['localidad']) && !empty(trim($ti['NOMBRE_LOC'] ?? ''))) {
+                $nom = mb_strtoupper(trim($ti['NOMBRE_LOC']), 'UTF-8');
+                if (isset($locNameToId[$nom])) {
+                    $contactosMap[$dni]['localidad'] = $locNameToId[$nom];
+                }
+            }
+        }
+
+        // 3. Procesar clientes
+        $totalClientes = (int)$pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
+        if ($limit) $totalClientes = min($totalClientes, $limit);
+
+        $this->info("Procesando {$totalClientes} clientes de Chubut...");
+        $bar = $this->output->createProgressBar($totalClientes);
         $bar->start();
 
-        $sql = "SELECT * FROM clientes ORDER BY DNI ASC";
-        if ($limit) {
-            $sql .= " LIMIT {$limit}";
-        }
+        // Indexar clientes existentes en v4 por DNI
+        $existingClients = DB::table('clientes')->pluck('id', 'dni')->toArray();
 
+        $sql = "SELECT * FROM clientes ORDER BY DNI ASC";
+        if ($limit) $sql .= " LIMIT {$limit}";
         $stmt = $pdo->query($sql);
+
         $now = now();
-        $chunkSize = 1000;
-        $batchClientes = [];
+        $batchInsert = [];
+        $actualizados = 0;
+        $insertados = 0;
 
         while ($row = $stmt->fetch()) {
-            $dni = (string)$row['DNI'];
-            $nombre = trim($row['RSOCIAL']) ?: ('CLIENTE DNI ' . $dni);
-            $sucursalId = (!empty($row['INTERIOR']) && $row['INTERIOR'] == 1) ? 4 : 3;
+            $dniInt = (int)$row['DNI'];
+            $dniStr = (string)$dniInt;
+            $nombre = trim($row['RSOCIAL']) ?: ('CLIENTE DNI ' . $dniStr);
+            $isInterior = (!empty($row['INTERIOR']) && $row['INTERIOR'] == 1);
+            $sucursalId = $isInterior ? 4 : 3;
 
-            $batchClientes[] = [
-                'id_sucursal'           => $sucursalId,
-                'id_localidad'          => 4, // Trelew
-                'nombre'                => $nombre,
-                'dni'                   => (int)$dni,
-                'cuit'                  => null,
-                'nro_cuenta'            => null,
-                'direccion'             => 'S/D',
-                'tel1'                  => 'S/T',
-                'saldo'                 => (float)$row['SALDO'],
-                'limite'                => (float)$row['LIMITE'] ?: 200000.00,
-                'suspendido'            => (bool)$row['SUSPENDIDO'],
-                'obs'                   => $row['OBSERVACIONES'] ?? null,
-                'cbu'                   => $row['CBU'] ?? null,
-                'medio_pago_preferido'  => (int)($row['MEDIO_PAGO'] ?? 1),
-                'tipo_haber'            => (int)($row['TIPO_HABER'] ?? 1),
-                'max_cuotas'            => (int)($row['MAX_CUOTAS'] ?? 3),
-                'created_at'            => $row['FECHA_ALTA'] ?: $now,
-                'updated_at'            => $row['FECHA_MODIF'] ?: $now,
-            ];
+            $cinfo = $contactosMap[$dniStr] ?? [];
+            $domicilio = !empty($cinfo['domicilio']) ? $cinfo['domicilio'] : 'S/D';
+            $tel1 = !empty($cinfo['tel1']) ? $cinfo['tel1'] : 'S/T';
+            $tel2 = !empty($cinfo['tel2']) ? $cinfo['tel2'] : null;
+            $email = !empty($cinfo['mail']) ? $cinfo['mail'] : null;
 
-            if (count($batchClientes) >= $chunkSize) {
-                DB::table('clientes')->insertOrIgnore($batchClientes);
-                $batchClientes = [];
+            // Determinar localidad:
+            $localidadId = $cinfo['localidad'] ?? null;
+            if (!$localidadId) {
+                // Default: Trelew (306)
+                $localidadId = 306;
+            }
+
+            // Datos del cliente
+            $saldo = (float)($row['SALDO'] ?? 0);
+            $limite = (float)($row['LIMITE'] ?? 0) ?: 200000.00;
+            $suspendido = (bool)($row['SUSPENDIDO'] ?? false);
+            $obs = !empty($row['OBSERVACIONES']) ? $row['OBSERVACIONES'] : ($cinfo['obs'] ?? null);
+            $cbu = $row['CBU'] ?? null;
+            $medioPago = (int)($row['MEDIO_PAGO'] ?? 1);
+            $tipoHaber = (int)($row['TIPO_HABER'] ?? 1);
+            $maxCuotas = (int)($row['MAX_CUOTAS'] ?? 3);
+            $fechaAlta = !empty($row['FECHA_ALTA']) && $row['FECHA_ALTA'] !== '0000-00-00 00:00:00' ? $row['FECHA_ALTA'] : $now;
+            $fechaModif = !empty($row['FECHA_MODIF']) && $row['FECHA_MODIF'] !== '0000-00-00 00:00:00' ? $row['FECHA_MODIF'] : $now;
+
+            if (isset($existingClients[$dniInt])) {
+                // Actualizar cliente existente (corrigiendo id_localidad, direccion, telefonos, saldo y límites)
+                DB::table('clientes')
+                    ->where('id', $existingClients[$dniInt])
+                    ->update([
+                        'id_sucursal'          => $sucursalId,
+                        'id_localidad'         => $localidadId,
+                        'nombre'               => $nombre,
+                        'direccion'            => $domicilio,
+                        'tel1'                 => $tel1,
+                        'tel2'                 => $tel2,
+                        'email'                => $email,
+                        'saldo'                => $saldo,
+                        'limite'               => $limite,
+                        'suspendido'           => $suspendido,
+                        'obs'                  => $obs,
+                        'cbu'                  => $cbu,
+                        'medio_pago_preferido' => $medioPago,
+                        'tipo_haber'           => $tipoHaber,
+                        'max_cuotas'           => $maxCuotas,
+                        'updated_at'           => $fechaModif,
+                    ]);
+                $actualizados++;
+            } else {
+                $batchInsert[] = [
+                    'id_sucursal'          => $sucursalId,
+                    'id_localidad'         => $localidadId,
+                    'nombre'               => $nombre,
+                    'dni'                  => $dniInt,
+                    'cuit'                 => null,
+                    'nro_cuenta'           => null,
+                    'direccion'            => $domicilio,
+                    'tel1'                 => $tel1,
+                    'tel2'                 => $tel2,
+                    'email'                => $email,
+                    'saldo'                => $saldo,
+                    'saldo_a_favor'        => 0.00,
+                    'limite'               => $limite,
+                    'max_cuotas'           => $maxCuotas,
+                    'suspendido'           => $suspendido,
+                    'obs'                  => $obs,
+                    'cbu'                  => $cbu,
+                    'medio_pago_preferido' => $medioPago,
+                    'tipo_haber'           => $tipoHaber,
+                    'created_at'           => $fechaAlta,
+                    'updated_at'           => $fechaModif,
+                ];
+                $insertados++;
+
+                if (count($batchInsert) >= 500) {
+                    DB::table('clientes')->insert($batchInsert);
+                    $batchInsert = [];
+                }
             }
 
             $bar->advance();
         }
 
-        if (!empty($batchClientes)) {
-            DB::table('clientes')->insertOrIgnore($batchClientes);
+        if (!empty($batchInsert)) {
+            DB::table('clientes')->insert($batchInsert);
         }
 
         $bar->finish();
         $this->newLine();
+        $this->info("Clientes: {$actualizados} actualizados con su localidad y domicilio real, {$insertados} nuevos insertados.");
 
-        // Obtener mapa de DNI -> ID
-        $dniToId = DB::table('clientes')->pluck('id', 'dni')->toArray();
-
-        // Crear titular en cliente_autorizados para los clientes que no tengan
-        $this->info("Verificando registros de autorizados titulares...");
-        $autorizadosExistentes = DB::table('cliente_autorizados')->pluck('id_titular')->flip()->toArray();
-
-        $autorizadosBatch = [];
-        foreach ($dniToId as $dni => $id) {
-            if (!isset($autorizadosExistentes[$id])) {
-                $autorizadosBatch[] = [
-                    'id_titular'    => $id,
-                    'id_autorizado' => $id,
-                    'relacion_aut'  => 'Titular',
-                    'created_at'    => $now,
-                    'updated_at'    => $now,
-                ];
-
-                if (count($autorizadosBatch) >= $chunkSize) {
-                    DB::table('cliente_autorizados')->insert($autorizadosBatch);
-                    $autorizadosBatch = [];
-                }
-            }
-        }
-        if (!empty($autorizadosBatch)) {
-            DB::table('cliente_autorizados')->insert($autorizadosBatch);
-        }
-
-        $this->info("Clientes disponibles en base: " . count($dniToId));
-        return $dniToId;
+        return DB::table('clientes')->pluck('id', 'dni')->toArray();
     }
 
     /**
-     * Importa las ventas de lamarina.ventas como créditos.
+     * Sincroniza los autorizados (titulares y familiares adicionales).
      */
-    protected function importarCreditos(PDO $pdo, array $dniToClienteId, int $presChubutDefaultId, ?int $limit): array
+    protected function sincronizarAutorizados(PDO $pdo, array $dniToClienteId): array
     {
-        $countSql = "SELECT count(*) FROM ventas";
-        if ($limit) {
-            $total = $limit;
-        } else {
-            $total = (int)$pdo->query($countSql)->fetchColumn();
+        $now = now();
+
+        // 1. Indexar todos los pares (id_titular, id_autorizado) existentes para no violar la clave única
+        $this->info("Verificando registros en cliente_autorizados...");
+        $existentesRows = DB::table('cliente_autorizados')->select('id', 'id_titular', 'id_autorizado')->get();
+        $existentesPares = [];
+        foreach ($existentesRows as $er) {
+            $existentesPares[$er->id_titular . '_' . $er->id_autorizado] = $er->id;
         }
 
-        $this->info("Procesando {$total} créditos / ventas...");
-        $bar = $this->output->createProgressBar($total);
+        // 2. Asegurar titular (self) para cada cliente
+        $batchSelf = [];
+        $nuevosTitulares = 0;
+        foreach ($dniToClienteId as $dni => $clienteId) {
+            $key = $clienteId . '_' . $clienteId;
+            if (!isset($existentesPares[$key])) {
+                $batchSelf[] = [
+                    'id_titular'       => $clienteId,
+                    'id_autorizado'    => $clienteId,
+                    'relacion_aut'     => 'Titular',
+                    'fecha_autorizado' => null,
+                    'limite_aut'       => null,
+                    'created_at'       => $now,
+                    'updated_at'       => $now,
+                ];
+                $existentesPares[$key] = true;
+                $nuevosTitulares++;
+
+                if (count($batchSelf) >= 500) {
+                    DB::table('cliente_autorizados')->insertOrIgnore($batchSelf);
+                    $batchSelf = [];
+                }
+            }
+        }
+        if (!empty($batchSelf)) {
+            DB::table('cliente_autorizados')->insertOrIgnore($batchSelf);
+        }
+        $this->info("Titulares autorizados asegurados ({$nuevosTitulares} nuevos).");
+
+        // 3. Importar autorizados/adicionales de lamarina.autorizados
+        $this->info("Importando autorizados y adicionales familiares...");
+        $autSrc = $pdo->query("SELECT * FROM autorizados ORDER BY ID_AUTORIZACION ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+        $batchAdic = [];
+        $nuevosAdic = 0;
+        foreach ($autSrc as $a) {
+            $dniTitular = (int)$a['DNI_TITULAR'];
+            $dniAut = (int)$a['DNI_AUTORIZADO'];
+
+            $titularId = $dniToClienteId[$dniTitular] ?? null;
+            if (!$titularId) continue;
+
+            $autId = $dniToClienteId[$dniAut] ?? null;
+            if (!$autId) {
+                // Si el DNI autorizado no está como cliente titular, crear registro base
+                $autId = DB::table('clientes')->insertGetId([
+                    'id_sucursal'          => 3,
+                    'id_localidad'         => 306,
+                    'nombre'               => 'AUTORIZADO DNI ' . $dniAut,
+                    'dni'                  => $dniAut,
+                    'cuit'                 => null,
+                    'nro_cuenta'           => null,
+                    'direccion'            => 'S/D',
+                    'tel1'                 => 'S/T',
+                    'saldo'                => 0.00,
+                    'saldo_a_favor'        => 0.00,
+                    'limite'               => 0.00,
+                    'max_cuotas'           => 3,
+                    'suspendido'           => 0,
+                    'created_at'           => $now,
+                    'updated_at'           => $now,
+                ]);
+                $dniToClienteId[$dniAut] = $autId;
+            }
+
+            $key = $titularId . '_' . $autId;
+            if (!isset($existentesPares[$key])) {
+                $relacion = trim($a['RELACION_AUT'] ?? '') ?: 'Familiar';
+                $fechaAut = !empty($a['FECHA_AUTORIZADO']) && $a['FECHA_AUTORIZADO'] !== '0000-00-00' ? $a['FECHA_AUTORIZADO'] : null;
+                $limiteAut = (float)($a['LIMITE_AUT'] ?? 0) ?: 50000.00;
+
+                $batchAdic[] = [
+                    'id_titular'       => $titularId,
+                    'id_autorizado'    => $autId,
+                    'relacion_aut'     => $relacion,
+                    'fecha_autorizado' => $fechaAut,
+                    'limite_aut'       => $limiteAut,
+                    'created_at'       => $fechaAut ?: $now,
+                    'updated_at'       => $fechaAut ?: $now,
+                ];
+                $existentesPares[$key] = true;
+                $nuevosAdic++;
+
+                if (count($batchAdic) >= 500) {
+                    DB::table('cliente_autorizados')->insertOrIgnore($batchAdic);
+                    $batchAdic = [];
+                }
+            }
+        }
+
+        if (!empty($batchAdic)) {
+            DB::table('cliente_autorizados')->insertOrIgnore($batchAdic);
+        }
+
+        $this->info("Autorizados adicionales sincronizados: {$nuevosAdic} nuevos.");
+
+        // Crear mapa para resolución rápida al importar ventas
+        $todosAut = DB::table('cliente_autorizados')
+            ->join('clientes as t', 'cliente_autorizados.id_titular', '=', 't.id')
+            ->leftJoin('clientes as a', 'cliente_autorizados.id_autorizado', '=', 'a.id')
+            ->select('cliente_autorizados.id', 't.dni as dni_titular', 'a.dni as dni_autorizado', 'cliente_autorizados.relacion_aut')
+            ->get();
+
+        $autLookup = [];
+        foreach ($todosAut as $ta) {
+            $autLookup[$ta->dni_titular . '_' . $ta->dni_autorizado] = $ta->id;
+            if ($ta->relacion_aut === 'Titular') {
+                $autLookup[$ta->dni_titular . '_0'] = $ta->id;
+            }
+        }
+
+        return $autLookup;
+    }
+
+    /**
+     * Sincroniza las ventas de lamarina.ventas hacia creditos.
+     */
+    protected function sincronizarCreditos(PDO $pdo, array $dniToClienteId, array $autLookup, array $presMap, ?int $limit): array
+    {
+        $totalVentas = (int)$pdo->query("SELECT COUNT(*) FROM ventas")->fetchColumn();
+        if ($limit) $totalVentas = min($totalVentas, $limit);
+
+        $this->info("Indexando créditos existentes en sucursales 3 y 4...");
+        $creditosDb = DB::table('creditos')
+            ->whereIn('id_sucursal', [3, 4])
+            ->select('id', 'id_sucursal', 'tipo_credito', 'credito', 'fecha_cancelacion')
+            ->get();
+
+        $ventaMap = [];
+        $canceladosMap = [];
+        foreach ($creditosDb as $c) {
+            $termKey = ($c->id_sucursal == 4) ? 'I' : 'T';
+            $ventaMap[$termKey . '_' . $c->credito] = $c->id;
+            $canceladosMap[$termKey . '_' . $c->credito] = $c->fecha_cancelacion;
+        }
+
+        $this->info("Créditos preexistentes en base: " . count($ventaMap));
+        $this->info("Procesando {$totalVentas} créditos de origen...");
+
+        $bar = $this->output->createProgressBar($totalVentas);
         $bar->start();
 
         $sql = "SELECT * FROM ventas ORDER BY ID_VENTA ASC";
-        if ($limit) {
-            $sql .= " LIMIT {$limit}";
-        }
-
+        if ($limit) $sql .= " LIMIT {$limit}";
         $stmt = $pdo->query($sql);
-        $chunkSize = 2000;
-        $batch = [];
-        $now = now();
 
-        $autMap = DB::table('cliente_autorizados')
-            ->where('relacion_aut', 'Titular')
-            ->pluck('id', 'id_titular')
-            ->toArray();
+        $now = now();
+        $batch = [];
+        $chunkSize = 1000;
+        $insertados = 0;
+        $actualizados = 0;
+
+        $defaultPresId = $presMap[105] ?? ($presMap[106] ?? 208);
 
         while ($row = $stmt->fetch()) {
+            $rawTerm = trim($row['TERMINAL'] ?: 'T');
+            $idVenta = (string)((int)$row['ID_VENTA']);
+            $key = $rawTerm . '_' . $idVenta;
+
+            $fechaBaja = (!empty($row['FECHA_BAJA']) && $row['FECHA_BAJA'] !== '0000-00-00 00:00:00') 
+                ? date('Y-m-d', strtotime($row['FECHA_BAJA'])) 
+                : null;
+
+            // Si ya existe, verificar si requiere actualizar fecha de cancelación
+            if (isset($ventaMap[$key])) {
+                $idCred = $ventaMap[$key];
+                if ($fechaBaja && empty($canceladosMap[$key])) {
+                    DB::table('creditos')->where('id', $idCred)->update(['fecha_cancelacion' => $fechaBaja]);
+                    $canceladosMap[$key] = $fechaBaja;
+                    $actualizados++;
+                }
+                $bar->advance();
+                continue;
+            }
+
             $dni = (string)$row['DNI'];
             $clienteId = $dniToClienteId[$dni] ?? null;
-
             if (!$clienteId) {
                 $bar->advance();
                 continue;
             }
 
-            $autId = $autMap[$clienteId] ?? $clienteId;
-            $rawTerm = trim($row['TERMINAL']) ?: 'T';
-            $tipoCredito = $this->normalizarTipoCredito($rawTerm);
             $sucursalId = (strtoupper($rawTerm) === 'I') ? 4 : 3;
-            $idVenta = (int)$row['ID_VENTA'];
+            $tipoCredito = $this->normalizarTipoCredito($rawTerm);
 
-            $fechaCredito = $row['FECHA_COMPRA'] ? date('Y-m-d', strtotime($row['FECHA_COMPRA'])) : date('Y-m-d');
-            $fechaCancelacion = (!empty($row['FECHA_BAJA']) && $row['FECHA_BAJA'] !== '0000-00-00 00:00:00') 
-                ? date('Y-m-d', strtotime($row['FECHA_BAJA'])) 
-                : null;
+            // Autorizado
+            $dniAut = (int)($row['AUTORIZADO'] ?? 0);
+            $autId = $autLookup[$dni . '_' . $dniAut] ?? ($autLookup[$dni . '_0'] ?? null);
+
+            // Presentación
+            $fechaCredito = !empty($row['FECHA_COMPRA']) && $row['FECHA_COMPRA'] !== '0000-00-00 00:00:00'
+                ? date('Y-m-d', strtotime($row['FECHA_COMPRA']))
+                : date('Y-m-d');
+
+            if ($fechaCredito >= '2026-10-23' && isset($presMap[106])) {
+                $idPresentacion = $presMap[106];
+            } else {
+                $idPresentacion = $defaultPresId;
+            }
 
             $batch[] = [
                 'id_cliente'        => $clienteId,
                 'id_sucursal'       => $sucursalId,
                 'id_autorizado'     => $autId,
-                'id_presentacion'   => $presChubutDefaultId,
-                'credito'           => (string)$idVenta,
+                'id_presentacion'   => $idPresentacion,
+                'credito'           => $idVenta,
                 'tipo_credito'      => $tipoCredito,
                 'importe_original'  => (float)$row['IMPORTE'],
                 'cantidad_cuotas'   => (int)$row['CANTIDAD_CUOTAS'],
                 'valor_cuota_ref'   => (float)$row['VALOR_CUOTA'],
                 'fecha_credito'     => $fechaCredito,
-                'fecha_cancelacion' => $fechaCancelacion,
+                'fecha_cancelacion' => $fechaBaja,
                 'created_at'        => $row['FECHA_COMPRA'] ?: $now,
                 'updated_at'        => $row['FECHA_BAJA'] ?: $row['FECHA_COMPRA'] ?: $now,
             ];
+            $insertados++;
 
             if (count($batch) >= $chunkSize) {
                 DB::table('creditos')->insert($batch);
@@ -321,85 +682,121 @@ class ImportTrelewDataCommand extends Command
 
         $bar->finish();
         $this->newLine();
+        $this->info("Créditos: {$insertados} nuevos insertados, {$actualizados} actualizados con fecha de cancelación.");
 
-        // Generar mapa en memoria de clave 'TERMINAL_IDVENTA' => id_credito
-        $this->info("Indexando mapa de créditos en memoria...");
-        $creditosDb = DB::table('creditos')
+        // Reconstruir mapa de créditos completo
+        $creditosFinal = DB::table('creditos')
+            ->whereIn('id_sucursal', [3, 4])
             ->select('id', 'id_sucursal', 'tipo_credito', 'credito')
             ->get();
 
-        $ventaMap = [];
-        foreach ($creditosDb as $c) {
-            if ($c->tipo_credito === 'C') {
-                $termKey = ($c->id_sucursal == 4) ? 'I' : 'T';
-                $ventaMap[$termKey . '_' . $c->credito] = $c->id;
-            } elseif ($c->tipo_credito === 'R') {
-                $ventaMap['RE_' . $c->credito] = $c->id;
-                $ventaMap['R_' . $c->credito] = $c->id;
-            } elseif ($c->tipo_credito === 'D') {
-                $ventaMap['DE_' . $c->credito] = $c->id;
-                $ventaMap['D_' . $c->credito] = $c->id;
-            }
+        $ventaMapFinal = [];
+        foreach ($creditosFinal as $c) {
+            $termKey = ($c->id_sucursal == 4) ? 'I' : 'T';
+            $ventaMapFinal[$termKey . '_' . $c->credito] = $c->id;
         }
 
-        $this->info("Créditos importados y mapeados: " . count($creditosDb));
-        return $ventaMap;
+        return $ventaMapFinal;
     }
 
     /**
-     * Importa las cuotas de lamarina.cuotas vinculándolas a sus créditos.
+     * Sincroniza las cuotas de lamarina.cuotas.
      */
-    protected function importarCuotas(PDO $pdo, array $ventaMap, ?int $limit): array
+    protected function sincronizarCuotas(PDO $pdo, array $ventaMap, ?int $limit): array
     {
-        $countSql = "SELECT count(*) FROM cuotas";
-        if ($limit) {
-            $total = $limit;
-        } else {
-            $total = (int)$pdo->query($countSql)->fetchColumn();
+        $totalCuotas = (int)$pdo->query("SELECT COUNT(*) FROM cuotas")->fetchColumn();
+        if ($limit) $totalCuotas = min($totalCuotas, $limit);
+
+        $this->info("Indexando cuotas existentes en base local...");
+        $cuotasDb = DB::table('cuotas')
+            ->join('creditos', 'cuotas.id_credito', '=', 'creditos.id')
+            ->whereIn('creditos.id_sucursal', [3, 4])
+            ->select('cuotas.id', 'creditos.id_sucursal', 'creditos.credito', 'cuotas.num_cuota', 'cuotas.saldo_actual', 'cuotas.entrego', 'cuotas.fecha_cobro')
+            ->get();
+
+        $cuotaMap = [];
+        $cuotaState = [];
+        foreach ($cuotasDb as $cu) {
+            $termKey = ($cu->id_sucursal == 4) ? 'I' : 'T';
+            $key = $termKey . '_' . $cu->credito . '_' . $cu->num_cuota;
+            $cuotaMap[$key] = $cu->id;
+            $cuotaState[$key] = [
+                'saldo' => (float)$cu->saldo_actual,
+                'entrego' => (float)$cu->entrego,
+                'fecha_cobro' => $cu->fecha_cobro,
+            ];
         }
 
-        $this->info("Procesando {$total} cuotas...");
-        $bar = $this->output->createProgressBar($total);
+        $this->info("Cuotas preexistentes indexadas: " . count($cuotaMap));
+        $this->info("Procesando {$totalCuotas} cuotas de origen...");
+
+        $bar = $this->output->createProgressBar($totalCuotas);
         $bar->start();
 
         $sql = "SELECT * FROM cuotas ORDER BY ID_VENTA ASC, CUOTA ASC";
-        if ($limit) {
-            $sql .= " LIMIT {$limit}";
-        }
-
+        if ($limit) $sql .= " LIMIT {$limit}";
         $stmt = $pdo->query($sql);
-        $chunkSize = 3000;
-        $batch = [];
+
         $now = now();
+        $batch = [];
+        $chunkSize = 2000;
+        $insertadas = 0;
+        $actualizadas = 0;
 
         while ($row = $stmt->fetch()) {
-            $term = trim($row['TERMINAL']) ?: 'T';
-            $idVenta = (int)$row['ID_VENTA'];
-            $key = $term . '_' . $idVenta;
+            $term = trim($row['TERMINAL'] ?: 'T');
+            $idVenta = (string)((int)$row['ID_VENTA']);
+            $numCuota = (int)$row['CUOTA'];
+            $key = $term . '_' . $idVenta . '_' . $numCuota;
 
-            $creditoId = $ventaMap[$key] ?? null;
+            $creditoId = $ventaMap[$term . '_' . $idVenta] ?? null;
             if (!$creditoId) {
                 $bar->advance();
                 continue;
             }
 
-            $numCuota = (int)$row['CUOTA'];
-            $fechaCobro = (!empty($row['FECHA_COBRO']) && $row['FECHA_COBRO'] !== '0000-00-00 00:00:00') 
-                ? date('Y-m-d', strtotime($row['FECHA_COBRO'])) 
+            $saldoActual = (float)$row['A_PAGAR'];
+            $entrego = (float)$row['ENTREGO'];
+            $fechaCobro = (!empty($row['FECHA_COBRO']) && $row['FECHA_COBRO'] !== '0000-00-00 00:00:00')
+                ? date('Y-m-d', strtotime($row['FECHA_COBRO']))
                 : null;
+            $medioPago = $row['MEDIO_PAGO'] ?: null;
+            $bancoEnvio = $row['BANCO_ENVIO'] ?: null;
+
+            if (isset($cuotaMap[$key])) {
+                $idCuota = $cuotaMap[$key];
+                $st = $cuotaState[$key];
+
+                // Verificar si hubo pago o cambio de saldo
+                if (abs($st['saldo'] - $saldoActual) > 0.01 || abs($st['entrego'] - $entrego) > 0.01 || $st['fecha_cobro'] !== $fechaCobro) {
+                    DB::table('cuotas')->where('id', $idCuota)->update([
+                        'saldo_actual' => $saldoActual,
+                        'entrego'      => $entrego,
+                        'fecha_cobro'  => $fechaCobro,
+                        'medio_pago'   => $medioPago,
+                        'banco_envio'  => $bancoEnvio,
+                        'updated_at'   => $fechaCobro ?: $now,
+                    ]);
+                    $actualizadas++;
+                }
+                $bar->advance();
+                continue;
+            }
 
             $batch[] = [
                 'id_credito'        => $creditoId,
                 'num_cuota'         => $numCuota,
                 'valor_base'        => (float)$row['VALOR_CUOTA'],
                 'intereses'         => (float)$row['INTERESES'],
-                'entrego'           => (float)$row['ENTREGO'],
-                'saldo_actual'      => (float)$row['A_PAGAR'],
+                'entrego'           => $entrego,
+                'saldo_actual'      => $saldoActual,
                 'fecha_cobro'       => $fechaCobro,
-                'medio_pago'        => $row['MEDIO_PAGO'] ?: null,
+                'medio_pago'        => $medioPago,
+                'banco_envio'       => $bancoEnvio,
                 'created_at'        => $now,
                 'updated_at'        => $fechaCobro ?: $now,
             ];
+            $insertadas++;
 
             if (count($batch) >= $chunkSize) {
                 DB::table('cuotas')->insert($batch);
@@ -415,58 +812,59 @@ class ImportTrelewDataCommand extends Command
 
         $bar->finish();
         $this->newLine();
+        $this->info("Cuotas: {$insertadas} nuevas insertadas, {$actualizadas} actualizadas.");
 
-        // Indexar mapa de cuotas 'TERMINAL_IDVENTA_NUMCUOTA' => id_cuota
-        $this->info("Indexando mapa de cuotas en memoria...");
-        $cuotasDb = DB::table('cuotas')
+        // Recargar mapa final de cuotas
+        $cuotasFinal = DB::table('cuotas')
             ->join('creditos', 'cuotas.id_credito', '=', 'creditos.id')
-            ->select('cuotas.id as cuota_id', 'creditos.id_sucursal', 'creditos.tipo_credito', 'creditos.credito', 'cuotas.num_cuota')
+            ->whereIn('creditos.id_sucursal', [3, 4])
+            ->select('cuotas.id', 'creditos.id_sucursal', 'creditos.credito', 'cuotas.num_cuota')
             ->get();
 
-        $cuotaMap = [];
-        foreach ($cuotasDb as $cu) {
-            if ($cu->tipo_credito === 'C') {
-                $termKey = ($cu->id_sucursal == 4) ? 'I' : 'T';
-                $cuotaMap[$termKey . '_' . $cu->credito . '_' . $cu->num_cuota] = $cu->cuota_id;
-            } elseif ($cu->tipo_credito === 'R') {
-                $cuotaMap['RE_' . $cu->credito . '_' . $cu->num_cuota] = $cu->cuota_id;
-                $cuotaMap['R_' . $cu->credito . '_' . $cu->num_cuota] = $cu->cuota_id;
-            } elseif ($cu->tipo_credito === 'D') {
-                $cuotaMap['DE_' . $cu->credito . '_' . $cu->num_cuota] = $cu->cuota_id;
-                $cuotaMap['D_' . $cu->credito . '_' . $cu->num_cuota] = $cu->cuota_id;
-            }
+        $cuotaMapFinal = [];
+        foreach ($cuotasFinal as $cu) {
+            $termKey = ($cu->id_sucursal == 4) ? 'I' : 'T';
+            $cuotaMapFinal[$termKey . '_' . $cu->credito . '_' . $cu->num_cuota] = $cu->id;
         }
 
-        $this->info("Cuotas importadas y mapeadas: " . count($cuotaMap));
-        return $cuotaMap;
+        return $cuotaMapFinal;
     }
 
     /**
-     * Importa los recibos de lamarina.recibos agrupados por ID_RECIBO.
+     * Sincroniza los recibos faltantes de lamarina.recibos hacia recibos y recibo_detalles.
      */
-    protected function importarRecibos(PDO $pdo, array $dniToClienteId, array $ventaMap, array $cuotaMap, ?int $limit): void
+    protected function sincronizarRecibos(PDO $pdo, array $dniToClienteId, array $ventaMap, array $cuotaMap, ?int $limit): void
     {
-        $sql = "SELECT * FROM recibos ORDER BY ID_RECIBO ASC, subID ASC";
-        if ($limit) {
-            $sql .= " LIMIT {$limit}";
-        }
+        // 1. Obtener recibos existentes en v4
+        $recibosExistentes = DB::table('recibos')
+            ->whereIn('id_sucursal', [3, 4])
+            ->pluck('id', 'numero_recibo')
+            ->toArray();
 
-        $stmt = $pdo->query($sql);
-        $rows = $stmt->fetchAll();
-        $totalRows = count($rows);
-        $this->info("Procesando {$totalRows} renglones de recibos...");
+        $this->info("Recibos preexistentes en base: " . count($recibosExistentes));
+
+        $sql = "SELECT * FROM recibos ORDER BY ID_RECIBO ASC, subID ASC";
+        if ($limit) $sql .= " LIMIT {$limit}";
+        $rows = $pdo->query($sql)->fetchAll();
 
         // Agrupar por ID_RECIBO
         $recibosGrouped = [];
         foreach ($rows as $r) {
             $idRecibo = (int)$r['ID_RECIBO'];
-            $recibosGrouped[$idRecibo][] = $r;
+            if (!isset($recibosExistentes[$idRecibo])) {
+                $recibosGrouped[$idRecibo][] = $r;
+            }
         }
 
-        $totalRecibos = count($recibosGrouped);
-        $this->info("Total de recibos únicos a emitir: {$totalRecibos}...");
+        $totalNuevos = count($recibosGrouped);
+        $this->info("Total de recibos nuevos a emitir: {$totalNuevos}...");
 
-        $bar = $this->output->createProgressBar($totalRecibos);
+        if ($totalNuevos === 0) {
+            $this->info("Todos los recibos ya estaban sincronizados.");
+            return;
+        }
+
+        $bar = $this->output->createProgressBar($totalNuevos);
         $bar->start();
 
         $batchDetalles = [];
@@ -475,14 +873,9 @@ class ImportTrelewDataCommand extends Command
         foreach ($recibosGrouped as $numeroRecibo => $items) {
             $first = $items[0];
             $dni = (string)$first['DNI_RECIBO'];
-            $clienteId = $dniToClienteId[$dni] ?? null;
-
-            if (!$clienteId) {
-                $clienteId = 1;
-            }
+            $clienteId = $dniToClienteId[$dni] ?? 1;
 
             $rawTerm = trim($first['TERMINAL_REC'] ?? 'T');
-            $tipoCredito = $this->normalizarTipoCredito($rawTerm);
             $sucursalId = (strtoupper($rawTerm) === 'I') ? 4 : 3;
 
             $totalCobrado = 0;
@@ -501,12 +894,12 @@ class ImportTrelewDataCommand extends Command
             $reciboId = DB::table('recibos')->insertGetId([
                 'id_sucursal'   => $sucursalId,
                 'id_cliente'    => $clienteId,
-                'id_user'       => 1, // Superusuario / Administrador
+                'id_user'       => 1, // Superusuario
                 'numero_recibo' => $numeroRecibo,
                 'fecha'         => $fechaRec,
                 'importe_total' => $totalCobrado,
                 'medio_pago'    => $medioPago,
-                'observaciones' => "Migración histórica recibo Trelew #{$numeroRecibo}",
+                'observaciones' => "Migración histórica recibo Chubut #{$numeroRecibo}",
                 'anulado'       => false,
                 'created_at'    => $fechaRec,
                 'updated_at'    => $fechaRec,
@@ -515,7 +908,7 @@ class ImportTrelewDataCommand extends Command
             // Insertar renglones detalles
             foreach ($items as $it) {
                 $term = trim($it['TERMINAL_REC'] ?? 'T');
-                $idVenta = (int)$it['ID_VENTA_REC'];
+                $idVenta = (string)((int)$it['ID_VENTA_REC']);
                 $numCuota = (int)$it['CUOTA_REC'];
 
                 $creditoId = $ventaMap[$term . '_' . $idVenta] ?? null;
@@ -535,7 +928,7 @@ class ImportTrelewDataCommand extends Command
                     'updated_at'     => $fechaRec,
                 ];
 
-                if (count($batchDetalles) >= 2000) {
+                if (count($batchDetalles) >= 1000) {
                     DB::table('recibo_detalles')->insert($batchDetalles);
                     $batchDetalles = [];
                 }
@@ -550,7 +943,67 @@ class ImportTrelewDataCommand extends Command
 
         $bar->finish();
         $this->newLine();
-        $this->info("Recibos importados con éxito.");
+        $this->info("Recibos nuevos importados con éxito.");
+    }
+
+    /**
+     * Sincroniza las novedades de clientes de lamarina.novedades hacia cliente_novedades.
+     */
+    protected function sincronizarNovedades(PDO $pdo, array $dniToClienteId): void
+    {
+        $totalNov = (int)$pdo->query("SELECT COUNT(*) FROM novedades")->fetchColumn();
+        $this->info("Total novedades en origen: {$totalNov}...");
+
+        $existentesCount = DB::table('cliente_novedades')
+            ->where('origen_accion', 'historico_chubut')
+            ->count();
+
+        if ($existentesCount >= $totalNov) {
+            $this->info("Novedades de Chubut ya sincronizadas ({$existentesCount} registros).");
+            return;
+        }
+
+        $stmt = $pdo->query("SELECT * FROM novedades ORDER BY ID_NOVEDAD ASC");
+        $batch = [];
+        $now = now();
+        $insertadas = 0;
+
+        while ($r = $stmt->fetch()) {
+            $dni = (string)$r['DNI_NOVEDAD'];
+            $clienteId = $dniToClienteId[$dni] ?? null;
+            if (!$clienteId) continue;
+
+            $fecha = !empty($r['FECHA']) && $r['FECHA'] !== '0000-00-00 00:00:00' ? $r['FECHA'] : $now;
+            $mensaje = trim($r['NOVEDAD'] ?? '');
+            if ($mensaje === '') continue;
+
+            $tipo = (int)($r['TIPO_NOVEDAD'] ?? 1);
+            $metodo = trim($r['METODO'] ?? '') ?: 'SISTEMA';
+
+            $batch[] = [
+                'id_cliente'     => $clienteId,
+                'user_id'        => 1,
+                'usuario_nombre' => 'Sistema Chubut',
+                'mensaje'        => $mensaje,
+                'origen_accion'  => 'historico_chubut',
+                'tipo'           => $tipo,
+                'metodo'         => $metodo,
+                'created_at'     => $fecha,
+                'updated_at'     => $fecha,
+            ];
+            $insertadas++;
+
+            if (count($batch) >= 1000) {
+                DB::table('cliente_novedades')->insert($batch);
+                $batch = [];
+            }
+        }
+
+        if (!empty($batch)) {
+            DB::table('cliente_novedades')->insert($batch);
+        }
+
+        $this->info("Novedades sincronizadas: {$insertadas} insertadas en el historial de clientes.");
     }
 
     /**
@@ -558,13 +1011,18 @@ class ImportTrelewDataCommand extends Command
      */
     protected function actualizarCorrelativosFinales(PDO $pdo): void
     {
+        // 1. Último recibo
         $maxRecibo = (int) $pdo->query("SELECT MAX(ID_RECIBO) FROM recibos")->fetchColumn();
-        if ($maxRecibo > 0) {
-            DB::table('sucursales')->where('id', 3)->update(['ultimo_recibo' => $maxRecibo]);
-            $this->info("Sucursal Trelew Centro (id 3): correlativo de último recibo fijado en #{$maxRecibo}.");
+        $var = $pdo->query("SELECT N_RECIBO FROM variables WHERE ID = 1")->fetch(PDO::FETCH_ASSOC);
+        $reciboVar = (int)($var['N_RECIBO'] ?? 0);
+        $reciboDefinitivo = max($maxRecibo, $reciboVar);
+
+        if ($reciboDefinitivo > 0) {
+            DB::table('sucursales')->where('id', 3)->update(['ultimo_recibo' => $reciboDefinitivo]);
+            $this->info("Sucursal Trelew Centro (id 3): correlativo de último recibo fijado en #{$reciboDefinitivo}.");
         }
 
-        // Actualizar terminales en sucursal_indices
+        // 2. Terminales e índices
         $terms = $pdo->query("SELECT * FROM terminales")->fetchAll();
         foreach ($terms as $t) {
             $idTerm = trim($t['ID_TERMINAL']);

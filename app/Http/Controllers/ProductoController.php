@@ -52,17 +52,30 @@ class ProductoController extends Controller
 
         $query = Producto::with(['categoria', 'subcategoria', 'proveedor', 'stocks.sucursal']);
 
-        // Búsqueda por texto (código, código de barras, descripción o proveedor)
+        // Búsqueda por texto (código, código de barras, código proveedor/fábrica, talle, color, descripción o proveedor)
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('codigo', 'like', "%{$search}%")
                   ->orWhere('codigo_barra', 'like', "%{$search}%")
+                  ->orWhere('codigo_proveedor', 'like', "%{$search}%")
+                  ->orWhere('talle', 'like', "%{$search}%")
+                  ->orWhere('color', 'like', "%{$search}%")
                   ->orWhere('descripcion', 'like', "%{$search}%")
                   ->orWhereHas('proveedor', function ($qp) use ($search) {
                       $qp->where('legajo', 'like', "%{$search}%")
                          ->orWhere('nombre', 'like', "%{$search}%");
                   });
             });
+        }
+
+        // Filtro específico por talle
+        if ($talleFiltro = $request->input('talle')) {
+            $query->where('talle', $talleFiltro);
+        }
+
+        // Filtro específico por color
+        if ($colorFiltro = $request->input('color')) {
+            $query->where('color', 'like', "%{$colorFiltro}%");
         }
 
         // Filtro por categoría
@@ -163,7 +176,8 @@ class ProductoController extends Controller
 
         $isFiltered = $request->anyFilled([
             'search', 'categoria_id', 'subcategoria_id', 'proveedor_id', 
-            'stock_status', 'rotacion', 'fecha_alta_desde', 'fecha_alta_hasta'
+            'stock_status', 'rotacion', 'fecha_alta_desde', 'fecha_alta_hasta',
+            'talle', 'color'
         ]) || ($request->has('sucursal_id') && $request->input('sucursal_id') !== (string)$sucursalActivaId);
 
         // 8. Ordenamiento interactivo por encabezados de columna (Click-to-Sort)
@@ -349,16 +363,340 @@ class ProductoController extends Controller
     }
 
     /**
-     * Formulario de alta de nuevo producto.
+     * Formulario de alta de nuevo producto y recepción ágil de mercadería.
      */
     public function create()
     {
         $categorias = ProductoCategoria::orderBy('nombre')->get();
         $subcategorias = ProductoSubcategoria::orderBy('nombre')->get();
-        $proveedores = Proveedor::where('activo', true)->orderBy('nombre')->get();
-        $sucursales = Sucursal::orderBy('nombre')->get();
+        $proveedores = Proveedor::where('activo', true)
+            ->orderByRaw('CASE WHEN legajo IS NULL THEN 1 ELSE 0 END, legajo ASC, nombre ASC')
+            ->get();
+        $sucursales = Sucursal::orderBy('id')->get();
+        $sucursalActivaId = session('sucursal_activa_id') ?? Auth::user()?->id_sucursal ?? 1;
+        $tallesSugeridos = Producto::listaTallesSugeridos();
+        $siguienteLegajoProveedor = Proveedor::sugerirSiguienteLegajo();
 
-        return view('productos.form', compact('categorias', 'subcategorias', 'proveedores', 'sucursales'));
+        return view('productos.create', compact('categorias', 'subcategorias', 'proveedores', 'sucursales', 'sucursalActivaId', 'tallesSugeridos', 'siguienteLegajoProveedor'));
+    }
+
+    /**
+     * Búsqueda dinámica de artículos de un proveedor específico para recepción de mercadería.
+     */
+    public function buscarPorProveedor(Request $request)
+    {
+        $proveedorId = $request->input('proveedor_id');
+        $q = trim((string)$request->input('q'));
+        $sucursalId = (int)($request->input('sucursal_id') ?? session('sucursal_activa_id') ?? Auth::user()?->id_sucursal ?? 1);
+
+        $query = Producto::with(['proveedor', 'stocks']);
+
+        if (!empty($proveedorId)) {
+            $query->where('proveedor_id', $proveedorId);
+        }
+
+        if (!empty($q)) {
+            $query->where(function ($sub) use ($q) {
+                $sub->where('codigo_proveedor', 'like', "%{$q}%")
+                    ->orWhere('descripcion', 'like', "%{$q}%")
+                    ->orWhere('codigo', 'like', "%{$q}%")
+                    ->orWhere('codigo_barra', 'like', "%{$q}%")
+                    ->orWhere('talle', 'like', "%{$q}%")
+                    ->orWhere('color', 'like', "%{$q}%");
+            });
+        }
+
+        $productos = $query->orderBy('descripcion', 'asc')
+            ->take(30)
+            ->get()
+            ->map(function ($p) use ($sucursalId) {
+                $stockSuc = (float)($p->stocks->firstWhere('sucursal_id', $sucursalId)?->stock ?? 0);
+                $stockTotal = (float)$p->stocks->sum('stock');
+
+                $desglose = Producto::desglosarCodigoBarra($p->codigo);
+                $codProveedor = !empty($p->codigo_proveedor) ? $p->codigo_proveedor : $desglose['codigo_proveedor'];
+                $talle = !empty($p->talle) ? $p->talle : $desglose['talle_sugerido'];
+                $color = !empty($p->color) ? $p->color : $desglose['color_sugerido'];
+
+                return [
+                    'id' => $p->id,
+                    'codigo' => $p->codigo,
+                    'codigo_barra' => $p->codigo_barra ?: $p->codigo,
+                    'codigo_proveedor' => $codProveedor,
+                    'descripcion' => $p->descripcion,
+                    'talle' => $talle,
+                    'color' => $color,
+                    'proveedor_id' => $p->proveedor_id,
+                    'categoria_id' => $p->categoria_id,
+                    'subcategoria_id' => $p->subcategoria_id,
+                    'proveedor_nombre' => $p->proveedor?->nombre ?? 'Sin Proveedor',
+                    'proveedor_legajo' => $p->proveedor?->legajo_formateado ?? $desglose['proveedor_legajo'] ?? '000',
+                    'precio_costo' => (float)$p->precio_costo,
+                    'precio_venta' => (float)$p->precio_venta,
+                    'controla_stock' => (bool)$p->controla_stock,
+                    'stock_sucursal' => $stockSuc,
+                    'stock_total' => $stockTotal,
+                ];
+            });
+
+        return response()->json($productos);
+    }
+
+    /**
+     * Verifica en tiempo real si un código (código / código de barras) ya está asignado a otra prenda.
+     */
+    public function verificarCodigo(Request $request)
+    {
+        $codigo = strtoupper(trim((string)$request->input('codigo')));
+        $excluirId = $request->input('excluir_id');
+        $sucursalId = (int)($request->input('sucursal_id') ?? session('sucursal_activa_id') ?? Auth::user()?->id_sucursal ?? 1);
+
+        if (empty($codigo)) {
+            return response()->json(['existe' => false]);
+        }
+
+        $query = Producto::with(['proveedor', 'stocks'])
+            ->where(function ($q) use ($codigo) {
+                $q->where('codigo', $codigo)
+                  ->orWhere('codigo_barra', $codigo);
+            });
+
+        if (!empty($excluirId)) {
+            $query->where('id', '!=', $excluirId);
+        }
+
+        $existente = $query->first();
+
+        if ($existente) {
+            $stockSuc = (float)($existente->stocks->firstWhere('sucursal_id', $sucursalId)?->stock ?? 0);
+            $stockTotal = (float)$existente->stocks->sum('stock');
+            $desglose = Producto::desglosarCodigoBarra($existente->codigo);
+
+            return response()->json([
+                'existe' => true,
+                'producto' => [
+                    'id' => $existente->id,
+                    'codigo' => $existente->codigo,
+                    'codigo_barra' => $existente->codigo_barra,
+                    'codigo_proveedor' => $existente->codigo_proveedor ?: $desglose['codigo_proveedor'],
+                    'descripcion' => $existente->descripcion,
+                    'descripcion_completa' => $existente->descripcion_completa,
+                    'talle' => $existente->talle ?: $desglose['talle_sugerido'],
+                    'color' => $existente->color ?: $desglose['color_sugerido'],
+                    'proveedor_id' => $existente->proveedor_id,
+                    'proveedor' => $existente->proveedor?->nombre,
+                    'categoria_id' => $existente->categoria_id,
+                    'subcategoria_id' => $existente->subcategoria_id,
+                    'precio_costo' => (float)$existente->precio_costo,
+                    'precio_venta' => (float)$existente->precio_venta,
+                    'stock_sucursal' => $stockSuc,
+                    'stock_total' => $stockTotal,
+                ],
+                'message' => "El código [{$codigo}] ya está asignado a: '{$existente->descripcion_completa}'"
+            ]);
+        }
+
+        return response()->json([
+            'existe' => false,
+            'message' => "Código disponible para nuevo artículo."
+        ]);
+    }
+
+    /**
+     * Registra el ingreso ágil de mercadería:
+     * Si el código/artículo ya existe en el catálogo, suma las unidades al stock existente.
+     * Si no existe (nueva combinación de talle/color o artículo nuevo), lo da de alta automáticamente
+     * y genera su stock inicial y etiquetas térmicas CODE128.
+     */
+    public function ingresoMercaderiaRapido(Request $request)
+    {
+        $validated = $request->validate([
+            'proveedor_id' => 'required|exists:proveedores,id',
+            'codigo_proveedor' => 'required|string|max:100',
+            'talle' => 'required|string|max:50',
+            'color' => 'required|string|max:50',
+            'descripcion' => 'required|string|max:255',
+            'precio_venta' => 'required|numeric|min:0',
+            'precio_costo' => 'nullable|numeric|min:0',
+            'cantidad' => 'required|numeric|min:1',
+            'sucursal_id' => 'required|exists:sucursales,id',
+            'categoria_id' => 'nullable|exists:productos_categorias,id',
+            'subcategoria_id' => 'nullable|exists:productos_subcategorias,id',
+            'codigo' => 'nullable|string|max:100',
+            'imprimir_etiquetas' => 'nullable|boolean',
+        ]);
+
+        $proveedor = Proveedor::findOrFail($validated['proveedor_id']);
+        $talle = strtoupper(trim($validated['talle']));
+        $color = strtoupper(trim($validated['color']));
+        $codigoProveedor = strtoupper(trim($validated['codigo_proveedor']));
+        $cantidad = (float)$validated['cantidad'];
+        $sucursalId = (int)$validated['sucursal_id'];
+        $precioCosto = isset($validated['precio_costo']) && (float)$validated['precio_costo'] > 0 ? (float)$validated['precio_costo'] : 0;
+        $precioVenta = (float)$validated['precio_venta'];
+
+        // Determinar código CODE128 estructurado
+        $codigoInput = trim((string)($request->input('codigo') ?? ''));
+        if (!empty($codigoInput)) {
+            $codigo = strtoupper($codigoInput);
+        } else {
+            $codigo = Producto::armarCodigoEstructurado($proveedor, $talle, $color, $codigoProveedor);
+        }
+
+        // Recordar el proveedor seleccionado en sesión para las siguientes cargas rápidas
+        session(['ultimo_proveedor_id' => $proveedor->id]);
+
+        // Buscar si ya existe un producto con este código
+        $producto = Producto::where('codigo', $codigo)
+            ->orWhere('codigo_barra', $codigo)
+            ->first();
+
+        $esNuevo = false;
+
+        if ($producto) {
+            // ==========================================
+            // CASO 1: VARIANTE EXISTENTE EN CATÁLOGO
+            // ==========================================
+            if ($precioCosto > 0) {
+                $producto->precio_costo = $precioCosto;
+            }
+            if ($precioVenta > 0) {
+                $producto->precio_venta = $precioVenta;
+            }
+            if (empty($producto->codigo_proveedor)) {
+                $producto->codigo_proveedor = $codigoProveedor;
+            }
+            if (empty($producto->talle)) {
+                $producto->talle = $talle;
+            }
+            if (empty($producto->color)) {
+                $producto->color = $color;
+            }
+            if (empty($producto->categoria_id) && !empty($validated['categoria_id'])) {
+                $producto->categoria_id = $validated['categoria_id'];
+            }
+            if (empty($producto->subcategoria_id) && !empty($validated['subcategoria_id'])) {
+                $producto->subcategoria_id = $validated['subcategoria_id'];
+            }
+            $producto->save();
+
+            // Sumar unidades a stock existente
+            if ($producto->controla_stock) {
+                $producto->ajustarStock(
+                    $sucursalId,
+                    'alta',
+                    $cantidad,
+                    "Ingreso de mercadería / Recepción proveedor ({$proveedor->nombre})",
+                    Auth::id(),
+                    'RECEPCION-PROV'
+                );
+            }
+
+            $mensaje = "Variante existente detectada: se sumaron {$cantidad} unid. al stock de '{$producto->descripcion_completa}' (Cód: {$producto->codigo}).";
+        } else {
+            // ==========================================
+            // CASO 2: NUEVO PRODUCTO / NUEVA VARIANTE
+            // ==========================================
+            $esNuevo = true;
+            $producto = Producto::create([
+                'codigo' => $codigo,
+                'codigo_barra' => $codigo,
+                'codigo_proveedor' => $codigoProveedor,
+                'talle' => $talle,
+                'color' => $color,
+                'descripcion' => strtoupper(trim($validated['descripcion'])),
+                'categoria_id' => $validated['categoria_id'] ?? null,
+                'subcategoria_id' => $validated['subcategoria_id'] ?? null,
+                'proveedor_id' => $proveedor->id,
+                'precio_costo' => $precioCosto,
+                'precio_venta' => $precioVenta,
+                'stock_minimo' => 5,
+                'unidad_medida' => 'UNIDAD',
+                'activo' => true,
+                'controla_stock' => true,
+                'fecha_alta' => now(),
+            ]);
+
+            // Cargar stock inicial
+            $producto->ajustarStock(
+                $sucursalId,
+                'alta',
+                $cantidad,
+                "Stock inicial por alta de producto ({$proveedor->nombre})",
+                Auth::id(),
+                'ALTA-PROV'
+            );
+
+            $mensaje = "Nuevo producto registrado exitosamente: '{$producto->descripcion_completa}' con código [{$codigo}]. Stock inicial: +{$cantidad} unid.";
+        }
+
+        // Impresión directa de etiquetas térmicas si está tildado
+        if ($request->boolean('imprimir_etiquetas') && $cantidad > 0) {
+            return redirect()->route('productos.etiqueta', [
+                'producto' => $producto->id,
+                'cantidad' => min(500, (int)$cantidad),
+                'sucursal_id' => $sucursalId,
+                'es_alta' => $esNuevo ? 1 : 0,
+                'autoprint' => 1,
+            ])->with('success', $mensaje . " Imprimiendo etiquetas térmicas...");
+        }
+
+        return redirect()->route('productos.create')
+            ->with('success', $mensaje);
+    }
+
+    /**
+     * Registra el ingreso de unidades a un producto existente y opcionalmente imprime etiquetas.
+     */
+    public function ingresoStockRapido(Request $request)
+    {
+        $validated = $request->validate([
+            'producto_id' => 'required|exists:productos,id',
+            'cantidad' => 'required|numeric|min:1',
+            'sucursal_id' => 'required|exists:sucursales,id',
+            'precio_costo' => 'nullable|numeric|min:0',
+            'precio_venta' => 'nullable|numeric|min:0',
+            'imprimir_etiquetas' => 'nullable|boolean',
+        ]);
+
+        $producto = Producto::findOrFail($validated['producto_id']);
+        $cantidad = (float)$validated['cantidad'];
+        $sucursalId = (int)$validated['sucursal_id'];
+
+        // Actualizar precios si vienen informados
+        if (isset($validated['precio_costo']) && (float)$validated['precio_costo'] > 0) {
+            $producto->precio_costo = $validated['precio_costo'];
+        }
+        if (isset($validated['precio_venta']) && (float)$validated['precio_venta'] > 0) {
+            $producto->precio_venta = $validated['precio_venta'];
+        }
+        $producto->save();
+
+        // Ingreso de stock físico
+        if ($producto->controla_stock) {
+            $producto->ajustarStock(
+                $sucursalId,
+                'alta',
+                $cantidad,
+                'Ingreso de mercadería / Recepción proveedor',
+                Auth::id(),
+                'RECEPCION-PROV'
+            );
+        }
+
+        // Si se marcó imprimir etiquetas térmicas
+        if ($request->boolean('imprimir_etiquetas') && $cantidad > 0) {
+            return redirect()->route('productos.etiqueta', [
+                'producto' => $producto->id,
+                'cantidad' => min(500, (int)$cantidad),
+                'sucursal_id' => $sucursalId,
+                'es_alta' => 1,
+                'autoprint' => 1,
+            ])->with('success', "Stock actualizado (+{$cantidad} unid.) para '{$producto->descripcion}'. Imprimiendo etiquetas térmicas...");
+        }
+
+        return redirect()->route('productos.create')
+            ->with('success', "Ingreso de {$cantidad} unid. registrado exitosamente para '{$producto->descripcion}'. Stock actualizado.");
     }
 
     /**
@@ -366,9 +704,34 @@ class ProductoController extends Controller
      */
     public function store(Request $request)
     {
+        $talle = !empty($request->input('talle')) ? strtoupper(trim($request->input('talle'))) : null;
+        $color = !empty($request->input('color')) ? strtoupper(trim($request->input('color'))) : null;
+        $codigoProveedor = !empty($request->input('codigo_proveedor')) ? strtoupper(trim($request->input('codigo_proveedor'))) : null;
+        $proveedorId = $request->input('proveedor_id');
+        $prov = !empty($proveedorId) ? Proveedor::find($proveedorId) : null;
+
+        // Determinar código y código de barra: "no tenemos codigo interno, usamos el codigo de barra como codigo interno"
+        $codigoInput = trim((string)$request->input('codigo'));
+        if (empty($codigoInput)) {
+            $codigo = Producto::armarCodigoEstructurado($prov, $talle, $color, $codigoProveedor);
+        } else {
+            $codigo = strtoupper($codigoInput);
+        }
+
+        $codigoBarra = $codigo;
+
+        // Verificar unicidad en tiempo de guardado
+        $duplicado = Producto::where('codigo', $codigo)
+            ->orWhere('codigo_barra', $codigo)
+            ->first();
+
+        if ($duplicado) {
+            return back()->withInput()->withErrors([
+                'codigo' => "El código [{$codigo}] ya está asignado a otra prenda: '{$duplicado->descripcion}'. Si es la misma prenda, búsquela para registrar el ingreso de unidades."
+            ]);
+        }
+
         $validated = $request->validate([
-            'codigo' => 'required|string|max:50|unique:productos,codigo',
-            'codigo_barra' => 'nullable|string|max:50',
             'descripcion' => 'required|string|max:255',
             'categoria_id' => 'nullable|exists:productos_categorias,id',
             'subcategoria_id' => 'nullable|exists:productos_subcategorias,id',
@@ -379,6 +742,8 @@ class ProductoController extends Controller
             'unidad_medida' => 'nullable|string|max:30',
             'observaciones' => 'nullable|string',
             'controla_stock' => 'nullable|boolean',
+            'cantidad_ingreso' => 'nullable|numeric|min:0',
+            'sucursal_id' => 'nullable|exists:sucursales,id',
             'stock_inicial' => 'nullable|array',
             'stock_inicial.*' => 'nullable|numeric|min:0',
         ]);
@@ -386,8 +751,11 @@ class ProductoController extends Controller
         $controlaStock = $request->boolean('controla_stock', true);
 
         $producto = Producto::create([
-            'codigo' => strtoupper(trim($validated['codigo'])),
-            'codigo_barra' => !empty($validated['codigo_barra']) ? trim($validated['codigo_barra']) : null,
+            'codigo' => $codigo,
+            'codigo_barra' => $codigoBarra,
+            'codigo_proveedor' => $codigoProveedor,
+            'talle' => $talle,
+            'color' => $color,
             'descripcion' => strtoupper(trim($validated['descripcion'])),
             'categoria_id' => $validated['categoria_id'] ?? null,
             'subcategoria_id' => $validated['subcategoria_id'] ?? null,
@@ -399,56 +767,75 @@ class ProductoController extends Controller
             'observaciones' => $validated['observaciones'] ?? null,
             'activo' => true,
             'controla_stock' => $controlaStock,
+            'fecha_alta' => now(),
         ]);
 
-        // Cargar stock inicial en cada sucursal solo si controla stock
-        if ($controlaStock && !empty($validated['stock_inicial'])) {
-            foreach ($validated['stock_inicial'] as $sucursalId => $cantidad) {
-                $qty = (float)$cantidad;
-                if ($qty > 0) {
-                    $producto->ajustarStock(
-                        $sucursalId,
-                        'alta',
-                        $qty,
-                        'Carga inicial de producto',
-                        Auth::id(),
-                        'STOCK-INICIAL'
-                    );
-                } else {
-                    ProductoStock::firstOrCreate(
-                        ['producto_id' => $producto->id, 'sucursal_id' => $sucursalId],
-                        ['stock' => 0, 'stock_minimo' => $producto->stock_minimo, 'precio_venta' => $producto->precio_venta]
-                    );
+        // Carga de unidades iniciales
+        $totalIngreso = 0;
+        $sucursalIngresoId = $request->input('sucursal_id') ?? session('sucursal_activa_id') ?? Auth::user()?->id_sucursal ?? 1;
+
+        if ($controlaStock) {
+            // Caso A: Ingreso rápido directo en la sucursal activa o seleccionada
+            if ($request->filled('cantidad_ingreso') && (float)$request->input('cantidad_ingreso') > 0) {
+                $cant = (float)$request->input('cantidad_ingreso');
+                $producto->ajustarStock(
+                    $sucursalIngresoId,
+                    'alta',
+                    $cant,
+                    'Carga inicial / Recepción proveedor',
+                    Auth::id(),
+                    'STOCK-INICIAL'
+                );
+                $totalIngreso += $cant;
+            }
+
+            // Caso B: Distribución multi-sucursal (stock_inicial array)
+            if (!empty($validated['stock_inicial'])) {
+                foreach ($validated['stock_inicial'] as $sucId => $cantidad) {
+                    $qty = (float)$cantidad;
+                    if ($qty > 0) {
+                        $producto->ajustarStock(
+                            $sucId,
+                            'alta',
+                            $qty,
+                            'Carga inicial de producto',
+                            Auth::id(),
+                            'STOCK-INICIAL'
+                        );
+                        $totalIngreso += $qty;
+                    }
                 }
             }
-        } else {
-            // Inicializar registros en 0 sin generar movimientos
-            foreach (Sucursal::all() as $sucursal) {
+
+            // Inicializar las sucursales restantes en 0
+            foreach (Sucursal::all() as $suc) {
                 ProductoStock::firstOrCreate(
-                    ['producto_id' => $producto->id, 'sucursal_id' => $sucursal->id],
+                    ['producto_id' => $producto->id, 'sucursal_id' => $suc->id],
+                    ['stock' => 0, 'stock_minimo' => $producto->stock_minimo, 'precio_venta' => $producto->precio_venta]
+                );
+            }
+        } else {
+            foreach (Sucursal::all() as $suc) {
+                ProductoStock::firstOrCreate(
+                    ['producto_id' => $producto->id, 'sucursal_id' => $suc->id],
                     ['stock' => 0, 'stock_minimo' => 0, 'precio_venta' => $producto->precio_venta]
                 );
             }
         }
 
-        // Si el usuario solicitó imprimir etiquetas tras la carga de stock inicial
-        if ($controlaStock && $request->boolean('imprimir_etiquetas') && !empty($validated['stock_inicial'])) {
-            $totalStockInicial = 0;
-            foreach ($validated['stock_inicial'] as $cantidad) {
-                $totalStockInicial += (int)$cantidad;
-            }
-            if ($totalStockInicial > 0) {
-                return redirect()->route('productos.etiqueta', [
-                    'producto' => $producto->id,
-                    'cantidad' => min(500, $totalStockInicial),
-                    'es_alta' => 1,
-                    'autoprint' => 1,
-                ])->with('success', "Producto '{$producto->descripcion}' registrado con {$totalStockInicial} unid. Imprimiendo etiquetas térmicas...");
-            }
+        // Si se solicitó imprimir etiquetas tras registrar
+        if ($controlaStock && $request->boolean('imprimir_etiquetas') && $totalIngreso > 0) {
+            return redirect()->route('productos.etiqueta', [
+                'producto' => $producto->id,
+                'cantidad' => min(500, (int)$totalIngreso),
+                'sucursal_id' => $sucursalIngresoId,
+                'es_alta' => 1,
+                'autoprint' => 1,
+            ])->with('success', "Producto '{$producto->descripcion}' registrado con {$totalIngreso} unid. Imprimiendo etiquetas térmicas...");
         }
 
-        return redirect()->route('productos.show', $producto->id)
-                         ->with('success', "Producto '{$producto->descripcion}' registrado correctamente.");
+        return redirect()->route('productos.create')
+            ->with('success', "Producto '{$producto->descripcion}' registrado con éxito. Código: [{$producto->codigo}].");
     }
 
     /**
@@ -493,8 +880,9 @@ class ProductoController extends Controller
         $subcategorias = ProductoSubcategoria::orderBy('nombre')->get();
         $proveedores = Proveedor::where('activo', true)->orderBy('nombre')->get();
         $sucursales = Sucursal::orderBy('nombre')->get();
+        $tallesSugeridos = Producto::listaTallesSugeridos();
 
-        return view('productos.form', compact('producto', 'categorias', 'subcategorias', 'proveedores', 'sucursales'));
+        return view('productos.form', compact('producto', 'categorias', 'subcategorias', 'proveedores', 'sucursales', 'tallesSugeridos'));
     }
 
     /**
@@ -505,6 +893,9 @@ class ProductoController extends Controller
         $validated = $request->validate([
             'codigo' => 'required|string|max:50|unique:productos,codigo,' . $producto->id,
             'codigo_barra' => 'nullable|string|max:50',
+            'codigo_proveedor' => 'nullable|string|max:100',
+            'talle' => 'nullable|string|max:20',
+            'color' => 'nullable|string|max:50',
             'descripcion' => 'required|string|max:255',
             'categoria_id' => 'nullable|exists:productos_categorias,id',
             'subcategoria_id' => 'nullable|exists:productos_subcategorias,id',
@@ -519,10 +910,22 @@ class ProductoController extends Controller
         ]);
 
         $controlaStock = $request->boolean('controla_stock', true);
+        $talle = !empty($validated['talle']) ? strtoupper(trim($validated['talle'])) : null;
+        $color = !empty($validated['color']) ? strtoupper(trim($validated['color'])) : null;
+        $codigoProveedor = !empty($validated['codigo_proveedor']) ? strtoupper(trim($validated['codigo_proveedor'])) : null;
+        $codigoBarra = !empty($validated['codigo_barra']) ? trim($validated['codigo_barra']) : null;
+
+        if (empty($codigoBarra) && $request->boolean('generar_codigo_barra')) {
+            $prov = !empty($validated['proveedor_id']) ? Proveedor::find($validated['proveedor_id']) : null;
+            $codigoBarra = Producto::generarCodigoBarraSugerido($talle, $color, $prov, $validated['codigo']);
+        }
 
         $producto->update([
             'codigo' => strtoupper(trim($validated['codigo'])),
-            'codigo_barra' => !empty($validated['codigo_barra']) ? trim($validated['codigo_barra']) : null,
+            'codigo_barra' => $codigoBarra,
+            'codigo_proveedor' => $codigoProveedor,
+            'talle' => $talle,
+            'color' => $color,
             'descripcion' => strtoupper(trim($validated['descripcion'])),
             'categoria_id' => $validated['categoria_id'] ?? null,
             'subcategoria_id' => $validated['subcategoria_id'] ?? null,
@@ -534,6 +937,7 @@ class ProductoController extends Controller
             'observaciones' => $validated['observaciones'] ?? null,
             'activo' => $request->boolean('activo', true),
             'controla_stock' => $controlaStock,
+            'fecha_modificacion' => now(),
         ]);
 
         // Si se cambia a no controlar stock, limpiar existencias acumuladas a 0

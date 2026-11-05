@@ -67,11 +67,11 @@
 
             <div class="flex items-center gap-2">
                 @if($remito->estado === 'parcial')
-                    <button type="button" @click="modalAgregar = true"
-                            class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md flex items-center gap-1.5">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-                        <span>+ Agregar Entrega a este Remito</span>
-                    </button>
+                    <a href="{{ route('remitos.create', ['remito_id' => $remito->id]) }}"
+                       class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition shadow-md flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                        <span>✏️ Continuar Carga en Etapas</span>
+                    </a>
                 @endif
 
                 <a href="{{ route('stock.movimientos', ['search' => 'REM-' . $remito->numero_remito]) }}"
@@ -175,9 +175,19 @@
                                 </td>
                                 <td class="py-3 px-4 text-slate-900 dark:text-white">
                                     <strong>{{ $item->producto?->descripcion ?? 'Artículo Eliminado' }}</strong>
-                                    <span class="text-[10px] text-slate-400 block font-mono">
-                                        Barra: {{ $item->producto?->codigo_barra ?? 'S/D' }} • {{ $item->producto?->categoria?->nombre ?? 'General' }}
-                                    </span>
+                                    <div class="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 font-mono flex-wrap">
+                                        @if($item->producto?->talle)
+                                            <span class="px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold">T: {{ $item->producto->talle }}</span>
+                                        @endif
+                                        @if($item->producto?->color)
+                                            <span class="px-1.5 py-0.2 rounded bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold">C: {{ $item->producto->color }}</span>
+                                        @endif
+                                        @if($item->producto?->codigo_proveedor)
+                                            <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Fab: {{ $item->producto->codigo_proveedor }}</span>
+                                        @endif
+                                        <span>Barra: {{ $item->producto?->codigo_barra ?? 'S/D' }}</span>
+                                        <span>• {{ $item->producto?->categoria?->nombre ?? 'General' }}</span>
+                                    </div>
                                 </td>
                                 <td class="py-3 px-3 text-center font-mono font-bold text-slate-900 dark:text-white">
                                     <span class="bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">

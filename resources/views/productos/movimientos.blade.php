@@ -24,6 +24,45 @@
             </div>
         </div>
 
+        {{-- Alerta de reimpresión si se actualizaron códigos de barra en el traslado --}}
+        @if(session('barcodes_actualizados'))
+            <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🏷️</span>
+                        <div>
+                            <h3 class="text-xs font-black uppercase text-amber-900 dark:text-amber-200">
+                                Códigos de Barra Actualizados en el Traslado
+                            </h3>
+                            <p class="text-[11px] text-amber-800 dark:text-amber-300">
+                                Se actualizaron talle/color o se generó un nuevo código de barra para los siguientes artículos. Puede reimprimir las etiquetas térmicas ahora:
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    @foreach(session('barcodes_actualizados') as $bItem)
+                        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 flex items-center justify-between shadow-2xs">
+                            <div class="text-xs">
+                                <span class="font-bold font-mono text-blue-700 dark:text-blue-400 block">{{ $bItem['codigo'] }}</span>
+                                <span class="text-slate-800 dark:text-white font-medium block truncate max-w-[180px]">{{ $bItem['descripcion'] }}</span>
+                                <span class="text-[10px] text-slate-400 font-mono">
+                                    {{ $bItem['talle'] ? 'T: ' . $bItem['talle'] : '' }} {{ $bItem['color'] ? '• C: ' . $bItem['color'] : '' }}
+                                    • Barcode: <strong>{{ $bItem['codigo_barra_nuevo'] }}</strong>
+                                </span>
+                            </div>
+                            <a href="{{ route('productos.etiqueta', ['producto' => $bItem['producto_id'], 'cantidad' => $bItem['cantidad'], 'es_alta' => 1, 'autoprint' => 1]) }}"
+                               target="_blank"
+                               class="px-2.5 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs inline-flex items-center gap-1 shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                <span>Imprimir ({{ (int)$bItem['cantidad'] }})</span>
+                            </a>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         {{-- Filtros de Auditoría --}}
         <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-4 shadow-2xs">
             <form method="GET" action="{{ route('stock.movimientos') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">

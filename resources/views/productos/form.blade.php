@@ -37,36 +37,123 @@
             @endif
 
             {{-- Bloque 1: Identificación y Códigos --}}
-            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-2xs space-y-4">
-                <h3 class="text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                    1. Identificación y Descripción
-                </h3>
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-2xs space-y-4"
+                 x-data="{
+                     codigo: '{{ old('codigo', $producto->codigo ?? '') }}',
+                     codigoBarra: '{{ old('codigo_barra', $producto->codigo_barra ?? '') }}',
+                     codigoProveedor: '{{ old('codigo_proveedor', $producto->codigo_proveedor ?? '') }}',
+                     talle: '{{ old('talle', $producto->talle ?? '') }}',
+                     color: '{{ old('color', $producto->color ?? '') }}',
+                     proveedorId: '{{ old('proveedor_id', $producto->proveedor_id ?? '') }}',
+                     proveedoresMap: @json($proveedores->pluck('legajo', 'id')),
+
+                     normalizarTalle2Char(val) {
+                         if (!val || !val.trim()) return '00';
+                         const t = val.trim().toUpperCase();
+                         if (!isNaN(t)) {
+                             return String(parseInt(t, 10)).padStart(2, '0');
+                         }
+                         const map = {
+                             'XS': 'XS', 'S': '0S', 'M': '0M', 'L': '0L', 'XL': 'XL',
+                             'XXL': '2X', '2XL': '2X', 'XXXL': '3X', '3XL': '3X',
+                             '4XL': '4X', '5XL': '5X', '6XL': '6X', '7XL': '7X', '8XL': '8X',
+                             'U': '0U', 'UNICO': 'UN', 'ESP': 'ES'
+                         };
+                         if (map[t]) return map[t];
+                         if (t.length === 2) return t;
+                         if (t.length === 1) return '0' + t;
+                         const clean = t.replace(/[^A-Z0-9]/g, '');
+                         return (clean.substring(0, 2) || '00').padEnd(2, '0');
+                     },
+
+                     normalizarColor2Char(val) {
+                         if (!val || !val.trim()) return '00';
+                         const c = val.trim().toUpperCase();
+                         const map = {
+                             'NEGRO': 'NE', 'BLANCO': 'BL', 'AZUL': 'AZ', 'ROJO': 'RO',
+                             'VERDE': 'VE', 'AMARILLO': 'AM', 'GRIS': 'GR', 'ROSA': 'RS',
+                             'ROSADO': 'RS', 'CELESTE': 'CE', 'BEIGE': 'BE', 'MARRON': 'MA',
+                             'CAFE': 'CF', 'BORDO': 'BO', 'VIOLETA': 'VI', 'LILA': 'LI',
+                             'NARANJA': 'NA', 'FUCSIA': 'FU', 'TURQUESA': 'TU', 'ESTAMPADO': 'ES',
+                             'SURTIDO': 'SU', 'VARIOS': 'VA', 'MULTICOLOR': 'MC'
+                         };
+                         if (map[c]) return map[c];
+                         const clean = c.replace(/[^A-Z0-9]/g, '');
+                         if (clean.length >= 2) return clean.substring(0, 2);
+                         if (clean.length === 1) return '0' + clean;
+                         return '00';
+                     },
+
+                     generarBarcodeSugerido() {
+                         const leg = this.proveedoresMap[this.proveedorId] || '0';
+                         const codProv = String(leg).padStart(3, '0');
+                         const talle2 = this.normalizarTalle2Char(this.talle);
+                         const color2 = this.normalizarColor2Char(this.color);
+                         let art = this.codigoProveedor ? this.codigoProveedor.trim().replace(/[^A-Za-z0-9]/g, '').toUpperCase() : '';
+                         if (!art) {
+                             art = this.codigo ? this.codigo.trim().replace(/[^A-Za-z0-9]/g, '').toUpperCase() : '00001';
+                         }
+                         this.codigoBarra = (codProv + talle2 + color2 + art).toUpperCase();
+                     }
+                 }">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                    <h3 class="text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                        1. Identificación, Talle, Color y Códigos
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-mono">
+                        Estándar de etiqueta: CODE128 (cod.prov/talle/color/codigo)
+                    </span>
+                </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {{-- Código Interno SKU --}}
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                             Código Interno / SKU <span class="text-rose-500">*</span>
                         </label>
                         <input type="text" name="codigo" required 
+                               x-model="codigo"
                                value="{{ old('codigo', $producto->codigo ?? '') }}" 
                                placeholder="Ej: ART-001045"
                                class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 uppercase font-mono font-bold focus:ring-blue-500 focus:border-blue-500">
                         @error('codigo') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
                     </div>
 
-                    <div class="sm:col-span-2">
+                    {{-- Código de Fabricante / Proveedor --}}
+                    <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Código de Barras (EAN-13 / Escáner)
+                            Código de Fábrica / Proveedor
                         </label>
+                        <input type="text" name="codigo_proveedor" 
+                               x-model="codigoProveedor"
+                               value="{{ old('codigo_proveedor', $producto->codigo_proveedor ?? '') }}" 
+                               placeholder="Ej: FAB-9921 / ART-402"
+                               class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 uppercase font-mono font-bold focus:ring-blue-500 focus:border-blue-500">
+                        @error('codigo_proveedor') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    {{-- Código de Barras con botón Sugerir --}}
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                                Código de Barras (CODE128)
+                            </label>
+                            <button type="button" @click="generarBarcodeSugerido()"
+                                    class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+                                <span>⚡ Sugerir estructurado</span>
+                            </button>
+                        </div>
                         <div class="relative">
                             <input type="text" name="codigo_barra" 
+                                   x-model="codigoBarra"
                                    value="{{ old('codigo_barra', $producto->codigo_barra ?? '') }}" 
-                                   placeholder="Escanee o ingrese código (Ej: 7791234567890)"
-                                   class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono focus:ring-blue-500 focus:border-blue-500">
+                                   placeholder="###,##,##,##### (CODE128)"
+                                   class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono uppercase focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         @error('codigo_barra') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
                     </div>
 
+                    {{-- Descripción del Artículo --}}
                     <div class="sm:col-span-3">
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                             Descripción del Artículo <span class="text-rose-500">*</span>
@@ -77,10 +164,87 @@
                                class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 uppercase font-bold focus:ring-blue-500 focus:border-blue-500">
                         @error('descripcion') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
                     </div>
+
+                    {{-- Talle --}}
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                                Talle (1 al 70 / XS a 8XL)
+                            </label>
+                            <span class="text-[9px] text-slate-400 font-mono">Calzado, Bebé, Adulto</span>
+                        </div>
+                        <input type="text" name="talle" list="lista_talles"
+                               x-model="talle"
+                               value="{{ old('talle', $producto->talle ?? '') }}" 
+                               placeholder="Ej: 42 o XL o 2XL"
+                               class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 uppercase font-mono font-bold focus:ring-blue-500 focus:border-blue-500">
+                        <datalist id="lista_talles">
+                            @foreach(App\Models\Producto::listaTallesSugeridos() as $t)
+                                <option value="{{ $t }}"></option>
+                            @endforeach
+                        </datalist>
+                        @error('talle') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    {{-- Color --}}
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                                Color del Artículo
+                            </label>
+                            <span class="text-[9px] text-slate-400">Nombre / Tono</span>
+                        </div>
+                        <input type="text" name="color" list="lista_colores"
+                               x-model="color"
+                               value="{{ old('color', $producto->color ?? '') }}" 
+                               placeholder="Ej: Negro, Azul Marino, Blanco..."
+                               class="w-full text-xs py-1.5 px-3 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 uppercase font-bold focus:ring-blue-500 focus:border-blue-500">
+                        <datalist id="lista_colores">
+                            <option value="NEGRO"></option>
+                            <option value="BLANCO"></option>
+                            <option value="AZUL"></option>
+                            <option value="AZUL MARINO"></option>
+                            <option value="CELESTE"></option>
+                            <option value="ROJO"></option>
+                            <option value="BORDO"></option>
+                            <option value="VERDE"></option>
+                            <option value="VERDE MILITAR"></option>
+                            <option value="AMARILLO"></option>
+                            <option value="GRIS"></option>
+                            <option value="GRIS MELANGE"></option>
+                            <option value="ROSA"></option>
+                            <option value="BEIGE"></option>
+                            <option value="MARRON"></option>
+                            <option value="VIOLETA"></option>
+                            <option value="LILA"></option>
+                            <option value="NARANJA"></option>
+                            <option value="ESTAMPADO"></option>
+                            <option value="SURTIDO"></option>
+                        </datalist>
+                        @error('color') <p class="text-rose-500 text-[10px] mt-1">{{ $message }}</p> @enderror
+                    </div>
+
+                    {{-- Proveedor Habitual --}}
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Proveedor Habitual</label>
+                            <span class="text-[9px] text-slate-400 font-mono">[Cód. Prov 3c]</span>
+                        </div>
+                        <select name="proveedor_id" 
+                                x-model="proveedorId"
+                                class="w-full text-xs py-1.5 px-2.5 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-bold">
+                            <option value="">-- Sin Proveedor Asignado --</option>
+                            @foreach($proveedores as $prov)
+                                <option value="{{ $prov->id }}" {{ old('proveedor_id', $producto->proveedor_id ?? '') == $prov->id ? 'selected' : '' }}>
+                                    [{{ $prov->legajo_formateado ?? '000' }}] {{ $prov->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
 
-                {{-- Clasificación --}}
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                {{-- Clasificación: Categoría y Subcategoría --}}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                     <div>
                         <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Categoría</label>
                         <select name="categoria_id" 
@@ -102,19 +266,6 @@
                             @foreach($subcategorias as $sub)
                                 <option value="{{ $sub->id }}" {{ old('subcategoria_id', $producto->subcategoria_id ?? '') == $sub->id ? 'selected' : '' }}>
                                     {{ $sub->nombre }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Proveedor Habitual</label>
-                        <select name="proveedor_id" 
-                                class="w-full text-xs py-1.5 px-2.5 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
-                            <option value="">-- Sin Proveedor Asignado --</option>
-                            @foreach($proveedores as $prov)
-                                <option value="{{ $prov->id }}" {{ old('proveedor_id', $producto->proveedor_id ?? '') == $prov->id ? 'selected' : '' }}>
-                                    {{ $prov->nombre }}
                                 </option>
                             @endforeach
                         </select>

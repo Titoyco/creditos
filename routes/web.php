@@ -138,6 +138,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/traslado', [\App\Http\Controllers\StockMovimientoController::class, 'trasladoStore'])->name('productos.traslado.store');
         Route::get('/buscar-traslado', [\App\Http\Controllers\StockMovimientoController::class, 'buscarParaTraslado'])->name('productos.buscar.traslado');
         Route::post('/verificar-stock-traslado', [\App\Http\Controllers\StockMovimientoController::class, 'verificarStock'])->name('productos.verificar.stock.traslado');
+        Route::get('/buscar-por-proveedor', [\App\Http\Controllers\ProductoController::class, 'buscarPorProveedor'])->name('productos.buscar-por-proveedor');
+        Route::get('/verificar-codigo', [\App\Http\Controllers\ProductoController::class, 'verificarCodigo'])->name('productos.verificar-codigo');
+        Route::post('/ingreso-mercaderia', [\App\Http\Controllers\ProductoController::class, 'ingresoMercaderiaRapido'])->name('productos.ingreso-mercaderia');
+        Route::post('/ingreso-stock-rapido', [\App\Http\Controllers\ProductoController::class, 'ingresoStockRapido'])->name('productos.ingreso-stock-rapido');
         Route::get('/movimientos', [\App\Http\Controllers\StockMovimientoController::class, 'index'])->name('productos.movimientos');
         Route::get('/{producto}', [\App\Http\Controllers\ProductoController::class, 'show'])->name('productos.show');
         Route::get('/{producto}/editar', [\App\Http\Controllers\ProductoController::class, 'edit'])->name('productos.edit');

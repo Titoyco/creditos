@@ -63,6 +63,13 @@
                 <span>Proveedores</span>
             </a>
 
+            <a href="{{ route('remitos.create') }}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center space-x-1.5 shadow-sm">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>INGRESO DE MERCADERÍA</span>
+            </a>
+
             <a href="{{ route('productos.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 shadow-sm">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
                 <span>NUEVO ARTÍCULO</span>
@@ -661,7 +668,7 @@
                             </x-context-menu>
                         </td>
 
-                        {{-- Descripción y Categoría --}}
+                        {{-- Descripción, Talle, Color y Categoría --}}
                         <td class="py-2 px-3 border-r border-slate-200/60 dark:border-slate-700/60">
                             <div class="flex items-center space-x-1.5 flex-wrap">
                                 <a href="{{ route('productos.show', $producto->id) }}" 
@@ -674,7 +681,29 @@
                                     </span>
                                 @endif
                             </div>
-                            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+
+                            {{-- Fila de Talle, Color y Cód. Fabricante --}}
+                            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                @if($producto->talle)
+                                    <span class="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800" title="Talle">
+                                        Talle: <strong>{{ $producto->talle }}</strong>
+                                    </span>
+                                @endif
+
+                                @if($producto->color)
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800" title="Color">
+                                        Color: <strong>{{ $producto->color }}</strong>
+                                    </span>
+                                @endif
+
+                                @if($producto->codigo_proveedor)
+                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600" title="Código de Fábrica / Proveedor">
+                                        Fab: <strong>{{ $producto->codigo_proveedor }}</strong>
+                                    </span>
+                                @endif
+                            </div>
+
+                            <div class="flex items-center gap-1.5 mt-1 flex-wrap">
                                 @if($producto->categoria)
                                     <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
                                         {{ $producto->categoria->nombre }}

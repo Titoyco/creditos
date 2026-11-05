@@ -33,8 +33,78 @@
                 items: (TRASLADO_CONFIG.initialItems || []).map(it => ({
                     ...it,
                     cantidad: parseFloat(it.cantidad) || 1,
-                    stock_origen: parseFloat(it.stock_origen) || 0
+                    stock_origen: parseFloat(it.stock_origen) || 0,
+                    codigo_proveedor: it.codigo_proveedor || '',
+                    talle: it.talle || '',
+                    color: it.color || '',
+                    proveedor: it.proveedor || '',
+                    proveedor_legajo: it.proveedor_legajo || '',
+                    actualizar_codigo_barra: it.actualizar_codigo_barra || false,
+                    nuevo_codigo_barra: it.nuevo_codigo_barra || '',
+                    mostrar_edicion: false
                 })),
+
+                normalizarTalle2Char(talle) {
+                    if (!talle || !talle.trim()) return '00';
+                    const t = talle.trim().toUpperCase();
+                    if (!isNaN(t)) {
+                        return String(parseInt(t, 10)).padStart(2, '0');
+                    }
+                    const map = {
+                        'XS': 'XS', 'S': '0S', 'M': '0M', 'L': '0L', 'XL': 'XL',
+                        'XXL': '2X', '2XL': '2X', 'XXXL': '3X', '3XL': '3X',
+                        '4XL': '4X', '5XL': '5X', '6XL': '6X', '7XL': '7X', '8XL': '8X',
+                        'U': '0U', 'UNICO': 'UN', 'ESP': 'ES'
+                    };
+                    if (map[t]) return map[t];
+                    if (t.length === 2) return t;
+                    if (t.length === 1) return '0' + t;
+                    const clean = t.replace(/[^A-Z0-9]/g, '');
+                    return (clean.substring(0, 2) || '00').padEnd(2, '0');
+                },
+
+                normalizarColor2Char(color) {
+                    if (!color || !color.trim()) return '00';
+                    const c = color.trim().toUpperCase();
+                    const map = {
+                        'NEGRO': 'NE', 'BLANCO': 'BL', 'AZUL': 'AZ', 'ROJO': 'RO',
+                        'VERDE': 'VE', 'AMARILLO': 'AM', 'GRIS': 'GR', 'ROSA': 'RS',
+                        'ROSADO': 'RS', 'CELESTE': 'CE', 'BEIGE': 'BE', 'MARRON': 'MA',
+                        'CAFE': 'CF', 'BORDO': 'BO', 'VIOLETA': 'VI', 'LILA': 'LI',
+                        'NARANJA': 'NA', 'FUCSIA': 'FU', 'TURQUESA': 'TU', 'ESTAMPADO': 'ES',
+                        'SURTIDO': 'SU', 'VARIOS': 'VA', 'MULTICOLOR': 'MC'
+                    };
+                    if (map[c]) return map[c];
+                    const clean = c.replace(/[^A-Z0-9]/g, '');
+                    if (clean.length >= 2) return clean.substring(0, 2);
+                    if (clean.length === 1) return '0' + clean;
+                    return '00';
+                },
+
+                generarCodigoBarraSugerido(item) {
+                    const codProv = String(item.proveedor_legajo || '0').padStart(3, '0');
+                    const talle2 = this.normalizarTalle2Char(item.talle);
+                    const color2 = this.normalizarColor2Char(item.color);
+                    let base = '00001';
+                    if (item.codigo) {
+                        const cleanBase = item.codigo.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                        base = !isNaN(cleanBase) ? cleanBase.padStart(5, '0') : cleanBase;
+                    }
+                    return (codProv + talle2 + color2 + base).toUpperCase();
+                },
+
+                onCambioTalleOColor(item) {
+                    if (item.actualizar_codigo_barra) {
+                        item.nuevo_codigo_barra = this.generarCodigoBarraSugerido(item);
+                    }
+                },
+
+                toggleActualizarBarcode(item) {
+                    item.actualizar_codigo_barra = !item.actualizar_codigo_barra;
+                    if (item.actualizar_codigo_barra) {
+                        item.nuevo_codigo_barra = this.generarCodigoBarraSugerido(item);
+                    }
+                },
 
                 init() {
                     this.focoScanner();
@@ -175,12 +245,20 @@
                             id: this.itemPendiente.id,
                             codigo: this.itemPendiente.codigo,
                             codigo_barra: this.itemPendiente.codigo_barra,
+                            codigo_proveedor: this.itemPendiente.codigo_proveedor || '',
+                            talle: this.itemPendiente.talle || '',
+                            color: this.itemPendiente.color || '',
+                            proveedor: this.itemPendiente.proveedor || '',
+                            proveedor_legajo: this.itemPendiente.proveedor_legajo || '',
                             descripcion: this.itemPendiente.descripcion,
                             categoria: this.itemPendiente.categoria,
                             subcategoria: this.itemPendiente.subcategoria,
                             unidad_medida: this.itemPendiente.unidad_medida,
                             stock_origen: this.itemPendiente.stock_origen,
-                            cantidad: cant
+                            cantidad: cant,
+                            actualizar_codigo_barra: false,
+                            nuevo_codigo_barra: '',
+                            mostrar_edicion: false
                         });
                     }
 
@@ -533,6 +611,7 @@
                                 <th class="py-2.5 px-4 w-12 text-center">#</th>
                                 <th class="py-2.5 px-4">Código / Barras</th>
                                 <th class="py-2.5 px-4">Descripción & Rubro</th>
+                                <th class="py-2.5 px-4">Talle / Color / Fábrica</th>
                                 <th class="py-2.5 px-4 text-right">Stock en Origen</th>
                                 <th class="py-2.5 px-4 text-center w-48">Cantidad a Mover</th>
                                 <th class="py-2.5 px-4 text-right">Remanente Origen</th>
@@ -558,6 +637,93 @@
                                         <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
                                             <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-700 font-semibold" x-text="item.categoria"></span>
                                             <span x-show="item.subcategoria" class="px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-semibold" x-text="item.subcategoria"></span>
+                                        </div>
+                                    </td>
+
+                                    {{-- Talle / Color / Cód. Fábrica y edición inline --}}
+                                    <td class="py-3 px-4">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <template x-if="item.talle">
+                                                <span class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold font-mono text-[10px]">
+                                                    T: <strong x-text="item.talle"></strong>
+                                                </span>
+                                            </template>
+                                            <template x-if="!item.talle">
+                                                <span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                                                    S/Talle
+                                                </span>
+                                            </template>
+
+                                            <template x-if="item.color">
+                                                <span class="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px]">
+                                                    C: <strong x-text="item.color"></strong>
+                                                </span>
+                                            </template>
+                                            <template x-if="!item.color">
+                                                <span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                                                    S/Color
+                                                </span>
+                                            </template>
+
+                                            <template x-if="item.codigo_proveedor">
+                                                <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[10px]">
+                                                    Fab: <strong x-text="item.codigo_proveedor"></strong>
+                                                </span>
+                                            </template>
+                                        </div>
+
+                                        <button type="button" @click="item.mostrar_edicion = !item.mostrar_edicion"
+                                                class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                            <span x-text="item.mostrar_edicion ? 'Ocultar edición' : 'Completar / Modificar datos'"></span>
+                                        </button>
+
+                                        {{-- Panel de edición inline de talle, color y código de barra --}}
+                                        <div x-show="item.mostrar_edicion" 
+                                             class="mt-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-800 space-y-2">
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                <div>
+                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Cód. Fabricante</label>
+                                                    <input type="text" x-model="item.codigo_proveedor" placeholder="Ej: FAB-123"
+                                                           class="w-full text-xs font-mono py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Talle (1-70 / Letras)</label>
+                                                    <input type="text" x-model="item.talle" @input="onCambioTalleOColor(item)" placeholder="Ej: 42, M, XL"
+                                                           class="w-full text-xs font-mono font-bold py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Color</label>
+                                                    <input type="text" x-model="item.color" @input="onCambioTalleOColor(item)" placeholder="Ej: Negro, Azul"
+                                                           class="w-full text-xs py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
+                                                </div>
+                                            </div>
+
+                                            {{-- Opción de actualizar código de barra --}}
+                                            <div class="pt-1.5 border-t border-blue-200/60 dark:border-blue-800/60">
+                                                <label class="flex items-start gap-2 cursor-pointer select-none">
+                                                    <input type="checkbox" x-model="item.actualizar_codigo_barra" @change="if(item.actualizar_codigo_barra) item.nuevo_codigo_barra = generarCodigoBarraSugerido(item)"
+                                                           class="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                                    <div class="text-[11px]">
+                                                        <span class="font-bold text-slate-900 dark:text-white">Generar / Actualizar Código de Barra (CODE128)</span>
+                                                        <span class="text-slate-500 dark:text-slate-400 block text-[10px]">
+                                                            Formato: [Prov 3c][Talle 2c][Color 2c][Cód 5c+]. Al confirmar el traslado se podrá reimprimir la etiqueta.
+                                                        </span>
+                                                    </div>
+                                                </label>
+
+                                                <div x-show="item.actualizar_codigo_barra" class="mt-2 flex items-center gap-2 flex-wrap">
+                                                    <span class="text-[10px] text-slate-400 font-mono">Actual: <strong x-text="item.codigo_barra || 'Sin barras'"></strong> &rarr;</span>
+                                                    <div class="flex items-center gap-1">
+                                                        <input type="text" x-model="item.nuevo_codigo_barra"
+                                                               class="text-xs font-mono font-bold py-1 px-2 rounded-lg border-blue-400 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300">
+                                                        <button type="button" @click="item.nuevo_codigo_barra = generarCodigoBarraSugerido(item)"
+                                                                class="px-2 py-1 text-[10px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-800 rounded">
+                                                            Regenerar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
 
@@ -613,7 +779,7 @@
 
                             {{-- Estado Vacío --}}
                             <tr x-show="items.length === 0">
-                                <td colspan="7" class="py-12 text-center text-slate-400 dark:text-slate-500">
+                                <td colspan="8" class="py-12 text-center text-slate-400 dark:text-slate-500">
                                     <div class="flex flex-col items-center justify-center space-y-2">
                                         <svg class="w-10 h-10 text-slate-300 dark:text-slate-600 stroke-[1.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -634,6 +800,11 @@
                     <div>
                         <input type="hidden" :name="'items[' + idx + '][producto_id]'" :value="it.id">
                         <input type="hidden" :name="'items[' + idx + '][cantidad]'" :value="it.cantidad">
+                        <input type="hidden" :name="'items[' + idx + '][codigo_proveedor]'" :value="it.codigo_proveedor || ''">
+                        <input type="hidden" :name="'items[' + idx + '][talle]'" :value="it.talle || ''">
+                        <input type="hidden" :name="'items[' + idx + '][color]'" :value="it.color || ''">
+                        <input type="hidden" :name="'items[' + idx + '][actualizar_codigo_barra]'" :value="it.actualizar_codigo_barra ? '1' : '0'">
+                        <input type="hidden" :name="'items[' + idx + '][nuevo_codigo_barra]'" :value="it.nuevo_codigo_barra || ''">
                     </div>
                 </template>
             </div>
