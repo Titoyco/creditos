@@ -80,6 +80,11 @@ class Sucursal extends Model implements Auditable
         return $this->hasMany(Venta::class, 'id_sucursal');
     }
 
+    public function puntosVenta(): HasMany
+    {
+        return $this->hasMany(PuntoVenta::class, 'id_sucursal');
+    }
+
     /**
      * Incrementa atómicamente el correlativo de recibos de la sucursal y retorna el nuevo número.
      */

@@ -638,3 +638,56 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
 - **Funcionalidad:**
   1. Extrae de `creditos/db.mdb` (tabla `PERSONAS`) los proveedores faltantes con saneamiento de caracteres UTF-8 e inserción directa en `proveedores`.
   2. Lee la tabla `PRODUCTOS` de Access y actualiza en un solo paso masivo indexado el campo `proveedor_id` de los 15.138 productos en MySQL `lamarina_v4`.
+
+---
+
+## 11. Módulo Puntos de Venta y Facturación Híbrida (Hasar 2G vs ARCA WSFE)
+
+### 11.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/sistema/puntos-venta` | `sistema.puntos-venta.index` | `PuntoVentaController@index` | `auth` | Data-Grid compacta con filtros por sucursal y tipo de emisión |
+| GET | `/sistema/puntos-venta/create` | `sistema.puntos-venta.create` | `PuntoVentaController@create` | `auth` | Formulario reactivo Alpine.js para alta de punto de venta |
+| POST | `/sistema/puntos-venta` | `sistema.puntos-venta.store` | `PuntoVentaController@store` | `auth` | Almacena punto de venta con validaciones compuestas y JSON de red |
+| GET | `/sistema/puntos-venta/{puntoVenta}/edit` | `sistema.puntos-venta.edit` | `PuntoVentaController@edit` | `auth` | Formulario de edición con precarga y descarga de configuración |
+| PUT | `/sistema/puntos-venta/{puntoVenta}` | `sistema.puntos-venta.update` | `PuntoVentaController@update` | `auth` | Actualización de datos maestros y parámetros técnicos |
+| DELETE | `/sistema/puntos-venta/{puntoVenta}` | `sistema.puntos-venta.destroy` | `PuntoVentaController@destroy` | `auth` | Eliminación de punto de venta |
+| GET | `/sistema/puntos-venta/{puntoVenta}/descargar-config` | `sistema.puntos-venta.descargar-config` | `PuntoVentaController@descargarConfig` | `auth` | Descarga de archivo `config.json` listo para el puente local Windows |
+
+### 11.2 Métodos y Lógica de Negocio
+
+#### `index(Request $request)`
+- Filtra por `id_sucursal` y `tipo_emision` (`fiscal_hasar` / `arca_wsfe`).
+- Eager loading de `sucursal`.
+- Ordena por `id_sucursal` y `numero`.
+- Paginación: 15 registros por página conservando parámetros (`withQueryString()`).
+
+#### `store(Request $request)` / `update(Request $request, PuntoVenta $puntoVenta)`
+- Valida regla de unicidad compuesta: `Rule::unique('puntos_venta')->where(fn($q) => $q->where('id_sucursal', $request->id_sucursal))`.
+- Si `tipo_emision === 'fiscal_hasar'`:
+  - `hasar_ip`: `required|ipv4`
+  - `hasar_puerto`: `required|integer|min:1|max:65535`
+  - `puerto_local`: `required|integer|min:1024|max:65535`
+  - `modelo`: `nullable|string|max:50` (default `SMH/PT-250F`)
+  - Genera JSON en columna `configuracion`.
+- Si `tipo_emision === 'arca_wsfe'`:
+  - `ambiente`: `required|in:homologacion,produccion`
+  - `concepto`: `nullable|integer|in:1,2,3` (default `1`)
+  - Genera JSON en columna `configuracion`.
+
+#### `descargarConfig(PuntoVenta $puntoVenta)`
+- Valida que `tipo_emision === 'fiscal_hasar'`.
+- Construye el payload:
+  ```json
+  {
+    "punto_venta_id": 1,
+    "punto_venta_numero": 3,
+    "sucursal": "Trelew - Centro",
+    "puerto_local": 8585,
+    "hasar_ip": "192.168.1.150",
+    "hasar_puerto": 2000,
+    "modelo": "SMH/PT-250F"
+  }
+  ```
+- Retorna respuesta de descarga HTTP `Content-Disposition: attachment; filename="config.json"` con `application/json; charset=utf-8`.

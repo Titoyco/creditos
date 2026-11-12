@@ -11,6 +11,7 @@ use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\PresentacionController;
 use App\Http\Controllers\AuditoriaController;
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\PuntoVentaController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
@@ -122,6 +123,10 @@ Route::middleware('auth')->group(function () {
         Route::put('/medios-pago/{medioPago}', [\App\Http\Controllers\MedioPagoController::class, 'update'])->name('sistema.medios-pago.update');
         Route::match(['post', 'patch'], '/medios-pago/{medioPago}/toggle-activo', [\App\Http\Controllers\MedioPagoController::class, 'toggleActivo'])->name('sistema.medios-pago.toggle-activo');
         Route::delete('/medios-pago/{medioPago}', [\App\Http\Controllers\MedioPagoController::class, 'destroy'])->name('sistema.medios-pago.destroy');
+
+        // Puntos de Venta y Facturación Híbrida (Hasar 2G / ARCA WSFE)
+        Route::get('/puntos-venta/{puntoVenta}/descargar-config', [PuntoVentaController::class, 'descargarConfig'])->name('sistema.puntos-venta.descargar-config');
+        Route::resource('puntos-venta', PuntoVentaController::class)->parameters(['puntos-venta' => 'puntoVenta'])->names('sistema.puntos-venta');
     });
 
     // --- PERFIL DE USUARIO ---

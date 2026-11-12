@@ -541,3 +541,60 @@ Todas las transacciones de ingresos, ventas, cobranzas y cuotas se vinculan a la
   - `cuotas()->count() === 0`
   - `recibos()->count() === 0`
 - Si registra movimientos, el controlador bloquea la eliminación informando el conteo discriminado de transacciones asociadas e instruye al usuario a desactivarlo (`activo = false`) para evitar su uso en nuevas operaciones.
+
+---
+
+## 12. Modelo `PuntoVenta` (Puntos de Venta y Facturación Híbrida)
+
+- **Clase**: `App\Models\PuntoVenta`
+- **Tabla**: `puntos_venta`
+- **Migración**: `database/migrations/2026_11_12_100000_create_puntos_venta_table.php`
+
+### 12.1 Esquema de Base de Datos y Tipos de Datos
+
+| Columna | Tipo BD | Modificadores / Restricciones | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id` | `bigint unsigned` | PK, Auto-increment | Identificador único del punto de venta |
+| `id_sucursal` | `bigint unsigned` | FK -> `sucursales(id)`, restrict | Sucursal física o fiscal emisora |
+| `numero` | `unsigned int` | Not Null (min 1, max 99999) | Número legal de punto de venta ante ARCA / AFIP |
+| `nombre` | `varchar(100)` | Not Null | Nombre o descripción operativa (ej: "Caja 1 Trelew") |
+| `tipo_emision` | `enum('fiscal_hasar','arca_wsfe')` | Not Null | Modalidad de emisión fiscal (Controlador local vs Web Service) |
+| `configuracion` | `json` | Nullable, Cast `array` | Parámetros técnicos específicos de red y protocolo |
+| `activo` | `boolean` | Default `true`, Cast `boolean` | Estado operativo del punto de venta |
+| `created_at` / `updated_at` | `timestamps` | Nullable | Fechas de creación y actualización |
+
+**Índice único compuesto**: `unique(['id_sucursal', 'numero'])` para garantizar que una sucursal no duplique números de boca de expendio.
+
+### 12.2 Estructura del Atributo JSON `configuracion`
+
+1. **Para Controlador Fiscal Hasar 2G (`tipo_emision === 'fiscal_hasar'`):**
+   ```json
+   {
+     "puerto_local": 8585,
+     "hasar_ip": "192.168.1.150",
+     "hasar_puerto": 2000,
+     "modelo": "SMH/PT-250F"
+   }
+   ```
+   - `puerto_local`: Puerto TCP HTTP en `127.0.0.1` donde corre el puente Windows de mostrador.
+   - `hasar_ip`: Dirección IPv4 estática asignada a la placa de red Ethernet de la impresora Hasar.
+   - `hasar_puerto`: Puerto TCP del protocolo Hasar (habitualmente 2000).
+   - `modelo`: Identificador de modelo de hardware (ej: `SMH/PT-250F`).
+
+2. **Para Factura Digital ARCA WSFE (`tipo_emision === 'arca_wsfe'`):**
+   ```json
+   {
+     "ambiente": "produccion",
+     "concepto": 1
+   }
+   ```
+   - `ambiente`: `produccion` (servidores oficiales AFIP/ARCA) o `homologacion` (entorno de pruebas).
+   - `concepto`: `1` (Productos / Mercaderías), `2` (Servicios), `3` (Productos y Servicios).
+
+### 12.3 Relaciones Eloquent
+- **`PuntoVenta::sucursal()`**: `belongsTo(Sucursal::class, 'id_sucursal')`.
+- **`Sucursal::puntosVenta()`**: `hasMany(PuntoVenta::class, 'id_sucursal')`.
+
+### 12.4 Auditoría y Accesores
+- Implementa `OwenIt\Auditing\Contracts\Auditable` con trait `\OwenIt\Auditing\Auditable`.
+- **`numero_formateado`**: Retorna el número de punto de venta a 5 dígitos rellenado con ceros a la izquierda (ej: `00003`).

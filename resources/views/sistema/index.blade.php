@@ -35,7 +35,22 @@
                 <h2 class="font-bold text-[11px] text-slate-800 dark:text-slate-100 uppercase tracking-wider group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">Sucursales</h2>
             </div>
             <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
-                Administración de puntos de venta, domicilios, códigos internos y configuración general por sucursal.
+                Administración de sucursales, domicilios, códigos internos y datos fiscales emisores.
+            </p>
+        </a>
+
+        <!-- 2b. Puntos de Venta (Facturación Híbrida) -->
+        <a href="{{ route('sistema.puntos-venta.index') }}" class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-300 dark:border-slate-700 shadow-sm p-4 hover:border-blue-500 dark:hover:border-blue-400 hover:ring-1 hover:ring-blue-500 transition-all flex flex-col group">
+            <div class="flex items-center space-x-3 mb-2">
+                <div class="p-2 bg-slate-100 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 group-hover:bg-blue-600 dark:group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:text-white transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <h2 class="font-bold text-[11px] text-slate-800 dark:text-slate-100 uppercase tracking-wider group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">Puntos de Venta</h2>
+            </div>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight">
+                Gestión de cajas y modalidades: Controlador Fiscal Hasar 2G local vs. Facturación Electrónica ARCA/AFIP.
             </p>
         </a>
 
