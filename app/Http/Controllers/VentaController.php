@@ -15,8 +15,11 @@ use App\Models\Sucursal;
 use App\Models\SucursalIndice;
 use App\Models\Provincia;
 use App\Models\CajaSesion;
+use App\Models\PuntoVenta;
+use App\Services\ArcaWsfeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
@@ -678,6 +681,7 @@ class VentaController extends Controller
                 'id_cliente'              => 'nullable|exists:clientes,id',
                 'cliente_nombre'          => 'nullable|string|max:191',
                 'cliente_documento'       => 'nullable|string|max:50',
+                'tipo_comprobante'        => 'nullable|string|in:FACTURA_A,FACTURA_B,factura_a,factura_b',
                 'medio_pago'              => 'required|string|max:50',
                 'cuotas'                  => 'nullable|integer|min:1|max:4',
                 'autorizado_vendedor'     => 'nullable|boolean',
@@ -816,6 +820,12 @@ class VentaController extends Controller
 
         $totalFinal = max(0, round($subtotal + $recargoFinanciacion - $descuentoMedio, 2));
 
+        // 1. Resolver Punto de Venta asignado a este puesto / terminal (disponible tanto en la transacción como en la respuesta)
+        $idPuntoVenta = $validated['id_punto_venta'] ?? session('terminal_punto_venta_id');
+        $puntoVenta = $idPuntoVenta 
+            ? PuntoVenta::where('id_sucursal', $sucursal->id)->find($idPuntoVenta) 
+            : PuntoVenta::where('id_sucursal', $sucursal->id)->where('activo', true)->first();
+
         // Transacción completa y atómica
         try {
             $venta = DB::transaction(function () use (
@@ -834,11 +844,18 @@ class VentaController extends Controller
                 $valorCuotaRef,
                 $cajaActiva,
                 $autorizadoVendedor,
-                $estadoCred
+                $estadoCred,
+                $puntoVenta
             ) {
-                // 1. Siguiente número correlativo de comprobante por sucursal
-                $numeroFactura = $sucursal->siguienteNumeroComprobante();
-                $comprobanteFormateado = $sucursal->formatearComprobante($numeroFactura);
+                $tipoEmision = $puntoVenta?->tipo_emision;
+                $pvNumero = $puntoVenta ? $puntoVenta->numero : $sucursal->id;
+
+                // Número correlativo de comprobante
+                $numeroFactura = !empty($validated['hasar_ticket_numero'])
+                    ? (int) $validated['hasar_ticket_numero']
+                    : $sucursal->siguienteNumeroComprobante();
+
+                $comprobanteFormateado = sprintf('%05d-%08d', $pvNumero, $numeroFactura);
 
                 // 2. Si es Crédito Personal, dar de alta el Crédito y las Cuotas
                 $idCredito = null;
@@ -898,21 +915,36 @@ class VentaController extends Controller
                     ]);
                 }
 
-                // 3. Crear cabecera de Venta
+                // 3. Crear cabecera de Venta y determinar tipo de comprobante
                 $clienteNombre = $cliente?->nombre ?? ($validated['cliente_nombre'] ?? 'CONSUMIDOR FINAL');
                 $clienteDoc = $cliente?->dni ?? ($validated['cliente_documento'] ?? null);
 
+                $tipoComprobante = strtoupper($validated['tipo_comprobante'] ?? $input['tipo_comprobante'] ?? 'FACTURA_B');
+                if (!in_array($tipoComprobante, ['FACTURA_A', 'FACTURA_B'])) {
+                    $tipoComprobante = 'FACTURA_B';
+                }
+
+                // Si se emite Factura A, verificar que el comprador tenga CUIT válido de 11 dígitos
+                if ($tipoComprobante === 'FACTURA_A') {
+                    $docNumerico = preg_replace('/\D/', '', (string) ($clienteDoc ?? ''));
+                    if (strlen($docNumerico) !== 11) {
+                        throw new \Exception("Para emitir Factura A es obligatorio seleccionar o ingresar un cliente con CUIT válido de 11 dígitos.");
+                    }
+                }
+
                 $venta = Venta::create([
                     'id_sucursal'         => $sucursal->id,
+                    'id_punto_venta'      => $puntoVenta?->id,
+                    'tipo_emision'        => $tipoEmision,
                     'id_usuario'          => $user?->id ?? 1,
                     'id_cliente'          => $cliente?->id,
                     'id_caja_sesion'      => $cajaActiva->id,
                     'cliente_nombre'      => $clienteNombre,
                     'cliente_documento'   => $clienteDoc,
-                    'punto_venta'         => $sucursal->id,
+                    'punto_venta'         => $pvNumero,
                     'numero_factura'      => $numeroFactura,
                     'comprobante'         => $comprobanteFormateado,
-                    'tipo_comprobante'    => 'FACTURA_B',
+                    'tipo_comprobante'    => $tipoComprobante,
                     'fecha'               => now(),
                     'medio_pago'          => $medioPago,
                     'id_medio_pago'       => $idMedioPago,
@@ -993,6 +1025,35 @@ class VentaController extends Controller
                     ]);
                 }
 
+                // 5. Emisión Fiscal según la Modalidad del Punto de Venta
+                if ($puntoVenta && $tipoEmision === 'arca_wsfe') {
+                    try {
+                        $arcaService = app(ArcaWsfeService::class);
+                        $tipoCbteAfip = ($tipoComprobante === 'FACTURA_A') ? 1 : 6;
+                        $resArca = $arcaService->emitirFactura($puntoVenta, $venta, $tipoCbteAfip);
+                        $venta->update([
+                            'numero_factura'  => $resArca['numero_factura'],
+                            'comprobante'     => sprintf('%05d-%08d', $pvNumero, $resArca['numero_factura']),
+                            'cae'             => $resArca['cae'],
+                            'cae_vencimiento' => $resArca['cae_vencimiento'],
+                            'afip_qr'         => $resArca['afip_qr'],
+                            'datos_fiscales'  => $resArca,
+                        ]);
+                    } catch (\Throwable $eArca) {
+                        Log::error("Fallo emisión ARCA en venta #{$venta->id}: " . $eArca->getMessage());
+                        throw new \Exception("Fallo en Factura Digital ARCA: " . $eArca->getMessage());
+                    }
+                } elseif ($puntoVenta && $tipoEmision === 'fiscal_hasar') {
+                    $venta->update([
+                        'datos_fiscales' => [
+                            'modelo'       => $puntoVenta->configuracion['modelo'] ?? 'SMH/PT-250F',
+                            'hasar_ip'     => $puntoVenta->configuracion['hasar_ip'] ?? null,
+                            'puerto_local' => $puntoVenta->configuracion['puerto_local'] ?? 8585,
+                            'letra'        => ($tipoComprobante === 'FACTURA_A') ? 'A' : 'B',
+                        ],
+                    ]);
+                }
+
                 return $venta;
             });
         } catch (\Throwable $e) {
@@ -1002,17 +1063,33 @@ class VentaController extends Controller
             return back()->with('error', $e->getMessage())->withInput();
         }
 
+        $pvConfig = $puntoVenta ?? $venta->puntoVenta;
+
         if ($request->wantsJson()) {
             return response()->json([
-                'success'      => true,
-                'venta_id'     => $venta->id,
-                'comprobante'  => $venta->comprobante,
-                'total'        => (float) $venta->total,
-                'redirect_url' => route('ventas.show', $venta->id),
-                'ticket_url'   => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']),
-                'a4_url'       => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'a4']),
-                'id_credito'   => $venta->id_credito,
-                'pagare_url'   => $venta->id_credito ? route('creditos.pagare', $venta->id_credito) : null,
+                'success'          => true,
+                'venta_id'         => $venta->id,
+                'comprobante'      => $venta->comprobante,
+                'tipo_comprobante' => $venta->tipo_comprobante,
+                'es_exento_iva'    => $venta->esExentoIva(),
+                'total'            => (float) $venta->total,
+                'tipo_emision'     => $venta->tipo_emision,
+                'cae'              => $venta->cae,
+                'cae_vencimiento'  => $venta->cae_vencimiento ? $venta->cae_vencimiento->format('d/m/Y') : null,
+                'afip_qr'          => $venta->afip_qr,
+                'hasar_config'     => ($venta->tipo_emision === 'fiscal_hasar' && $pvConfig) ? [
+                    'puerto_local' => $pvConfig->configuracion['puerto_local'] ?? 8585,
+                    'hasar_ip'     => $pvConfig->configuracion['hasar_ip'] ?? '',
+                    'hasar_puerto' => $pvConfig->configuracion['hasar_puerto'] ?? 2000,
+                    'modelo'       => $pvConfig->configuracion['modelo'] ?? 'SMH/PT-250F',
+                    'letra'        => ($venta->tipo_comprobante === 'FACTURA_A') ? 'A' : 'B',
+                    'es_exento_iva'=> $venta->esExentoIva(),
+                ] : null,
+                'redirect_url'    => route('ventas.show', $venta->id),
+                'ticket_url'      => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']),
+                'a4_url'          => route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'a4']),
+                'id_credito'      => $venta->id_credito,
+                'pagare_url'      => $venta->id_credito ? route('creditos.pagare', $venta->id_credito) : null,
             ]);
         }
 
@@ -1123,10 +1200,35 @@ class VentaController extends Controller
                 $credito->delete();
             }
 
-            // 3. Marcar venta como anulada
+            // 3. Emisión de Nota de Crédito Fiscal según el canal emisor
+            $mensajeFiscal = '';
+            if ($venta->tipo_emision === 'arca_wsfe' && !empty($venta->cae) && $venta->puntoVenta) {
+                try {
+                    $arcaService = app(ArcaWsfeService::class);
+                    $resNc = $arcaService->emitirNotaCredito($venta->puntoVenta, $venta, $request->motivo);
+                    $datosFiscales = $venta->datos_fiscales ?? [];
+                    $datosFiscales['nota_credito'] = $resNc;
+                    $venta->datos_fiscales = $datosFiscales;
+                    $mensajeFiscal = " Se generó la Nota de Crédito ARCA N° {$resNc['numero_factura']} (CAE: {$resNc['cae']}).";
+                } catch (\Throwable $eNc) {
+                    Log::error("Fallo emitiendo Nota de Crédito ARCA: " . $eNc->getMessage());
+                    throw new \Exception("No se pudo emitir la Nota de Crédito en ARCA: " . $eNc->getMessage());
+                }
+            } elseif ($venta->tipo_emision === 'fiscal_hasar') {
+                $datosFiscales = $venta->datos_fiscales ?? [];
+                $datosFiscales['nota_credito'] = [
+                    'motivo'                  => $request->motivo,
+                    'fecha'                   => now()->toDateTimeString(),
+                    'pendiente_emision_hasar' => true,
+                ];
+                $venta->datos_fiscales = $datosFiscales;
+                $mensajeFiscal = " Recuerde emitir el Ticket Nota de Crédito en el Controlador Fiscal Hasar.";
+            }
+
+            // 4. Marcar venta como anulada
             $venta->update([
                 'estado'        => 'anulada',
-                'observaciones' => trim(($venta->observaciones ? $venta->observaciones . " | " : "") . "ANULADA: " . $request->motivo),
+                'observaciones' => trim(($venta->observaciones ? $venta->observaciones . " | " : "") . "ANULADA: " . $request->motivo . $mensajeFiscal),
             ]);
         });
 

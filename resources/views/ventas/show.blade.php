@@ -12,7 +12,15 @@
                 </a>
                 <div>
                     <h1 class="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight flex items-center gap-2">
-                        <span>Factura #{{ $venta->comprobante }}</span>
+                        <span>Factura {{ $venta->isFacturaA() ? 'A' : 'B' }} #{{ $venta->comprobante }}</span>
+                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded {{ $venta->isFacturaA() ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200 border border-indigo-300' : 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200' }}">
+                            {{ $venta->isFacturaA() ? 'Factura A' : 'Factura B' }}
+                        </span>
+                        @if($venta->esExentoIva())
+                            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-300 dark:bg-teal-950 dark:text-teal-300" title="Operación Exenta por Ley 19.640">
+                                🌴 Exento Ley 19.640
+                            </span>
+                        @endif
                         @if($venta->estado === 'completada')
                             <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300">
                                 Completada
@@ -20,6 +28,16 @@
                         @else
                             <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950 dark:text-rose-300">
                                 Anulada
+                            </span>
+                        @endif
+
+                        @if($venta->cae)
+                            <span class="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300 dark:bg-sky-950 dark:text-sky-300">
+                                CAE: {{ $venta->cae }} (Vto: {{ $venta->cae_vencimiento?->format('d/m/Y') }})
+                            </span>
+                        @elseif($venta->tipo_emision === 'fiscal_hasar')
+                            <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950 dark:text-amber-300">
+                                🖨️ Hasar 2G
                             </span>
                         @endif
                     </h1>
@@ -141,6 +159,22 @@
                         <div class="flex items-center justify-between text-xs text-indigo-600">
                             <span>Recargo Financiación:</span>
                             <span class="font-mono tabular-nums font-bold">$ {{ number_format((float)$venta->recargo, 2, ',', '.') }}</span>
+                        </div>
+                    @endif
+
+                    @if($venta->esExentoIva())
+                        <div class="flex items-center justify-between text-xs text-teal-700 dark:text-teal-400">
+                            <span>Tratamiento Fiscal:</span>
+                            <span class="font-bold">Exento de IVA (Ley 19.640)</span>
+                        </div>
+                    @elseif($venta->isFacturaA())
+                        <div class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+                            <span>Neto Gravado:</span>
+                            <span class="font-mono tabular-nums font-bold">$ {{ number_format($venta->netoGravado(), 2, ',', '.') }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-400">
+                            <span>IVA Liquidado (21%):</span>
+                            <span class="font-mono tabular-nums font-bold">$ {{ number_format($venta->ivaLiquidado(), 2, ',', '.') }}</span>
                         </div>
                     @endif
 

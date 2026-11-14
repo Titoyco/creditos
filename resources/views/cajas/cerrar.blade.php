@@ -1,16 +1,236 @@
 <x-app-layout>
-    <div class="max-w-4xl mx-auto py-5 px-3 space-y-5" 
-         x-data="{
-             teoricoEfectivo: {{ (float) $totales['efectivo_esperado'] }},
-             realContado: {{ (float) $totales['efectivo_esperado'] }},
-             formatDinero(val) {
-                 if (val === undefined || val === null || isNaN(val)) return '0,00';
-                 return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-             },
-             diferencia() {
-                 return Math.round((Number(this.realContado || 0) - this.teoricoEfectivo) * 100) / 100;
-             }
-         }">
+    <!-- Script del Cierre Z y Arqueo de Caja -->
+    <script>
+        window.controladoresHasarEstado = @json($resumenFiscal['hasar_controladores'] ?? []);
+
+        function actualizarInputResumenFiscal() {
+            const input = document.getElementById('input_resumen_fiscal');
+            if (input) {
+                input.value = JSON.stringify({
+                    arca: @json($resumenFiscal['arca'] ?? []),
+                    hasar_controladores: window.controladoresHasarEstado,
+                    hasar_total_general: window.controladoresHasarEstado.reduce((acc, c) => acc + Number(c.total || 0), 0),
+                    hasar_cant_total: window.controladoresHasarEstado.reduce((acc, c) => acc + Number(c.cant_tickets || 0), 0)
+                });
+            }
+        }
+
+        window.ejecutarCierreZ = async function(key, hasarIp, hasarPuerto, puertoLocal, modelo, ctrlId) {
+            console.group(`⚡ [CIERRE Z HASAR] - Controlador ${modelo} (${key})`);
+            console.log('1. [INICIO] Ejecutando Cierre Z:', { key, hasarIp, hasarPuerto, puertoLocal, modelo });
+
+            const btn = document.getElementById(ctrlId + '_btn');
+            const btnText = document.getElementById(ctrlId + '_btn_text');
+            const badge = document.getElementById(ctrlId + '_badge');
+            const icon = document.getElementById(ctrlId + '_icon');
+            const card = document.getElementById(ctrlId);
+            const errP = document.getElementById(ctrlId + '_error');
+
+            if (btn) btn.disabled = true;
+            if (btnText) btnText.textContent = '⏳ Emitiendo Z...';
+            if (errP) { errP.textContent = ''; errP.classList.add('hidden'); }
+
+            let payloadZ = {
+                accion: "cierre_z",
+                hasar_ip: hasarIp,
+                hasar_puerto: hasarPuerto,
+                modelo: modelo,
+                caja_id: {{ $caja->id }},
+                sucursal: {!! json_encode($caja->sucursal?->nombre ?? '') !!}
+            };
+
+            console.log('2. [PAYLOAD ENVIADO]:', payloadZ);
+
+            let dataBridge = null;
+            const hostsATestear = ['127.0.0.1', 'localhost'];
+            for (let h of hostsATestear) {
+                try {
+                    console.log(`3. [INTENTO FETCH PUENTE]: http://${h}:${puertoLocal}/imprimir`);
+                    let resBridge = await fetch(`http://${h}:${puertoLocal}/imprimir`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                        body: JSON.stringify(payloadZ)
+                    });
+                    if (resBridge && resBridge.ok) {
+                        dataBridge = await resBridge.json();
+                        console.log(`✓ [PUENTE RESPONDIÓ EN ${h}:${puertoLocal}]:`, dataBridge);
+                        break;
+                    }
+                } catch (err) {
+                    console.warn(`Fetch a http://${h}:${puertoLocal}/imprimir no disponible:`, err.message);
+                }
+            }
+
+            try {
+                console.log('4. [ENVIANDO A LARAVEL]:', '{{ route("cajas.cierre-z-hasar", $caja->id) }}');
+                let resServidor = await fetch('{{ route("cajas.cierre-z-hasar", $caja->id) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        hasar_ip: hasarIp,
+                        hasar_puerto: hasarPuerto,
+                        puerto_local: puertoLocal,
+                        modelo: modelo,
+                        numero_z: dataBridge ? (dataBridge.numero_comprobante || dataBridge.numero_z || dataBridge.numero || dataBridge.nro_z) : null,
+                        respuesta: dataBridge
+                    })
+                });
+
+                let dataServidor = await resServidor.json();
+                console.log('5. [RESPUESTA DE LARAVEL]:', dataServidor);
+
+                if (!resServidor.ok || !dataServidor.success) {
+                    throw new Error(dataServidor.message || 'No se pudo contactar el controlador fiscal Hasar.');
+                }
+
+                let nroZ = dataServidor.numero_z || (dataBridge ? dataBridge.numero_comprobante : 'Z-OK');
+                
+                // Actualizar UI
+                if (badge) {
+                    badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200 flex items-center gap-1';
+                    badge.textContent = `✓ Cierre Z Emitido (#${nroZ})`;
+                }
+                if (icon) {
+                    icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 shadow-sm bg-emerald-600 text-white';
+                }
+                if (card) {
+                    card.className = 'p-3.5 rounded-xl border transition-all bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800';
+                }
+                if (btn) {
+                    btn.className = 'px-3.5 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300';
+                    btn.disabled = false;
+                }
+                if (btnText) {
+                    btnText.textContent = '🔄 Re-emitir Cierre Z';
+                }
+
+                const banner = document.getElementById('banner-alerta-z');
+                if (banner) banner.classList.add('hidden');
+
+                // Actualizar estado persistido
+                let idx = window.controladoresHasarEstado.findIndex(c => c.key === key);
+                if (idx !== -1) {
+                    window.controladoresHasarEstado[idx].cierre_z_emitido = true;
+                    window.controladoresHasarEstado[idx].cierre_z_numero = nroZ;
+                    window.controladoresHasarEstado[idx].cierre_z_fecha = new Date().toLocaleTimeString('es-AR');
+                }
+                actualizarInputResumenFiscal();
+
+                console.log(`✅ [ÉXITO] Cierre Z registrado: #${nroZ}`);
+                console.groupEnd();
+                alert(`✓ Cierre Z emitido y registrado exitosamente.\n\nNúmero de Z: #${nroZ}\nControlador: ${modelo} (${hasarIp})`);
+
+            } catch (e) {
+                console.error('❌ [ERROR AL EMITIR CIERRE Z]:', e);
+                console.groupEnd();
+
+                let nroManual = prompt('No se pudo contactar automáticamente el controlador fiscal Hasar en el puerto ' + puertoLocal + '.\n\nSi emitió el Cierre Z manualmente desde la impresora física (o el simulador ya lo emitió), ingrese el Número de Z para registrarlo en el sistema (ej: 0010):');
+                if (nroManual && nroManual.trim()) {
+                    let nroZ = nroManual.trim();
+                    await fetch('{{ route("cajas.cierre-z-hasar", $caja->id) }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({
+                            hasar_ip: hasarIp,
+                            hasar_puerto: hasarPuerto,
+                            puerto_local: puertoLocal,
+                            modelo: modelo,
+                            numero_z: nroZ,
+                            respuesta: { manual: true }
+                        })
+                    });
+
+                    if (badge) {
+                        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200 flex items-center gap-1';
+                        badge.textContent = `✓ Cierre Z Emitido (#${nroZ})`;
+                    }
+                    if (icon) {
+                        icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 shadow-sm bg-emerald-600 text-white';
+                    }
+                    if (card) {
+                        card.className = 'p-3.5 rounded-xl border transition-all bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800';
+                    }
+                    if (btn) {
+                        btn.className = 'px-3.5 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300';
+                        btn.disabled = false;
+                    }
+                    if (btnText) {
+                        btnText.textContent = '🔄 Re-emitir Cierre Z';
+                    }
+
+                    const banner = document.getElementById('banner-alerta-z');
+                    if (banner) banner.classList.add('hidden');
+
+                    let idx = window.controladoresHasarEstado.findIndex(c => c.key === key);
+                    if (idx !== -1) {
+                        window.controladoresHasarEstado[idx].cierre_z_emitido = true;
+                        window.controladoresHasarEstado[idx].cierre_z_numero = nroZ;
+                        window.controladoresHasarEstado[idx].cierre_z_fecha = new Date().toLocaleTimeString('es-AR');
+                    }
+                    actualizarInputResumenFiscal();
+                    alert(`✓ Cierre Z #${nroZ} registrado manualmente.`);
+                } else {
+                    if (errP) {
+                        errP.textContent = 'No se pudo contactar el controlador fiscal. Verifique que el simulador/puente Hasar esté activo en localhost:' + puertoLocal;
+                        errP.classList.remove('hidden');
+                    }
+                    if (btn) btn.disabled = false;
+                    if (btnText) btnText.textContent = '⚡ Emitir Cierre Z';
+                }
+            }
+        };
+
+        window.validarCierreForm = function(e) {
+            console.log('⚡ [FORM SUBMIT] validarCierreForm invocado');
+            let pend = (window.controladoresHasarEstado || []).filter(c => Number(c.cant_tickets || 0) > 0 && !c.cierre_z_emitido);
+            if (pend.length > 0) {
+                let nombres = pend.map(c => `• ${c.modelo} (${c.hasar_ip}:${c.hasar_puerto}) - ${c.cant_tickets} ticket(s)`).join('\n');
+                let avanzar = confirm(`Controladores pendientes de Cierre Z:\n${nombres}\n\n¿Desea que el sistema intente emitir el Cierre Z automáticamente ahora y asentar el cierre de caja?`);
+                if (!avanzar) {
+                    if (e) e.preventDefault();
+                    return false;
+                }
+            } else {
+                if (!confirm('¿Está seguro de cerrar definitivamente la caja? Se asentará el Cierre Z oficial y el arqueo de efectivo.')) {
+                    if (e) e.preventDefault();
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        function cierreCajaApp() {
+            return {
+                arca: @json($resumenFiscal['arca'] ?? []),
+                teoricoEfectivo: {{ (float) $totales['efectivo_esperado'] }},
+                realContado: {{ max(0, (float) $totales['efectivo_esperado']) }},
+                formatDinero(val) {
+                    if (val === undefined || val === null || isNaN(val)) return '0,00';
+                    return Number(val).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                },
+                diferencia() {
+                    return Math.round((Number(this.realContado || 0) - this.teoricoEfectivo) * 100) / 100;
+                }
+            };
+        }
+
+        window.cierreCajaApp = cierreCajaApp;
+        if (window.Alpine) {
+            window.Alpine.data('cierreCajaApp', cierreCajaApp);
+        } else {
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('cierreCajaApp', cierreCajaApp);
+            });
+        }
+    </script>
+
+    <div class="max-w-4xl mx-auto py-5 px-3 space-y-5" x-data="cierreCajaApp()">
 
         <!-- Header -->
         <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
@@ -47,7 +267,9 @@
         @endif
 
         <form method="POST" action="{{ route('cajas.cerrar.store', $caja->id) }}" class="space-y-5"
-              onsubmit="return confirm('¿Está seguro de cerrar definitivamente la caja? Se generará el Cierre Z oficial y no se podrán agregar más ventas a este turno.');">
+              id="formCierreCaja"
+              @submit="validarAntesDeCerrar($event)"
+              onsubmit="return window.validarCierreForm(event)">
             @csrf
 
             <!-- 1. RESUMEN POR MEDIOS DE PAGO (SIMILAR AL CIERRE Z DE REGISTRADORA) -->
@@ -143,7 +365,142 @@
                 </div>
             </div>
 
-            <!-- 2. ARQUEO DE EFECTIVO FÍSICO Y FALLO DE CAJA -->
+            <!-- 2. DISCRIMINACIÓN FISCAL HÍBRIDA & CIERRES Z DE CONTROLADORES FISCALES -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-xs space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm">🖨️</span>
+                        <div>
+                            <span class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 block">
+                                Discriminación Fiscal & Cierres Z de Controladores
+                            </span>
+                            <span class="text-[10px] text-slate-500">
+                                Factura Digital ARCA vs. Controladores Fiscales Hasar 2G (Unificados por IP)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- A. Facturación Digital ARCA --}}
+                <div class="p-3 rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50/50 dark:bg-sky-950/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
+                            🌐
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-black uppercase text-sky-950 dark:text-sky-200">Facturación Digital ARCA (Web Service)</span>
+                                <span class="text-[9px] font-mono bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-200 font-bold px-1.5 py-0.5 rounded uppercase">
+                                    Digital en Línea
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-sky-800 dark:text-sky-300 mt-0.5">
+                                Comprobantes autorizados con CAE electrónico. No requiere cierre Z de hardware físico.
+                            </p>
+                            <div class="flex items-center gap-3 text-[10px] text-sky-700 dark:text-sky-400 mt-1 font-mono">
+                                <span>Facturas B: <strong>{{ $resumenFiscal['arca']['facturas_b_cant'] ?? 0 }}</strong> (${{ number_format($resumenFiscal['arca']['facturas_b_total'] ?? 0, 2, ',', '.') }})</span>
+                                <span>•</span>
+                                <span>Facturas A: <strong>{{ $resumenFiscal['arca']['facturas_a_cant'] ?? 0 }}</strong> (${{ number_format($resumenFiscal['arca']['facturas_a_total'] ?? 0, 2, ',', '.') }})</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right sm:border-l sm:border-sky-200 dark:sm:border-sky-900 sm:pl-4 shrink-0">
+                        <span class="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase block">Total Digital ARCA</span>
+                        <span class="text-lg font-black font-mono text-sky-950 dark:text-sky-200">$ {{ number_format($resumenFiscal['arca']['total'] ?? 0, 2, ',', '.') }}</span>
+                        <span class="text-[10px] font-mono text-sky-600 dark:text-sky-400 block">{{ $resumenFiscal['arca']['cant_comprobantes'] ?? 0 }} comprobantes</span>
+                    </div>
+                </div>
+
+                {{-- B. Controladores Fiscales Hasar 2G Físicos --}}
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            <span>🖨️</span>
+                            <span>Controladores Fiscales Físicos en la Sucursal:</span>
+                        </span>
+                    </div>
+
+                    @php
+                        $hasPendientesZ = false;
+                        foreach ($resumenFiscal['hasar_controladores'] ?? [] as $c) {
+                            if (!empty($c['cant_tickets']) && empty($c['cierre_z_emitido'])) {
+                                $hasPendientesZ = true;
+                                break;
+                            }
+                        }
+                    @endphp
+
+                    {{-- Banner de advertencia si hay Z pendientes con tickets --}}
+                    <div id="banner-alerta-z" class="p-3 bg-amber-50 dark:bg-amber-950/60 border-2 border-amber-400 dark:border-amber-700 rounded-xl text-xs text-amber-950 dark:text-amber-200 flex items-start gap-2.5 shadow-xs {{ $hasPendientesZ ? '' : 'hidden' }}">
+                        <span class="text-base shrink-0">⚠️</span>
+                        <div>
+                            <strong class="font-black uppercase tracking-wider block">Emisión Obligatoria de Cierre Z</strong>
+                            <span class="text-[11px] leading-tight block mt-0.5">
+                                Existen controladores fiscales con tickets emitidos que aún no poseen Cierre Z. <strong>Debe presionar "⚡ Emitir Cierre Z" en cada equipo</strong> (o asentar su N° manual si la impresora física no responde al puente) antes de poder cerrar la caja.
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3">
+                        @forelse($resumenFiscal['hasar_controladores'] ?? [] as $ctrl)
+                            @php
+                                $ctrlId = 'ctrl_' . md5($ctrl['key']);
+                                $tieneTickets = ($ctrl['cant_tickets'] ?? 0) > 0;
+                                $zEmitido = !empty($ctrl['cierre_z_emitido']);
+                            @endphp
+                            <div id="{{ $ctrlId }}" class="p-3.5 rounded-xl border transition-all {{ $zEmitido ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800' : ($tieneTickets ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700') }}">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div class="flex items-start gap-3">
+                                        <div id="{{ $ctrlId }}_icon" class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shrink-0 shadow-sm {{ $zEmitido ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white' }}">
+                                            🖨️
+                                        </div>
+                                        <div>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-xs font-black uppercase text-slate-900 dark:text-white">
+                                                    {{ $ctrl['modelo'] }} • IP: {{ $ctrl['hasar_ip'] }}:{{ $ctrl['hasar_puerto'] }}
+                                                </span>
+                                                <span id="{{ $ctrlId }}_badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full {{ $zEmitido ? 'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200' : ($tieneTickets ? 'bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200 animate-pulse' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300') }}">
+                                                    {{ $zEmitido ? '✓ Cierre Z Emitido (' . ($ctrl['cierre_z_numero'] ?? 'OK') . ')' : ($tieneTickets ? '⚠️ Cierre Z Pendiente' : 'Sin Ventas en este Turno') }}
+                                                </span>
+                                            </div>
+
+                                            <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                                                Puntos de venta asociados: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ $ctrl['puntos_venta_info'] }}</strong>
+                                            </p>
+
+                                            <div class="flex items-center gap-3 text-[11px] font-mono text-slate-600 dark:text-slate-400 mt-1">
+                                                <span>Tickets Emitidos: <strong class="text-slate-900 dark:text-white">{{ $ctrl['cant_tickets'] }}</strong></span>
+                                                <span>•</span>
+                                                <span>Total Facturado: <strong class="text-slate-900 dark:text-white">$ {{ number_format($ctrl['total'], 2, ',', '.') }}</strong></span>
+                                            </div>
+
+                                            <p id="{{ $ctrlId }}_error" class="text-[11px] text-rose-600 font-bold mt-1 hidden"></p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                        <button type="button" 
+                                                id="{{ $ctrlId }}_btn"
+                                                onclick="ejecutarCierreZ('{{ $ctrl['key'] }}', '{{ $ctrl['hasar_ip'] }}', {{ $ctrl['hasar_puerto'] }}, {{ $ctrl['puerto_local'] }}, '{{ $ctrl['modelo'] }}', '{{ $ctrlId }}')"
+                                                class="px-3.5 py-2 rounded-xl text-xs font-black uppercase transition flex items-center gap-1.5 shadow-sm cursor-pointer {{ $zEmitido ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300' : 'bg-amber-600 hover:bg-amber-700 text-white' }}">
+                                            <span id="{{ $ctrlId }}_btn_text">{{ $zEmitido ? '🔄 Re-emitir Cierre Z' : '⚡ Emitir Cierre Z' }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 text-center">
+                                No hay controladores fiscales Hasar activos registrados para esta sucursal.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+
+                {{-- Campo oculto para persistir el resumen fiscal consolidado en el POST --}}
+                <input type="hidden" name="resumen_fiscal" id="input_resumen_fiscal" value="{{ json_encode($resumenFiscal) }}">
+            </div>
+
+            <!-- 3. ARQUEO DE EFECTIVO FÍSICO Y FALLO DE CAJA -->
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-xs space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-2">
                     <span class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -293,6 +650,37 @@
                 </div>
             </div>
 
+            @if(!$caja->esDeHoy())
+            <!-- 4. APERTURA AUTOMÁTICA DE LA CAJA DE HOY -->
+            <div class="bg-indigo-50/70 dark:bg-indigo-950/40 p-4 rounded-2xl border-2 border-indigo-400 dark:border-indigo-600 shadow-xs space-y-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-sm">
+                        🌅
+                    </span>
+                    <div>
+                        <h3 class="text-xs font-black uppercase text-indigo-950 dark:text-indigo-200 tracking-wider">
+                            Apertura Automática de la Caja de HOY ({{ now()->format('d/m/Y') }})
+                        </h3>
+                        <p class="text-[11px] text-indigo-800 dark:text-indigo-300">
+                            Al confirmar este Cierre Z de la jornada previa, se abrirá automáticamente el turno de hoy para <strong>{{ $caja->sucursal?->nombre }}</strong> y volverá al POS listo para facturar.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="pt-1">
+                    <label class="block text-[11px] font-black uppercase text-indigo-950 dark:text-indigo-200 mb-1">
+                        Fondo Inicial en Efectivo para Abrir la Caja de HOY ($ ARS):
+                    </label>
+                    <div class="relative max-w-xs">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-sm">$</span>
+                        <input type="number" step="0.01" min="0" required name="monto_inicial_hoy"
+                               class="w-full pl-8 pr-3 font-mono font-black text-base py-2 rounded-xl border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right focus:ring-2 focus:ring-indigo-500 shadow-xs"
+                               placeholder="0.00" value="{{ old('monto_inicial_hoy', '') }}">
+                    </div>
+                </div>
+            </div>
+            @endif
+
             <!-- Botones de Acción -->
             <div class="flex items-center justify-end gap-3 pt-2">
                 <a href="{{ route('cajas.index') }}" 
@@ -301,7 +689,7 @@
                 </a>
                 <button type="submit" 
                         class="bg-slate-900 hover:bg-black dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-black text-xs py-2.5 px-6 rounded-xl shadow-lg transition uppercase flex items-center gap-2 cursor-pointer">
-                    <span>🔒 Confirmar Cierre Z de Caja</span>
+                    <span>🔒 {{ !$caja->esDeHoy() ? 'Confirmar Cierre Z y Abrir Caja de Hoy' : 'Confirmar Cierre Z de Caja' }}</span>
                 </button>
             </div>
         </form>

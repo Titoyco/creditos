@@ -14,7 +14,7 @@
         </div>
     </div>
 
-    <form action="{{ route('sistema.puntos-venta.store') }}" method="POST" autocomplete="off"
+    <form action="{{ route('sistema.puntos-venta.store') }}" method="POST" enctype="multipart/form-data" autocomplete="off"
           x-data="{ tipo: '{{ old('tipo_emision', 'fiscal_hasar') }}' }">
         @csrf
 
@@ -168,26 +168,71 @@
                 <div class="p-4 space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
                         <!-- Ambiente -->
-                        <div class="sm:col-span-6">
+                        <div class="sm:col-span-4">
                             <label for="ambiente" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Ambiente ARCA *</label>
                             <select id="ambiente" name="ambiente"
                                     class="w-full text-xs font-bold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm">
-                                <option value="produccion" {{ old('ambiente', 'produccion') === 'produccion' ? 'selected' : '' }}>Producción Oficial (Comprobantes con validez fiscal)</option>
-                                <option value="homologacion" {{ old('ambiente') === 'homologacion' ? 'selected' : '' }}>Homologación / Testing (Pruebas de desarrollo)</option>
+                                <option value="produccion" {{ old('ambiente', 'produccion') === 'produccion' ? 'selected' : '' }}>Producción Oficial (Validez Fiscal)</option>
+                                <option value="homologacion" {{ old('ambiente') === 'homologacion' ? 'selected' : '' }}>Homologación / Testing (Pruebas)</option>
                             </select>
                             <x-input-error :messages="$errors->get('ambiente')" class="mt-1"/>
                         </div>
 
+                        <!-- CUIT Emisor -->
+                        <div class="sm:col-span-4">
+                            <label for="cuit" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">CUIT Emisor ante ARCA *</label>
+                            <input id="cuit" name="cuit" type="text" maxlength="14"
+                                   value="{{ old('cuit', '30-71234567-8') }}"
+                                   placeholder="30712345678"
+                                   class="w-full text-xs font-mono font-bold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm tabular-nums">
+                            <x-input-error :messages="$errors->get('cuit')" class="mt-1"/>
+                        </div>
+
                         <!-- Concepto -->
-                        <div class="sm:col-span-6">
-                            <label for="concepto" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Concepto AFIP Predeterminado</label>
+                        <div class="sm:col-span-4">
+                            <label for="concepto" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Concepto Predeterminado</label>
                             <select id="concepto" name="concepto"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm">
-                                <option value="1" {{ old('concepto', 1) == 1 ? 'selected' : '' }}>1 - Productos / Mercaderías (Venta minorista)</option>
+                                <option value="1" {{ old('concepto', 1) == 1 ? 'selected' : '' }}>1 - Productos / Mercaderías</option>
                                 <option value="2" {{ old('concepto') == 2 ? 'selected' : '' }}>2 - Servicios</option>
                                 <option value="3" {{ old('concepto') == 3 ? 'selected' : '' }}>3 - Productos y Servicios</option>
                             </select>
                             <x-input-error :messages="$errors->get('concepto')" class="mt-1"/>
+                        </div>
+                    </div>
+
+                    <!-- Claves Digitales y Certificado X.509 -->
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-700/80">
+                        <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                            <span>Certificado Digital y Clave Privada (WSAA)</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-3 leading-tight">
+                            Suba el archivo de certificado otorgado por ARCA (<code>.crt</code> o <code>.pem</code>) y la clave privada generada con OpenSSL (<code>.key</code>). Se almacenarán de forma segura en el servidor.
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <!-- Archivo Certificado -->
+                            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                                <label for="certificado" class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                                    Certificado Digital (.crt / .pem)
+                                </label>
+                                <input id="certificado" name="certificado" type="file" accept=".crt,.pem,.cert"
+                                       class="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                <x-input-error :messages="$errors->get('certificado')" class="mt-1"/>
+                            </div>
+
+                            <!-- Archivo Clave Privada -->
+                            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                                <label for="clave_privada" class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-1">
+                                    Clave Privada (.key)
+                                </label>
+                                <input id="clave_privada" name="clave_privada" type="file" accept=".key,.pem,.txt"
+                                       class="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                <x-input-error :messages="$errors->get('clave_privada')" class="mt-1"/>
+                            </div>
                         </div>
                     </div>
                 </div>

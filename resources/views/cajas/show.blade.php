@@ -195,6 +195,136 @@
             </div>
         </div>
 
+        <!-- DISCRIMINACIÓN FISCAL HÍBRIDA & CIERRES Z DE CONTROLADORES -->
+        @if(!empty($resumenFiscal))
+        <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/80 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">🖨️</span>
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">
+                            Discriminación Fiscal Híbrida & Cierres Z
+                        </h2>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            Separación de facturación electrónica en la nube (ARCA) y controladores fiscales de hardware Hasar 2G.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- ARCA Digital -->
+                <div class="p-4 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50/40 dark:bg-sky-950/20 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-black uppercase text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
+                                <span>🌐</span>
+                                <span>Factura Digital ARCA (WSFE)</span>
+                            </span>
+                            <span class="text-[10px] font-mono bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300 font-bold px-2 py-0.5 rounded">
+                                CAE Digital
+                            </span>
+                        </div>
+                        <p class="text-xs text-sky-700 dark:text-sky-300 mt-1">
+                            Comprobantes autorizados por Web Service en servidores de ARCA. No requiere Z de hardware.
+                        </p>
+
+                        <div class="mt-3 grid grid-cols-2 gap-2 text-xs font-mono">
+                            <div class="p-2 bg-white/70 dark:bg-slate-900/40 rounded-lg border border-sky-100 dark:border-sky-900/60">
+                                <div class="text-[10px] uppercase font-bold text-slate-500">Facturas B (C. Final)</div>
+                                <div class="font-bold text-sky-900 dark:text-sky-200 mt-0.5">
+                                    {{ $resumenFiscal['arca']['facturas_b_cant'] ?? 0 }} comprobantes
+                                </div>
+                                <div class="text-[11px] text-slate-600 dark:text-slate-400">
+                                    ${{ number_format($resumenFiscal['arca']['facturas_b_total'] ?? 0, 2, ',', '.') }}
+                                </div>
+                            </div>
+                            <div class="p-2 bg-white/70 dark:bg-slate-900/40 rounded-lg border border-sky-100 dark:border-sky-900/60">
+                                <div class="text-[10px] uppercase font-bold text-slate-500">Facturas A (Resp. Insc.)</div>
+                                <div class="font-bold text-sky-900 dark:text-sky-200 mt-0.5">
+                                    {{ $resumenFiscal['arca']['facturas_a_cant'] ?? 0 }} comprobantes
+                                </div>
+                                <div class="text-[11px] text-slate-600 dark:text-slate-400">
+                                    ${{ number_format($resumenFiscal['arca']['facturas_a_total'] ?? 0, 2, ',', '.') }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-sky-200/60 dark:border-sky-900/60 flex items-center justify-between">
+                        <span class="text-xs font-bold text-sky-700 dark:text-sky-300">Subtotal ARCA:</span>
+                        <div class="text-right">
+                            <span class="text-base font-black font-mono text-sky-950 dark:text-white">
+                                ${{ number_format($resumenFiscal['arca']['total'] ?? 0, 2, ',', '.') }}
+                            </span>
+                            <span class="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">
+                                {{ $resumenFiscal['arca']['cant_comprobantes'] ?? 0 }} ventas
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controladores Hasar Físicos -->
+                <div class="space-y-3">
+                    <div class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5">
+                            <span>🖨️</span>
+                            <span>Controladores Fiscales Hasar 2G</span>
+                        </span>
+                        <span class="text-[10px] font-mono text-slate-400">
+                            {{ count($resumenFiscal['hasar_controladores'] ?? []) }} equipo(s)
+                        </span>
+                    </div>
+
+                    @forelse($resumenFiscal['hasar_controladores'] ?? [] as $ctrl)
+                        <div class="p-3.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-black text-amber-950 dark:text-amber-200 font-mono">
+                                        {{ $ctrl['modelo'] }} ({{ $ctrl['hasar_ip'] }}:{{ $ctrl['hasar_puerto'] }})
+                                    </span>
+                                    <span class="text-[9px] font-mono bg-amber-200/80 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-bold">
+                                        Hasar 2G
+                                    </span>
+                                </div>
+
+                                @if(!empty($ctrl['cierre_z_emitido']))
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                        ✓ Cierre Z N° {{ $ctrl['cierre_z_numero'] ?? 'OK' }}
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                        ⏳ Z Pendiente
+                                    </span>
+                                @endif
+                            </div>
+
+                            <div class="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+                                Puntos de Venta Asociados: <strong class="font-mono">{{ $ctrl['puntos_venta_info'] ?? '-' }}</strong>
+                            </div>
+
+                            <div class="mt-2.5 pt-2 border-t border-amber-200/60 dark:border-amber-900/60 flex items-center justify-between text-xs">
+                                <span class="font-mono text-slate-500 dark:text-slate-400">
+                                    {{ $ctrl['cant_tickets'] ?? 0 }} tickets emitidos
+                                    @if(!empty($ctrl['cierre_z_fecha']))
+                                        <span class="text-[10px] ml-1">({{ \Carbon\Carbon::parse($ctrl['cierre_z_fecha'])->format('d/m H:i') }} hs)</span>
+                                    @endif
+                                </span>
+                                <span class="text-sm font-black font-mono text-amber-950 dark:text-white">
+                                    ${{ number_format($ctrl['total'] ?? 0, 2, ',', '.') }}
+                                </span>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 text-xs text-slate-500 text-center">
+                            No se registraron ventas en controladores fiscales Hasar en esta sesión.
+                        </div>
+                    @endforelse
+                </div>
+            </div>
+        </div>
+        @endif
+
         <!-- SECCIÓN 1: MOVIMIENTOS DE CAJA (INGRESOS Y RETIROS) -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
             <div class="p-4 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">

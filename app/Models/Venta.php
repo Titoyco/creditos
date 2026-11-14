@@ -18,11 +18,17 @@ class Venta extends Model implements Auditable
         'id_sucursal',
         'id_caja_sesion',
         'id_usuario',
+        'id_punto_venta',
+        'tipo_emision',
         'id_cliente',
         'cliente_nombre',
         'cliente_documento',
         'punto_venta',
         'numero_factura',
+        'cae',
+        'cae_vencimiento',
+        'afip_qr',
+        'datos_fiscales',
         'comprobante',
         'tipo_comprobante',
         'fecha',
@@ -49,6 +55,8 @@ class Venta extends Model implements Auditable
         'cuotas_credito' => 'integer',
         'punto_venta' => 'integer',
         'numero_factura' => 'integer',
+        'cae_vencimiento' => 'date',
+        'datos_fiscales' => 'array',
     ];
     public function getRecargoFinanciacionAttribute(): float
     {
@@ -68,6 +76,21 @@ class Venta extends Model implements Auditable
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'id_usuario');
+    }
+
+    public function puntoVenta(): BelongsTo
+    {
+        return $this->belongsTo(PuntoVenta::class, 'id_punto_venta');
+    }
+
+    public function getEsFiscalHasarAttribute(): bool
+    {
+        return $this->tipo_emision === 'fiscal_hasar';
+    }
+
+    public function getEsArcaDigitalAttribute(): bool
+    {
+        return $this->tipo_emision === 'arca_wsfe';
     }
 
     public function cliente(): BelongsTo
@@ -121,5 +144,36 @@ class Venta extends Model implements Auditable
     public function getEsConsumidorFinalAttribute(): bool
     {
         return is_null($this->id_cliente);
+    }
+
+    public function isFacturaA(): bool
+    {
+        return $this->tipo_comprobante === 'FACTURA_A';
+    }
+
+    public function isFacturaB(): bool
+    {
+        return $this->tipo_comprobante === 'FACTURA_B' || empty($this->tipo_comprobante);
+    }
+
+    public function esExentoIva(): bool
+    {
+        return $this->sucursal ? $this->sucursal->isTdf() : false;
+    }
+
+    public function netoGravado(): float
+    {
+        if ($this->esExentoIva()) {
+            return 0.00;
+        }
+        return round((float) $this->total / 1.21, 2);
+    }
+
+    public function ivaLiquidado(): float
+    {
+        if ($this->esExentoIva()) {
+            return 0.00;
+        }
+        return round((float) $this->total - $this->netoGravado(), 2);
     }
 }

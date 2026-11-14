@@ -187,6 +187,46 @@
             </div>
         </div>
 
+        <!-- DESGLOSE FISCAL HÍBRIDO (ARCA DIGITAL VS CONTROLADOR FISCAL HASAR) -->
+        @if(!empty($resumenFiscal))
+        <div class="border-bottom">
+            <div class="bold center" style="margin-bottom: 5px;">DISCRIMINACIÓN FISCAL & CIERRES Z</div>
+            
+            {{-- ARCA Digital --}}
+            <div class="row">
+                <span>Factura Digital ARCA ({{ $resumenFiscal['arca']['cant_comprobantes'] ?? 0 }} cbte.):</span>
+                <span class="bold">${{ number_format($resumenFiscal['arca']['total'] ?? 0, 2, ',', '.') }}</span>
+            </div>
+            @if(!empty($resumenFiscal['arca']['facturas_a_cant']))
+                <div style="font-size: 0.85em; color: #475569; padding-left: 8px;">
+                    • Facturas A: {{ $resumenFiscal['arca']['facturas_a_cant'] }} (${{ number_format($resumenFiscal['arca']['facturas_a_total'] ?? 0, 2, ',', '.') }})
+                </div>
+            @endif
+            @if(!empty($resumenFiscal['arca']['facturas_b_cant']))
+                <div style="font-size: 0.85em; color: #475569; padding-left: 8px;">
+                    • Facturas B: {{ $resumenFiscal['arca']['facturas_b_cant'] }} (${{ number_format($resumenFiscal['arca']['facturas_b_total'] ?? 0, 2, ',', '.') }})
+                </div>
+            @endif
+
+            {{-- Controladores Hasar --}}
+            @if(!empty($resumenFiscal['hasar_controladores']))
+                <div class="bold" style="margin-top: 6px; font-size: 0.9em;">Controladores Fiscales Hasar:</div>
+                @foreach($resumenFiscal['hasar_controladores'] as $ctrl)
+                    <div class="row" style="margin-top: 2px;">
+                        <span>{{ $ctrl['modelo'] }} ({{ $ctrl['hasar_ip'] }}):</span>
+                        <span class="bold">${{ number_format($ctrl['total'] ?? 0, 2, ',', '.') }}</span>
+                    </div>
+                    <div style="font-size: 0.82em; color: #334155; padding-left: 8px;">
+                        • P.Venta: {{ $ctrl['puntos_venta_info'] ?? '-' }} • Tickets: {{ $ctrl['cant_tickets'] ?? 0 }}
+                    </div>
+                    <div style="font-size: 0.82em; padding-left: 8px; font-weight: bold; color: {{ !empty($ctrl['cierre_z_emitido']) ? '#059669' : '#d97706' }};">
+                        • Estado Z: {{ !empty($ctrl['cierre_z_emitido']) ? 'Z Emitido (' . ($ctrl['cierre_z_numero'] ?? 'OK') . ')' : 'Pendiente' }}
+                    </div>
+                @endforeach
+            @endif
+        </div>
+        @endif
+
         <!-- ARQUEO DE EFECTIVO FÍSICO / FALLO DE CAJA -->
         <div class="border-bottom">
             <div class="bold center" style="margin-bottom: 5px;">ARQUEO DE EFECTIVO / FALLO DE CAJA</div>

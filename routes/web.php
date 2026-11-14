@@ -125,6 +125,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('/medios-pago/{medioPago}', [\App\Http\Controllers\MedioPagoController::class, 'destroy'])->name('sistema.medios-pago.destroy');
 
         // Puntos de Venta y Facturación Híbrida (Hasar 2G / ARCA WSFE)
+        Route::get('/puntos-venta/activos-sucursal', [PuntoVentaController::class, 'activosPorSucursal'])->name('sistema.puntos-venta.activos-sucursal');
+        Route::post('/puntos-venta/seleccionar-terminal', [PuntoVentaController::class, 'seleccionarTerminal'])->name('sistema.puntos-venta.seleccionar-terminal');
+        Route::post('/puntos-venta/{puntoVenta}/probar-arca', [PuntoVentaController::class, 'probarArca'])->name('sistema.puntos-venta.probar-arca');
         Route::get('/puntos-venta/{puntoVenta}/descargar-config', [PuntoVentaController::class, 'descargarConfig'])->name('sistema.puntos-venta.descargar-config');
         Route::resource('puntos-venta', PuntoVentaController::class)->parameters(['puntos-venta' => 'puntoVenta'])->names('sistema.puntos-venta');
     });
@@ -148,6 +151,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/ingreso-mercaderia', [\App\Http\Controllers\ProductoController::class, 'ingresoMercaderiaRapido'])->name('productos.ingreso-mercaderia');
         Route::post('/ingreso-stock-rapido', [\App\Http\Controllers\ProductoController::class, 'ingresoStockRapido'])->name('productos.ingreso-stock-rapido');
         Route::get('/movimientos', [\App\Http\Controllers\StockMovimientoController::class, 'index'])->name('productos.movimientos');
+        Route::get('/etiquetas-lote', [\App\Http\Controllers\ProductoController::class, 'imprimirEtiquetasLote'])->name('productos.etiquetas.lote');
         Route::get('/{producto}', [\App\Http\Controllers\ProductoController::class, 'show'])->name('productos.show');
         Route::get('/{producto}/editar', [\App\Http\Controllers\ProductoController::class, 'edit'])->name('productos.edit');
         Route::put('/{producto}', [\App\Http\Controllers\ProductoController::class, 'update'])->name('productos.update');
@@ -223,6 +227,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{caja}', [\App\Http\Controllers\CajaController::class, 'show'])->name('cajas.show');
         Route::get('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrarForm'])->name('cajas.cerrar');
         Route::post('/{caja}/cerrar', [\App\Http\Controllers\CajaController::class, 'cerrar'])->name('cajas.cerrar.store');
+        Route::post('/{caja}/cierre-z-hasar', [\App\Http\Controllers\CajaController::class, 'registrarCierreZHasar'])->name('cajas.cierre-z-hasar');
         Route::get('/{caja}/comprobante', [\App\Http\Controllers\CajaController::class, 'comprobante'])->name('cajas.comprobante');
         Route::post('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'storeMovimiento'])->name('cajas.movimientos.store');
         Route::get('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'movimientosJson'])->name('cajas.movimientos.json');

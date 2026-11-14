@@ -407,6 +407,7 @@ protected $fillable = [
 | `total_retiros_efectivo` | `decimal(14,2)` | Total de retiros/gastos manuales justificados |
 | `cant_ingresos_efectivo` | `integer` | Cantidad de ingresos manuales |
 | `cant_retiros_efectivo` | `integer` | Cantidad de retiros/gastos manuales |
+| `resumen_fiscal` | `json` | Nullable. Desglose fiscal híbrido: comprobantes y totales ARCA digital (WSFE Facturas A y B) y controladores fiscales Hasar 2G unificados por `{hasar_ip}:{hasar_puerto}` con registro del Cierre Z emitido |
 | `estado` | `varchar(20)` | `abierta` / `cerrada` |
 | `observaciones_apertura` | `text` | Notas del operador en apertura (ej. desglose de billetes de cambio) |
 | `observaciones_cierre` | `text` | Justificaciones de arqueo / notas de cierre |
@@ -426,7 +427,8 @@ protected $fillable = [
 
 ### 7.3 Métodos Clave de `CajaSesion`
 - **`calcularTotales()`**: Suma en tiempo real las ventas activas discriminadas por medio de pago, computa los movimientos manuales (`totalIngresos`, `totalRetiros`) y formula el `efectivo_esperado`.
-- **`cerrar(float $efectivoRealContado, ?string $observaciones, ?int $usuarioId)`**: Fija la fecha de cierre, persiste el arqueo, calcula la diferencia/fallo y marca `estado = 'cerrada'`.
+- **`calcularResumenFiscal()`**: Discrimina las ventas activas entre facturación digital ARCA (WSFE) y controladores físicos Hasar 2G. Agrupa los controladores físicos por `{hasar_ip}:{hasar_puerto}` para unificar múltiples puntos de venta que compartan hardware, computando tickets, importes y estado de Cierre Z emitido.
+- **`cerrar(float $efectivoRealContado, ?string $observaciones, ?int $usuarioId, ?array $resumenFiscal)`**: Fija la fecha de cierre, persiste el arqueo y el `resumen_fiscal`, calcula la diferencia/fallo y marca `estado = 'cerrada'`.
 - **`esDeHoy()`**: Determina si la sesión pertenece a la jornada actual (`fecha_apertura->isToday()`).
 - **`scopeActivaParaSucursal($sucursalId)`**: Devuelve la caja con `estado = 'abierta'` correspondiente a la sucursal.
 
@@ -585,16 +587,51 @@ Todas las transacciones de ingresos, ventas, cobranzas y cuotas se vinculan a la
    ```json
    {
      "ambiente": "produccion",
-     "concepto": 1
+     "cuit": "30712345678",
+     "concepto": 1,
+     "certificado_path": "arca/certificados/cert_pv_4_1731441234.crt",
+     "clave_privada_path": "arca/claves/key_pv_4_1731441234.key"
    }
    ```
    - `ambiente`: `produccion` (servidores oficiales AFIP/ARCA) o `homologacion` (entorno de pruebas).
+   - `cuit`: CUIT de la empresa emisora registrado en ARCA.
    - `concepto`: `1` (Productos / Mercaderías), `2` (Servicios), `3` (Productos y Servicios).
+   - `certificado_path`: Ruta relativa a `storage/app/` del certificado digital X.509 (`.crt`/`.pem`).
+   - `clave_privada_path`: Ruta relativa a `storage/app/` de la clave privada generada con OpenSSL (`.key`).
 
 ### 12.3 Relaciones Eloquent
 - **`PuntoVenta::sucursal()`**: `belongsTo(Sucursal::class, 'id_sucursal')`.
 - **`Sucursal::puntosVenta()`**: `hasMany(PuntoVenta::class, 'id_sucursal')`.
+- **`PuntoVenta::ventas()`**: `hasMany(Venta::class, 'id_punto_venta')`.
 
 ### 12.4 Auditoría y Accesores
 - Implementa `OwenIt\Auditing\Contracts\Auditable` con trait `\OwenIt\Auditing\Auditable`.
 - **`numero_formateado`**: Retorna el número de punto de venta a 5 dígitos rellenado con ceros a la izquierda (ej: `00003`).
+
+---
+
+## 13. Atributos Fiscales y Tratamiento Impositivo en Modelo `Venta`
+- **`id_punto_venta`**: FK a `puntos_venta.id` (nullable, `onDelete('set null')`).
+- **`tipo_emision`**: `enum('fiscal_hasar', 'arca_wsfe')`.
+- **`tipo_comprobante`**: `varchar(20)` (`FACTURA_B`, `FACTURA_A`, `NOTA_CREDITO_B`, `NOTA_CREDITO_A`).
+- **`cae`**: Código de Autorización Electrónica otorgado por ARCA (14 dígitos).
+- **`cae_vencimiento`**: Fecha de vencimiento del CAE.
+- **`afip_qr`**: Cadena URL oficial con parámetro Base64 según RG 5003 (`https://www.afip.gob.ar/fe/qr/?p=...`).
+- **`datos_fiscales`**: Campo JSON con metadatos de respuesta fiscal (detalle de CAE, observaciones o comprobantes asociados en notas de crédito).
+
+### 13.1 Tratamiento Impositivo por Jurisdicción
+- **Ushuaia (Tierra del Fuego - Ley 19.640)**:
+  - Operaciones en el **Área Aduanera Especial** exentas de IVA y Ganancias.
+  - En Web Services ARCA (WSFE): se informa `ImpOpEx = $total`, `ImpNeto = 0.00`, `ImpIVA = 0.00`, y no se envía nodo `AlicIva` (cumpliendo con la restricción técnica de AFIP para comprobantes exentos).
+  - En impresión (Ticket y A4): Leyenda legal obligatoria *"Operación Exenta de IVA - Ley 19.640 (Área Aduanera Especial)"* y desglose con IVA 0%.
+- **Trelew / Interior (Chubut - Régimen General Continental)**:
+  - Operaciones gravadas con IVA general del **21%**.
+  - **Factura B (Cód. 06)**: Consumidor Final / Monotributo. El precio incluye IVA. En WSFE se informa base neta e IVA 21%.
+  - **Factura A (Cód. 01)**: Receptor Responsable Inscripto. Exige CUIT de 11 dígitos válido (DocTipo 80). Discrimina explícitamente Subtotal Neto Gravado (`$total / 1.21`) e IVA Liquidado 21%.
+
+### 13.2 Métodos Helpers en `Venta`
+- **`isFacturaA()`**: Determina si el comprobante emitido es Factura A (`tipo_comprobante === 'FACTURA_A'`).
+- **`isFacturaB()`**: Determina si el comprobante emitido es Factura B (`tipo_comprobante === 'FACTURA_B' || null`).
+- **`esExentoIva()`**: Retorna verdadero si la sucursal emisora pertenece a Tierra del Fuego (`$this->sucursal?->isTdf()`).
+- **`netoGravado()`**: Retorna el importe neto gravado ($0.00$ si es exento por Ley 19.640, o `$total / 1.21$` si está gravado en Chubut).
+- **`ivaLiquidado()`**: Retorna el IVA liquidado al 21% ($0.00$ si es exento por Ley 19.640, o `$total - netoGravado()`$ en Chubut).

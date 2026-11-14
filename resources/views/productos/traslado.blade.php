@@ -25,10 +25,25 @@
                 searchResults: [],
                 showResultsDropdown: false,
 
+                // Modal de ingreso de cantidad y rectificación de talle / color
                 modalCantidad: false,
                 itemPendiente: null,
                 cantidadAEnviar: 1,
                 errorModal: '',
+
+                desgloseActual: {
+                    prov: '000',
+                    talle: '00',
+                    color: '00',
+                    resto: '00001',
+                    codigo_completo: ''
+                },
+                talleOriginal: '',
+                colorOriginal: '',
+                talleNuevo: '',
+                colorNuevo: '',
+                nuevoCodigoGenerado: '',
+                esRectificado: false,
 
                 items: (TRASLADO_CONFIG.initialItems || []).map(it => ({
                     ...it,
@@ -37,9 +52,11 @@
                     codigo_proveedor: it.codigo_proveedor || '',
                     talle: it.talle || '',
                     color: it.color || '',
+                    talle_original: it.talle_original || it.talle || '',
+                    color_original: it.color_original || it.color || '',
                     proveedor: it.proveedor || '',
                     proveedor_legajo: it.proveedor_legajo || '',
-                    actualizar_codigo_barra: it.actualizar_codigo_barra || false,
+                    rectificado: it.rectificado || false,
                     nuevo_codigo_barra: it.nuevo_codigo_barra || '',
                     mostrar_edicion: false
                 })),
@@ -81,29 +98,43 @@
                     return '00';
                 },
 
-                generarCodigoBarraSugerido(item) {
-                    const codProv = String(item.proveedor_legajo || '0').padStart(3, '0');
-                    const talle2 = this.normalizarTalle2Char(item.talle);
-                    const color2 = this.normalizarColor2Char(item.color);
-                    let base = '00001';
-                    if (item.codigo) {
-                        const cleanBase = item.codigo.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-                        base = !isNaN(cleanBase) ? cleanBase.padStart(5, '0') : cleanBase;
+                // Descompone el código según la regla canónica:
+                // Primeros 3: Proveedor | Siguientes 2: Talle | Siguientes 2: Color | Resto: Producto
+                descomponerCodigo(prod) {
+                    let cod = (prod.codigo_barra || prod.codigo || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                    if (cod.length === 11) {
+                        cod = '0' + cod;
                     }
-                    return (codProv + talle2 + color2 + base).toUpperCase();
-                },
 
-                onCambioTalleOColor(item) {
-                    if (item.actualizar_codigo_barra) {
-                        item.nuevo_codigo_barra = this.generarCodigoBarraSugerido(item);
-                    }
-                },
+                    let prov = '000';
+                    let talle = '00';
+                    let color = '00';
+                    let resto = '00001';
 
-                toggleActualizarBarcode(item) {
-                    item.actualizar_codigo_barra = !item.actualizar_codigo_barra;
-                    if (item.actualizar_codigo_barra) {
-                        item.nuevo_codigo_barra = this.generarCodigoBarraSugerido(item);
+                    if (cod.length >= 12) {
+                        prov = cod.substring(0, 3);
+                        talle = cod.substring(3, 5);
+                        color = cod.substring(5, 7);
+                        resto = cod.substring(7);
+                    } else if (cod.length >= 8) {
+                        prov = cod.substring(0, 3);
+                        talle = '00';
+                        color = '00';
+                        resto = cod.substring(3);
+                    } else {
+                        prov = String(prod.proveedor_legajo || '0').padStart(3, '0');
+                        talle = this.normalizarTalle2Char(prod.talle);
+                        color = this.normalizarColor2Char(prod.color);
+                        resto = (prod.codigo_proveedor || prod.codigo || '00001').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
                     }
+
+                    return {
+                        prov,
+                        talle,
+                        color,
+                        resto,
+                        codigo_completo: cod
+                    };
                 },
 
                 init() {
@@ -196,8 +227,8 @@
                         return;
                     }
 
-                    const itemExistente = this.items.find(i => i.id === prod.id);
-                    const yaAsignado = itemExistente ? itemExistente.cantidad : 0;
+                    const itemsMismoProd = this.items.filter(i => i.id === prod.id);
+                    const yaAsignado = itemsMismoProd.reduce((acc, i) => acc + (parseFloat(i.cantidad) || 0), 0);
                     const disponibleRestante = prod.stock_origen - yaAsignado;
 
                     if (disponibleRestante <= 0) {
@@ -210,6 +241,18 @@
                     this.itemPendiente = prod;
                     this.cantidadAEnviar = 1;
                     this.errorModal = '';
+
+                    // Descomposición del código en los 4 componentes (3 Prov, 2 Talle, 2 Color, Resto Producto)
+                    this.desgloseActual = this.descomponerCodigo(prod);
+
+                    // Inicializar Talle y Color actuales de la prenda
+                    this.talleOriginal = (prod.talle && String(prod.talle).trim()) ? String(prod.talle).trim().toUpperCase() : this.desgloseActual.talle;
+                    this.colorOriginal = (prod.color && String(prod.color).trim()) ? String(prod.color).trim().toUpperCase() : this.desgloseActual.color;
+                    this.talleNuevo = this.talleOriginal;
+                    this.colorNuevo = this.colorOriginal;
+                    this.nuevoCodigoGenerado = this.desgloseActual.codigo_completo;
+                    this.esRectificado = false;
+
                     this.modalCantidad = true;
 
                     this.$nextTick(() => {
@@ -218,6 +261,25 @@
                             this.$refs.inputCantidadModal.select();
                         }
                     });
+                },
+
+                recalcularEnModal() {
+                    const tNuevo = (this.talleNuevo || '').trim().toUpperCase();
+                    const cNuevo = (this.colorNuevo || '').trim().toUpperCase();
+                    const tOrig = (this.talleOriginal || '').trim().toUpperCase();
+                    const cOrig = (this.colorOriginal || '').trim().toUpperCase();
+
+                    const cambioTalle = tNuevo !== tOrig;
+                    const cambioColor = cNuevo !== cOrig;
+                    this.esRectificado = cambioTalle || cambioColor;
+
+                    if (this.esRectificado) {
+                        const talle2 = this.normalizarTalle2Char(tNuevo);
+                        const color2 = this.normalizarColor2Char(cNuevo);
+                        this.nuevoCodigoGenerado = (this.desgloseActual.prov + talle2 + color2 + this.desgloseActual.resto).toUpperCase();
+                    } else {
+                        this.nuevoCodigoGenerado = this.desgloseActual.codigo_completo;
+                    }
                 },
 
                 confirmarAgregarAlLote() {
@@ -229,35 +291,57 @@
                         return;
                     }
 
-                    const itemExistente = this.items.find(i => i.id === this.itemPendiente.id);
-                    const yaAsignado = itemExistente ? itemExistente.cantidad : 0;
+                    const tNuevo = (this.talleNuevo || '').trim().toUpperCase();
+                    const cNuevo = (this.colorNuevo || '').trim().toUpperCase();
+                    const tOrig = (this.talleOriginal || '').trim().toUpperCase();
+                    const cOrig = (this.colorOriginal || '').trim().toUpperCase();
+                    const esRect = this.esRectificado;
+                    const codNuevo = esRect ? this.nuevoCodigoGenerado : this.desgloseActual.codigo_completo;
+
+                    // Validar límite de stock en origen
+                    const itemsMismoProd = this.items.filter(i => i.id === this.itemPendiente.id);
+                    const yaAsignado = itemsMismoProd.reduce((acc, i) => acc + (parseFloat(i.cantidad) || 0), 0);
                     const nuevoTotal = yaAsignado + cant;
 
                     if (nuevoTotal > this.itemPendiente.stock_origen) {
-                        this.errorModal = `La cantidad supera las existencias en origen (Disponible: ${this.itemPendiente.stock_origen}, ya en lote: ${yaAsignado}).`;
+                        this.errorModal = `La cantidad total (${nuevoTotal} un.) supera el stock disponible en origen (${this.itemPendiente.stock_origen} un., ya en lote: ${yaAsignado}).`;
                         return;
                     }
 
+                    // Buscar si ya existe una fila idéntica (mismo producto y misma rectificación)
+                    const itemExistente = this.items.find(i => 
+                        i.id === this.itemPendiente.id && 
+                        i.rectificado === esRect && 
+                        i.nuevo_codigo_barra === codNuevo
+                    );
+
                     if (itemExistente) {
-                        itemExistente.cantidad = nuevoTotal;
+                        itemExistente.cantidad += cant;
                     } else {
                         this.items.unshift({
                             id: this.itemPendiente.id,
                             codigo: this.itemPendiente.codigo,
-                            codigo_barra: this.itemPendiente.codigo_barra,
-                            codigo_proveedor: this.itemPendiente.codigo_proveedor || '',
-                            talle: this.itemPendiente.talle || '',
-                            color: this.itemPendiente.color || '',
+                            codigo_barra: this.itemPendiente.codigo_barra || this.desgloseActual.codigo_completo,
+                            codigo_proveedor: this.desgloseActual.resto,
                             proveedor: this.itemPendiente.proveedor || '',
-                            proveedor_legajo: this.itemPendiente.proveedor_legajo || '',
+                            proveedor_legajo: this.desgloseActual.prov,
                             descripcion: this.itemPendiente.descripcion,
                             categoria: this.itemPendiente.categoria,
                             subcategoria: this.itemPendiente.subcategoria,
                             unidad_medida: this.itemPendiente.unidad_medida,
                             stock_origen: this.itemPendiente.stock_origen,
                             cantidad: cant,
-                            actualizar_codigo_barra: false,
-                            nuevo_codigo_barra: '',
+                            // Datos de rectificación
+                            talle_original: tOrig,
+                            color_original: cOrig,
+                            talle: tNuevo,
+                            color: cNuevo,
+                            rectificado: esRect,
+                            nuevo_codigo_barra: codNuevo,
+                            desglose_prov: this.desgloseActual.prov,
+                            desglose_talle: this.normalizarTalle2Char(tNuevo),
+                            desglose_color: this.normalizarColor2Char(cNuevo),
+                            desglose_resto: this.desgloseActual.resto,
                             mostrar_edicion: false
                         });
                     }
@@ -298,7 +382,6 @@
                 },
 
                 async cambioSucursalOrigen() {
-                    // Si el destino seleccionado coincide con el nuevo origen, reiniciar destino
                     if (this.sucursalDestinoId == this.sucursalOrigenId) {
                         this.sucursalDestinoId = '';
                     }
@@ -329,6 +412,10 @@
                     return this.items.reduce((acc, it) => acc + (parseFloat(it.cantidad) || 0), 0);
                 },
 
+                totalRectificados() {
+                    return this.items.filter(it => it.rectificado).reduce((acc, it) => acc + (parseFloat(it.cantidad) || 0), 0);
+                },
+
                 hayStockInvalido() {
                     return this.items.some(it => it.cantidad > it.stock_origen || it.stock_origen <= 0);
                 },
@@ -346,7 +433,10 @@
                         return false;
                     }
                     const dest = this.$refs.selectDestino.options[this.$refs.selectDestino.selectedIndex]?.text || 'Sucursal Destino';
-                    const msg = `¿Confirma el traslado de ${this.totalArticulos()} artículo(s) (${this.totalUnidades()} unidades) hacia "${dest}"?`;
+                    let msg = `¿Confirma el traslado de ${this.totalArticulos()} artículo(s) (${this.totalUnidades()} unidades) hacia "${dest}"?`;
+                    if (this.totalRectificados() > 0) {
+                        msg += `\n\nATENCIÓN: ${this.totalRectificados()} unidad(es) poseen rectificación de talle/color. Se generarán nuevos códigos y se habilitará la impresión de etiquetas térmicas.`;
+                    }
                     if (!confirm(msg)) {
                         e.preventDefault();
                         return false;
@@ -368,6 +458,19 @@
         }
     </script>
 
+    {{-- Datalists globales de sugerencias de talles y colores --}}
+    <datalist id="lista-talles-sugeridos">
+        @foreach($tallesSugeridos as $ts)
+            <option value="{{ $ts }}"></option>
+        @endforeach
+    </datalist>
+
+    <datalist id="lista-colores-sugeridos">
+        @foreach($coloresSugeridos as $cs)
+            <option value="{{ $cs }}"></option>
+        @endforeach
+    </datalist>
+
     <div class="max-w-7xl mx-auto py-2 space-y-5" x-data="trasladoLoteComponent()">
 
         {{-- Encabezado Principal --}}
@@ -384,35 +487,61 @@
                     </h1>
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Escanee códigos de barras de los artículos con el lector para armar la caja o lote; al finalizar confirme para mover todo el stock a la nueva sucursal.
+                    Escanee prendas con el lector. Puede rectificar Talle y Color en el acto: si cambian, se descuenta del original, se genera el nuevo código estructurado y se habilitan etiquetas térmicas.
                 </p>
             </div>
 
             <div class="flex items-center gap-2">
                 <a href="{{ route('stock.movimientos') }}" 
-                   class="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xs transition-all flex items-center gap-1.5">
+                   class="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl transition-all flex items-center gap-1.5 shadow-sm">
                     <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     <span>Historial de Movimientos</span>
                 </a>
                 <a href="{{ route('productos.index') }}" 
-                   class="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xs transition-all">
+                   class="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl transition-all shadow-sm">
                     &larr; Catálogo
                 </a>
             </div>
         </div>
 
+        {{-- BANNER ESPECIAL: BOTÓN DIRECTO PARA IMPRIMIR ETIQUETAS DE RECTIFICACIÓN --}}
+        @if(session('etiquetas_rectificadas'))
+            <div class="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-blue-500/15 border-2 border-amber-400 dark:border-amber-600 flex flex-col md:flex-row items-center justify-between gap-3 shadow-md">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl p-2.5 rounded-xl bg-amber-500/20 text-amber-600">🏷️</span>
+                    <div>
+                        <h3 class="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                            ¡Traslado completado con {{ count(session('etiquetas_rectificadas')) }} prenda(s) rectificada(s)!
+                        </h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                            Se generaron nuevos códigos de barra CODE128. Imprima las etiquetas térmicas (50mm x 25mm) para pegarlas en las prendas físicas.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="{{ route('productos.etiquetas.lote', ['desde_sesion' => 1]) }}" target="_blank"
+                       class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wide shadow-lg transition-all flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        <span>Imprimir Etiquetas ({{ array_sum(array_column(session('etiquetas_rectificadas'), 'cantidad')) }} unid.)</span>
+                    </a>
+                </div>
+            </div>
+        @endif
+
         {{-- Alertas Globales --}}
-        @if(session('success'))
-            <div class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 shadow-2xs">
+        @if(session('success') && !session('etiquetas_rectificadas'))
+            <div class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 shadow-sm">
                 <svg class="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                 <span>{{ session('success') }}</span>
             </div>
         @endif
 
         @if(session('error'))
-            <div class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 shadow-2xs">
+            <div class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 shadow-sm">
                 <svg class="w-5 h-5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <span>{{ session('error') }}</span>
             </div>
@@ -423,7 +552,7 @@
             @csrf
 
             {{-- 1. BLOQUE DE ENCABEZADO DEL ENVÍO / REMITO --}}
-            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-2xs space-y-4">
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-sm space-y-4">
                 <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-700/60">
                     <span class="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center text-[11px] font-bold">1</span>
@@ -543,7 +672,7 @@
                          class="absolute z-50 left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto text-slate-900 dark:text-white">
                         <div class="p-2 bg-slate-50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between text-xs font-bold text-slate-500">
                             <span>Sugerencias de artículos (<span x-text="searchResults.length"></span>):</span>
-                            <span class="text-[10px] text-blue-600 dark:text-blue-400">Haga clic en un artículo para indicar la cantidad</span>
+                            <span class="text-[10px] text-blue-600 dark:text-blue-400">Haga clic en una prenda para indicar cantidad y rectificar</span>
                         </div>
                         <template x-for="item in searchResults" :key="item.id">
                             <button type="button" 
@@ -554,10 +683,11 @@
                                         <span class="font-mono font-bold text-xs text-blue-600 dark:text-blue-400" x-text="item.codigo"></span>
                                         <span class="text-xs font-bold uppercase" x-text="item.descripcion"></span>
                                     </div>
-                                    <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                                    <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                                         <span x-show="item.codigo_barra" class="font-mono">Barras: <span x-text="item.codigo_barra"></span></span>
+                                        <span x-show="item.talle" class="px-1 py-0.2 bg-indigo-50 dark:bg-indigo-950 text-indigo-500 rounded font-mono">T: <span x-text="item.talle"></span></span>
+                                        <span x-show="item.color" class="px-1 py-0.2 bg-rose-50 dark:bg-rose-950 text-rose-500 rounded">C: <span x-text="item.color"></span></span>
                                         <span class="px-1 py-0.2 bg-slate-100 dark:bg-slate-800 rounded text-slate-500" x-text="item.categoria"></span>
-                                        <span x-show="item.subcategoria" class="px-1 py-0.2 bg-indigo-50 dark:bg-indigo-950 text-indigo-500 rounded" x-text="item.subcategoria"></span>
                                     </div>
                                 </div>
                                 <div class="text-right">
@@ -584,18 +714,21 @@
             </div>
 
             {{-- 3. LISTADO DEL LOTE / CAJA DE ENVÍO (TABLA EN TIEMPO REAL) --}}
-            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-2xs overflow-hidden">
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-sm overflow-hidden">
                 <div class="p-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between flex-wrap gap-2">
                     <div class="flex items-center gap-2">
                         <span class="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center text-[11px] font-bold">3</span>
                         <h2 class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
-                            Artículos en el Lote a Trasladar
+                            Prendas en el Lote a Trasladar
                         </h2>
                     </div>
 
                     <div class="flex items-center gap-4 text-xs font-mono font-bold">
                         <span class="text-slate-500 dark:text-slate-400">
                             Artículos distintos: <strong class="text-slate-900 dark:text-white" x-text="totalArticulos()"></strong>
+                        </span>
+                        <span x-show="totalRectificados() > 0" class="px-2 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[11px]">
+                            Rectificados: <strong x-text="totalRectificados()"></strong> un.
                         </span>
                         <span class="px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                             Total Unidades a Mover: <strong class="text-sm" x-text="totalUnidades()"></strong>
@@ -611,7 +744,7 @@
                                 <th class="py-2.5 px-4 w-12 text-center">#</th>
                                 <th class="py-2.5 px-4">Código / Barras</th>
                                 <th class="py-2.5 px-4">Descripción & Rubro</th>
-                                <th class="py-2.5 px-4">Talle / Color / Fábrica</th>
+                                <th class="py-2.5 px-4">Talle & Color</th>
                                 <th class="py-2.5 px-4 text-right">Stock en Origen</th>
                                 <th class="py-2.5 px-4 text-center w-48">Cantidad a Mover</th>
                                 <th class="py-2.5 px-4 text-right">Remanente Origen</th>
@@ -619,16 +752,30 @@
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
-                            <template x-for="(item, index) in items" :key="item.id">
+                            <template x-for="(item, index) in items" :key="index">
                                 <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors"
-                                    :class="item.cantidad > item.stock_origen ? 'bg-rose-50/50 dark:bg-rose-950/30' : ''">
+                                    :class="item.rectificado ? 'bg-amber-50/40 dark:bg-amber-950/20' : (item.cantidad > item.stock_origen ? 'bg-rose-50/50 dark:bg-rose-950/30' : '')">
                                     {{-- Nro --}}
                                     <td class="py-3 px-4 text-center font-mono text-slate-400 text-[11px]" x-text="index + 1"></td>
 
                                     {{-- Código y Barras --}}
                                     <td class="py-3 px-4 whitespace-nowrap">
-                                        <div class="font-mono font-bold text-slate-900 dark:text-slate-100" x-text="item.codigo"></div>
-                                        <div class="text-[10px] font-mono text-slate-400" x-text="item.codigo_barra || 'Sin barras'"></div>
+                                        <template x-if="!item.rectificado">
+                                            <div>
+                                                <div class="font-mono font-bold text-slate-900 dark:text-slate-100" x-text="item.codigo"></div>
+                                                <div class="text-[10px] font-mono text-slate-400" x-text="item.codigo_barra || 'Sin barras'"></div>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="item.rectificado">
+                                            <div>
+                                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500 text-white mb-0.5">
+                                                    RECTIFICADO
+                                                </span>
+                                                <div class="font-mono font-bold text-amber-700 dark:text-amber-300" x-text="item.nuevo_codigo_barra"></div>
+                                                <div class="text-[10px] font-mono text-slate-400 line-through" x-text="'Orig: ' + item.codigo"></div>
+                                            </div>
+                                        </template>
                                     </td>
 
                                     {{-- Descripción y Clasificación --}}
@@ -640,91 +787,30 @@
                                         </div>
                                     </td>
 
-                                    {{-- Talle / Color / Cód. Fábrica y edición inline --}}
+                                    {{-- Talle / Color (con indicador si fue rectificado) --}}
                                     <td class="py-3 px-4">
-                                        <div class="flex items-center gap-1.5 flex-wrap">
-                                            <template x-if="item.talle">
-                                                <span class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold font-mono text-[10px]">
-                                                    T: <strong x-text="item.talle"></strong>
-                                                </span>
-                                            </template>
-                                            <template x-if="!item.talle">
-                                                <span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
-                                                    S/Talle
-                                                </span>
-                                            </template>
+                                        <template x-if="!item.rectificado">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold font-mono text-[10px]"
+                                                      x-text="'T: ' + (item.talle || 'S/T')"></span>
+                                                <span class="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px]"
+                                                      x-text="'C: ' + (item.color || 'S/C')"></span>
+                                            </div>
+                                        </template>
 
-                                            <template x-if="item.color">
-                                                <span class="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px]">
-                                                    C: <strong x-text="item.color"></strong>
-                                                </span>
-                                            </template>
-                                            <template x-if="!item.color">
-                                                <span class="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
-                                                    S/Color
-                                                </span>
-                                            </template>
-
-                                            <template x-if="item.codigo_proveedor">
-                                                <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[10px]">
-                                                    Fab: <strong x-text="item.codigo_proveedor"></strong>
-                                                </span>
-                                            </template>
-                                        </div>
-
-                                        <button type="button" @click="item.mostrar_edicion = !item.mostrar_edicion"
-                                                class="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                            <span x-text="item.mostrar_edicion ? 'Ocultar edición' : 'Completar / Modificar datos'"></span>
-                                        </button>
-
-                                        {{-- Panel de edición inline de talle, color y código de barra --}}
-                                        <div x-show="item.mostrar_edicion" 
-                                             class="mt-2 p-2.5 rounded-xl bg-blue-50/70 dark:bg-slate-900/80 border border-blue-200 dark:border-blue-800 space-y-2">
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                <div>
-                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Cód. Fabricante</label>
-                                                    <input type="text" x-model="item.codigo_proveedor" placeholder="Ej: FAB-123"
-                                                           class="w-full text-xs font-mono py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
+                                        <template x-if="item.rectificado">
+                                            <div class="space-y-0.5">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 font-black font-mono text-[10px]"
+                                                          x-text="'T: ' + item.talle"></span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200 font-black text-[10px]"
+                                                          x-text="'C: ' + item.color"></span>
                                                 </div>
-                                                <div>
-                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Talle (1-70 / Letras)</label>
-                                                    <input type="text" x-model="item.talle" @input="onCambioTalleOColor(item)" placeholder="Ej: 42, M, XL"
-                                                           class="w-full text-xs font-mono font-bold py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
-                                                </div>
-                                                <div>
-                                                    <label class="block text-[9px] font-bold uppercase text-slate-500">Color</label>
-                                                    <input type="text" x-model="item.color" @input="onCambioTalleOColor(item)" placeholder="Ej: Negro, Azul"
-                                                           class="w-full text-xs py-1 px-2 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 uppercase">
+                                                <div class="text-[9px] text-slate-400 font-mono">
+                                                    Orig: T: <span x-text="item.talle_original || 'S/T'"></span> | C: <span x-text="item.color_original || 'S/C'"></span>
                                                 </div>
                                             </div>
-
-                                            {{-- Opción de actualizar código de barra --}}
-                                            <div class="pt-1.5 border-t border-blue-200/60 dark:border-blue-800/60">
-                                                <label class="flex items-start gap-2 cursor-pointer select-none">
-                                                    <input type="checkbox" x-model="item.actualizar_codigo_barra" @change="if(item.actualizar_codigo_barra) item.nuevo_codigo_barra = generarCodigoBarraSugerido(item)"
-                                                           class="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                                    <div class="text-[11px]">
-                                                        <span class="font-bold text-slate-900 dark:text-white">Generar / Actualizar Código de Barra (CODE128)</span>
-                                                        <span class="text-slate-500 dark:text-slate-400 block text-[10px]">
-                                                            Formato: [Prov 3c][Talle 2c][Color 2c][Cód 5c+]. Al confirmar el traslado se podrá reimprimir la etiqueta.
-                                                        </span>
-                                                    </div>
-                                                </label>
-
-                                                <div x-show="item.actualizar_codigo_barra" class="mt-2 flex items-center gap-2 flex-wrap">
-                                                    <span class="text-[10px] text-slate-400 font-mono">Actual: <strong x-text="item.codigo_barra || 'Sin barras'"></strong> &rarr;</span>
-                                                    <div class="flex items-center gap-1">
-                                                        <input type="text" x-model="item.nuevo_codigo_barra"
-                                                               class="text-xs font-mono font-bold py-1 px-2 rounded-lg border-blue-400 bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300">
-                                                        <button type="button" @click="item.nuevo_codigo_barra = generarCodigoBarraSugerido(item)"
-                                                                class="px-2 py-1 text-[10px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-800 rounded">
-                                                            Regenerar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        </template>
                                     </td>
 
                                     {{-- Stock actual en origen --}}
@@ -735,7 +821,7 @@
 
                                     {{-- Controles de Cantidad (+/- y número editable) --}}
                                     <td class="py-3 px-4 text-center whitespace-nowrap">
-                                        <div class="inline-flex items-center border border-slate-300 dark:border-slate-600 rounded-xl overflow-hidden shadow-2xs bg-white dark:bg-slate-900">
+                                        <div class="inline-flex items-center border border-slate-300 dark:border-slate-600 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-slate-900">
                                             <button type="button" 
                                                     @click="modificarCantidad(index, -1)"
                                                     class="px-2.5 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition font-bold text-sm select-none">
@@ -786,7 +872,7 @@
                                         </svg>
                                         <p class="font-bold text-xs uppercase tracking-wide">El lote de traslado está vacío</p>
                                         <p class="text-[11px] max-w-sm text-slate-400">
-                                            Escriba o use el lector de código de barras arriba para agregar los artículos que colocará en la caja de envío.
+                                            Escriba o use el lector de código de barras arriba para agregar las prendas que trasladará en la caja o lote.
                                         </p>
                                     </div>
                                 </td>
@@ -796,31 +882,33 @@
                 </div>
 
                 {{-- Inputs ocultos para enviar el array de items en el formulario HTTP POST --}}
-                <template x-for="(it, idx) in items" :key="it.id">
+                <template x-for="(it, idx) in items" :key="idx">
                     <div>
                         <input type="hidden" :name="'items[' + idx + '][producto_id]'" :value="it.id">
                         <input type="hidden" :name="'items[' + idx + '][cantidad]'" :value="it.cantidad">
                         <input type="hidden" :name="'items[' + idx + '][codigo_proveedor]'" :value="it.codigo_proveedor || ''">
+                        <input type="hidden" :name="'items[' + idx + '][talle_original]'" :value="it.talle_original || ''">
+                        <input type="hidden" :name="'items[' + idx + '][color_original]'" :value="it.color_original || ''">
                         <input type="hidden" :name="'items[' + idx + '][talle]'" :value="it.talle || ''">
                         <input type="hidden" :name="'items[' + idx + '][color]'" :value="it.color || ''">
-                        <input type="hidden" :name="'items[' + idx + '][actualizar_codigo_barra]'" :value="it.actualizar_codigo_barra ? '1' : '0'">
+                        <input type="hidden" :name="'items[' + idx + '][rectificado]'" :value="it.rectificado ? '1' : '0'">
                         <input type="hidden" :name="'items[' + idx + '][nuevo_codigo_barra]'" :value="it.nuevo_codigo_barra || ''">
                     </div>
                 </template>
             </div>
 
             {{-- 4. PIE DE ACCIONES Y CONFIRMACIÓN --}}
-            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700/80 p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div class="text-xs text-slate-500 dark:text-slate-400">
                     <p class="font-bold text-slate-700 dark:text-slate-200">Resumen de la Operación:</p>
                     <p class="mt-0.5">
-                        Al confirmar, se descontarán las unidades en la sede emisora y se acreditarán automáticamente en la sede receptora con auditoría.
+                        Al confirmar, se descontarán las unidades en la sede emisora y se acreditarán automáticamente en la sede receptora con auditoría. Las prendas con rectificación crearán nuevo código habilitando la impresión de etiquetas.
                     </p>
                 </div>
 
                 <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                     <a href="{{ route('productos.index') }}" 
-                       class="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-xl transition-all">
+                       class="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:white bg-slate-100 dark:bg-slate-800 rounded-xl transition-all">
                         Cancelar
                     </a>
 
@@ -838,11 +926,11 @@
 
         </form>
 
-        {{-- MODAL RÁPIDO: PREGUNTAR CANTIDAD AL ESCANEAR O SELECCIONAR --}}
+        {{-- MODAL INTERACTIVO: PREGUNTAR CANTIDAD Y RECTIFICAR TALLE & COLOR --}}
         <div x-show="modalCantidad" style="display: none;" 
              class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
              @keydown.escape.window="modalCantidad = false; focoScanner()">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 space-y-4"
                  @click.outside="modalCantidad = false; focoScanner()">
                 
                 {{-- Encabezado Modal --}}
@@ -854,56 +942,149 @@
                         <h3 class="text-sm font-black uppercase text-slate-900 dark:text-white tracking-tight mt-0.5"
                             x-text="itemPendiente ? itemPendiente.descripcion : ''"></h3>
                     </div>
-                    <button type="button" @click="modalCantidad = false; focoScanner()" class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+                    <button type="button" @click="modalCantidad = false; focoScanner()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
                 </div>
 
-                {{-- Detalles del Producto --}}
-                <div class="py-3 space-y-2">
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="text-slate-400">Código / SKU:</span>
+                {{-- Detalles rápidos del producto y stock disponible --}}
+                <div class="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                    <div>
+                        <span class="text-slate-400 block text-[10px]">CÓDIGO ACTUAL:</span>
                         <span class="font-mono font-bold text-slate-800 dark:text-slate-200" x-text="itemPendiente ? itemPendiente.codigo : ''"></span>
                     </div>
-                    <div class="flex items-center justify-between text-xs" x-show="itemPendiente && itemPendiente.codigo_barra">
-                        <span class="text-slate-400">Código de Barras:</span>
-                        <span class="font-mono text-slate-700 dark:text-slate-300" x-text="itemPendiente ? itemPendiente.codigo_barra : ''"></span>
-                    </div>
-                    <div class="flex items-center justify-between text-xs">
-                        <span class="text-slate-400">Stock disponible en Origen:</span>
-                        <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm"
+                    <div class="text-right">
+                        <span class="text-slate-400 block text-[10px]">DISPONIBLE EN ORIGEN:</span>
+                        <span class="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm"
                               x-text="itemPendiente ? (itemPendiente.stock_origen + ' ' + itemPendiente.unidad_medida) : ''"></span>
-                    </div>
-
-                    {{-- Input de Cantidad --}}
-                    <div class="pt-3">
-                        <label class="block text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
-                            ¿Cuántas unidades desea agregar al envío? <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative">
-                            <input type="number" 
-                                   x-ref="inputCantidadModal"
-                                   x-model="cantidadAEnviar"
-                                   step="1" 
-                                   min="1"
-                                   :max="itemPendiente ? itemPendiente.stock_origen : 9999"
-                                   @keydown.enter.prevent="confirmarAgregarAlLote()"
-                                   class="w-full text-lg py-2.5 px-4 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-black text-center focus:ring-2 focus:ring-amber-500">
-                        </div>
-
-                        {{-- Atajos rápidos de cantidad --}}
-                        <div class="flex items-center justify-center gap-2 mt-2.5">
-                            <button type="button" @click="cantidadAEnviar = 1" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">1 un.</button>
-                            <button type="button" @click="cantidadAEnviar = 5" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">+5 un.</button>
-                            <button type="button" @click="cantidadAEnviar = 10" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">+10 un.</button>
-                            <button type="button" @click="cantidadAEnviar = itemPendiente ? itemPendiente.stock_origen : 1" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 hover:bg-amber-200">Todo el stock</button>
-                        </div>
-
-                        {{-- Error Modal --}}
-                        <p x-show="errorModal" class="text-rose-500 text-xs font-bold mt-2 text-center" x-text="errorModal"></p>
                     </div>
                 </div>
 
+                {{-- PANEL DE DESCOMPOSICIÓN DEL CÓDIGO (Regla: 3 Proveedor, 2 Talle, 2 Color, Resto Producto) --}}
+                <div class="p-3 bg-blue-50/60 dark:bg-slate-900/90 rounded-xl border border-blue-200 dark:border-blue-800/80 space-y-2">
+                    <div class="flex items-center justify-between text-[11px] font-bold text-blue-900 dark:text-blue-300">
+                        <span class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                            </svg>
+                            Descomposición del Código de Barras (Regla 3-2-2-X):
+                        </span>
+                        <span class="font-mono text-xs font-black text-blue-700 dark:text-blue-300" x-text="desgloseActual.codigo_completo"></span>
+                    </div>
+
+                    <div class="grid grid-cols-4 gap-1.5 text-center">
+                        <div class="p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-slate-700 shadow-xs">
+                            <span class="block text-[9px] font-bold uppercase text-slate-400">1. Prov (3c)</span>
+                            <span class="font-mono font-black text-xs text-blue-600 dark:text-blue-400" x-text="desgloseActual.prov"></span>
+                        </div>
+                        <div class="p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-indigo-200 dark:border-slate-700 shadow-xs">
+                            <span class="block text-[9px] font-bold uppercase text-slate-400">2. Talle (2c)</span>
+                            <span class="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400" x-text="desgloseActual.talle"></span>
+                        </div>
+                        <div class="p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-rose-200 dark:border-slate-700 shadow-xs">
+                            <span class="block text-[9px] font-bold uppercase text-slate-400">3. Color (2c)</span>
+                            <span class="font-mono font-black text-xs text-rose-600 dark:text-rose-400" x-text="desgloseActual.color"></span>
+                        </div>
+                        <div class="p-1.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-xs">
+                            <span class="block text-[9px] font-bold uppercase text-slate-400">4. Producto</span>
+                            <span class="font-mono font-black text-xs text-slate-800 dark:text-slate-200 truncate block" x-text="desgloseActual.resto" :title="desgloseActual.resto"></span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Input de Cantidad a mover --}}
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1">
+                        ¿Cuántas unidades desea agregar al envío? <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number" 
+                               x-ref="inputCantidadModal"
+                               x-model="cantidadAEnviar"
+                               step="1" 
+                               min="1"
+                               :max="itemPendiente ? itemPendiente.stock_origen : 9999"
+                               @keydown.enter.prevent="confirmarAgregarAlLote()"
+                               class="w-full text-base py-2 px-3 rounded-xl border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono font-black text-center focus:ring-2 focus:ring-amber-500">
+                    </div>
+
+                    {{-- Atajos rápidos de cantidad --}}
+                    <div class="flex items-center justify-center gap-1.5 mt-1.5">
+                        <button type="button" @click="cantidadAEnviar = 1" class="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">1 un.</button>
+                        <button type="button" @click="cantidadAEnviar = 5" class="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">+5 un.</button>
+                        <button type="button" @click="cantidadAEnviar = 10" class="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200">+10 un.</button>
+                        <button type="button" @click="cantidadAEnviar = itemPendiente ? itemPendiente.stock_origen : 1" class="px-2.5 py-0.5 text-[11px] font-bold rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300 hover:bg-amber-200">Todo el stock</button>
+                    </div>
+                </div>
+
+                {{-- Campos Talle y Color: sugerencias y libre edición --}}
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span>Talle</span>
+                            <span class="text-[10px] font-mono text-slate-400" x-show="talleOriginal">Actual: <strong x-text="talleOriginal"></strong></span>
+                        </label>
+                        <input type="text" 
+                               x-model="talleNuevo" 
+                               @input="recalcularEnModal()"
+                               list="lista-talles-sugeridos"
+                               placeholder="Ej: 34, 42, M..."
+                               class="w-full text-xs py-2 px-3 rounded-xl font-mono uppercase font-bold border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
+                        <span class="text-[10px] text-slate-400 mt-0.5 block">Sugerido o nuevo libre</span>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-black uppercase text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                            <span>Color</span>
+                            <span class="text-[10px] font-mono text-slate-400" x-show="colorOriginal">Actual: <strong x-text="colorOriginal"></strong></span>
+                        </label>
+                        <input type="text" 
+                               x-model="colorNuevo" 
+                               @input="recalcularEnModal()"
+                               list="lista-colores-sugeridos"
+                               placeholder="Ej: NEGRO, AZUL, 46..."
+                               class="w-full text-xs py-2 px-3 rounded-xl uppercase font-bold border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-rose-500">
+                        <span class="text-[10px] text-slate-400 mt-0.5 block">Sugerido o nuevo libre</span>
+                    </div>
+                </div>
+
+                {{-- Previsualización reactiva del código resultante y aviso de rectificación --}}
+                <div class="p-2.5 rounded-xl text-xs transition-colors"
+                     :class="esRectificado 
+                        ? 'bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200' 
+                        : 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'">
+                    
+                    <template x-if="!esRectificado">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                            <div>
+                                <span class="font-bold">Mismo Código de Barra: </span>
+                                <span class="font-mono font-black" x-text="desgloseActual.codigo_completo"></span>
+                                <span class="block text-[10px] text-emerald-700 dark:text-emerald-300/80">Sin modificación de talle ni color; se trasladará normalmente con el mismo SKU.</span>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="esRectificado">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-1.5 font-black text-amber-800 dark:text-amber-300">
+                                <span class="text-sm">⚡</span>
+                                <span>Rectificación detectada: Se generará un nuevo código de barra</span>
+                            </div>
+                            <div class="flex items-center justify-between font-mono bg-white/70 dark:bg-black/30 p-1.5 rounded-lg border border-amber-200 dark:border-amber-800">
+                                <span class="text-slate-400 text-[10px]">Orig: <strong x-text="desgloseActual.codigo_completo"></strong> &rarr;</span>
+                                <span class="text-xs font-black text-amber-700 dark:text-amber-300" x-text="nuevoCodigoGenerado"></span>
+                            </div>
+                            <p class="text-[10px] text-amber-800 dark:text-amber-300/90 leading-tight">
+                                Se dará de baja el stock original en origen y se creará/acreditará como nuevo producto en destino con habilitación para imprimir etiquetas térmicas.
+                            </p>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- Error Modal --}}
+                <p x-show="errorModal" class="text-rose-500 text-xs font-bold text-center" x-text="errorModal"></p>
+
                 {{-- Botones de Acción Modal --}}
-                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-700">
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                     <button type="button" 
                             @click="modalCantidad = false; focoScanner()" 
                             class="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700">

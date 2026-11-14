@@ -63,15 +63,15 @@
                             </span>
                         </div>
                         <p class="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
-                            La caja de la jornada anterior no fue cerrada. Debe ingresar el arqueo de efectivo físico (revisión de fallo de caja) e iniciar el turno de hoy antes de realizar la primera venta.
+                            La caja de la jornada anterior no fue cerrada. Para abrir la caja de hoy y poder facturar, debe emitir el Cierre Z de los controladores fiscales que registraron ventas y realizar el arqueo de caja.
                         </p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end">
-                    <button type="button" @click="modalCierreAnterior = true"
-                            class="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-2 px-4 rounded-xl shadow transition uppercase flex items-center gap-1.5 cursor-pointer">
-                        <span>⚠️ Arqueo Anterior y Abrir Hoy</span>
-                    </button>
+                    <a href="{{ route('cajas.cerrar', $cajaActiva->id) }}" 
+                       class="bg-amber-600 hover:bg-amber-700 text-white font-black text-xs py-2 px-4 rounded-xl shadow transition uppercase flex items-center gap-1.5 cursor-pointer">
+                        <span>🔒 Emitir Cierre Z Anterior y Abrir Hoy</span>
+                    </a>
                     <a href="{{ route('cajas.index') }}" 
                        class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 font-bold text-xs py-2 px-3 rounded-xl transition hover:bg-slate-50">
                         <span>📋 Historial Cajas</span>
@@ -175,56 +175,56 @@
                         :class="pasoActualFlujo === 1 
                             ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
                             : (clienteSeleccionado ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
-                    <span x-text="clienteSeleccionado ? '✓ 1. Cliente' : '1. Cargar Cliente'"></span>
+                    <span x-text="clienteSeleccionado ? '✓ 1. Cliente' : '1. Cliente'"></span>
                     <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F2</kbd>
                 </button>
 
                 <span class="text-indigo-400 font-black">→</span>
 
-                <!-- Paso 2: Monto -->
+                <!-- Paso 2: COD: BARRA -->
                 <button type="button" @click="irAPaso(2)"
                         class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
                         :class="pasoActualFlujo === 2 
                             ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
                             : (items.length > 0 ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
-                    <span x-text="items.length > 0 ? '✓ 2. Monto ($' + formatDinero(calcularSubtotal()) + ')' : '2. Cargar Monto'"></span>
+                    <span>2. COD: BARRA</span>
                     <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F3</kbd>
                 </button>
 
                 <span class="text-indigo-400 font-black">→</span>
 
-                <!-- Paso 3: Crédito Personal -->
+                <!-- Paso 3: Monto -->
                 <button type="button" @click="irAPaso(3)"
                         class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
                         :class="pasoActualFlujo === 3 
                             ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
-                            : (creditoAutorizado ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
-                    <span x-text="creditoAutorizado ? '✓ 3. Crédito Aprobado' : '3. Ir a Crédito Personal'"></span>
+                            : (items.length > 0 ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span x-text="items.length > 0 ? '✓ 3. Monto ($' + formatDinero(calcularSubtotal()) + ')' : '3. Monto'"></span>
                     <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F4</kbd>
                 </button>
 
                 <span class="text-indigo-400 font-black">→</span>
 
-                <!-- Paso 4: Facturar y Generar Pagaré -->
+                <!-- Paso 4: Crédito Personal -->
                 <button type="button" @click="irAPaso(4)"
                         class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
                         :class="pasoActualFlujo === 4 
-                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs animate-pulse' 
-                            : (modalExito ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
-                    <span>4. Facturar y Pagaré</span>
-                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F8</kbd>
+                            ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs' 
+                            : (creditoAutorizado ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span x-text="creditoAutorizado ? '✓ 4. Crédito Aprobado' : '4. Crédito Personal'"></span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F5</kbd>
                 </button>
 
                 <span class="text-indigo-400 font-black">→</span>
 
-                <!-- Paso 5: Imprimir y Reiniciar -->
+                <!-- Paso 5: Facturar y Generar Pagaré -->
                 <button type="button" @click="irAPaso(5)"
                         class="px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-[11px]"
                         :class="pasoActualFlujo === 5 
                             ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-xs animate-pulse' 
-                            : 'bg-indigo-900/70 text-indigo-200'">
-                    <span>5. Imprimir y Reiniciar</span>
-                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F9</kbd>
+                            : (modalExito ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-600/60' : 'bg-indigo-900/70 text-indigo-200')">
+                    <span>5. Facturar</span>
+                    <kbd class="text-[9px] px-1 py-0.2 rounded bg-black/25 font-mono">F8</kbd>
                 </button>
             </div>
 
@@ -260,6 +260,49 @@
                                 <span>✕ Cambiar Cliente (F2)</span>
                             </button>
                         </template>
+                    </div>
+
+                    <!-- Selector de Tipo de Comprobante & Régimen Fiscal -->
+                    <div class="mb-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        @if($esTdf)
+                            <div class="flex items-center justify-between text-xs">
+                                <div class="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300">
+                                    <span>🌴</span>
+                                    <span>Régimen Ushuaia (Ley 19.640):</span>
+                                    <span class="font-normal text-[11px] text-teal-700 dark:text-teal-400">Operaciones Exentas de IVA.</span>
+                                </div>
+                                <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-teal-200/80 dark:bg-teal-900/80 text-teal-900 dark:text-teal-200 uppercase">
+                                    Factura B (Exenta)
+                                </span>
+                            </div>
+                        @else
+                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">Tipo Cbte:</span>
+                                    <div class="inline-flex rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-0.5">
+                                        <button type="button" 
+                                                @click="seleccionarTipoComprobante('FACTURA_B')"
+                                                :class="tipoComprobante === 'FACTURA_B' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'"
+                                                class="px-2.5 py-1 text-xs font-bold rounded-md transition cursor-pointer">
+                                            Factura B (Cons. Final)
+                                        </button>
+                                        <button type="button" 
+                                                @click="seleccionarTipoComprobante('FACTURA_A')"
+                                                :class="tipoComprobante === 'FACTURA_A' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'"
+                                                class="px-2.5 py-1 text-xs font-bold rounded-md transition cursor-pointer">
+                                            Factura A (Resp. Inscripto)
+                                        </button>
+                                    </div>
+                                </div>
+                                <template x-if="tipoComprobante === 'FACTURA_A'">
+                                    <div class="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                                        <span>Neto: <strong>$<span x-text="formatDinero(calcularTotal() / 1.21)"></span></strong></span>
+                                        <span>•</span>
+                                        <span>IVA 21%: <strong>$<span x-text="formatDinero(calcularTotal() - (calcularTotal() / 1.21))"></span></strong></span>
+                                    </div>
+                                </template>
+                            </div>
+                        @endif
                     </div>
 
                     <!-- CASO A: CONSUMIDOR FINAL (ESTADO POR DEFECTO) -->
@@ -406,10 +449,10 @@
 
                 <!-- 2. Barra de Carga Rápida: Monto Genérico VARIOS + Escáner -->
                 <div class="flex flex-col gap-2">
-                    <!-- Carga Rápida de Monto / Artículo Genérico VARIOS (En Trelew aparece primero como Paso 2) -->
+                    <!-- Carga Rápida de Monto / Artículo Genérico VARIOS (Paso 3) -->
                     <div :class="[
                             esTrelew ? 'order-1 p-3 border-2' : 'order-2 p-2 border',
-                            pasoActualFlujo === 2 ? 'ring-2 ring-amber-400 border-amber-500' : 'border-amber-200 dark:border-amber-800/50'
+                            pasoActualFlujo === 3 ? 'ring-2 ring-amber-400 border-amber-500' : 'border-amber-200 dark:border-amber-800/50'
                          ]"
                          class="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-slate-800 dark:to-slate-800/90 rounded-xl shadow-xs flex items-center justify-between gap-2 transition">
                         <div class="flex items-center gap-2">
@@ -419,9 +462,9 @@
                             <div>
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-xs font-black uppercase text-amber-900 dark:text-amber-200 block leading-tight"
-                                          x-text="esTrelew ? '2. Cargar Monto del Crédito (VARIOS)' : 'Carga Rápida de Artículo Genérico (VARIOS)'">
+                                          x-text="esTrelew ? '3. Cargar Monto del Crédito (VARIOS)' : 'Carga Rápida de Monto (VARIOS)'">
                                     </span>
-                                    <span class="text-[9px] font-mono bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-bold">F3</span>
+                                    <span class="text-[9px] font-mono bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-bold">F4</span>
                                 </div>
                                 <span class="text-[10px] text-amber-700 dark:text-amber-400 leading-none"
                                       x-text="esTrelew ? 'Ingrese el monto y presione ENTER para ir a Crédito Personal' : 'Venta de mostrador sin código'">
@@ -446,9 +489,12 @@
                         </div>
                     </div>
 
-                    <!-- Input Escáner de Código de Barras / Búsqueda -->
-                    <div :class="esTrelew ? 'order-2' : 'order-1'"
-                         class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border-2 border-indigo-500/40 dark:border-indigo-500/50 shadow-sm relative">
+                    <!-- Input Escáner de Código de Barras / Búsqueda (Paso 2) -->
+                    <div :class="[
+                            esTrelew ? 'order-2' : 'order-1',
+                            pasoActualFlujo === 2 ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-indigo-500/40 dark:border-indigo-500/50'
+                         ]"
+                         class="bg-white dark:bg-slate-800 p-2.5 rounded-xl border-2 shadow-sm relative">
                         <div class="flex items-center gap-2">
                             <div class="relative flex-grow">
                                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-indigo-600 dark:text-indigo-400">
@@ -462,11 +508,14 @@
                                        @keydown.enter.prevent="procesarCodigoBarra()"
                                        @input.debounce.250ms="buscarProductosSugeridos()"
                                        placeholder="Escanee código de barra o descripción..."
-                                       class="w-full text-xs font-mono py-2 pl-9 pr-16 rounded-lg border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500 shadow-inner"
+                                       class="w-full text-xs font-mono py-2 pl-9 pr-24 rounded-lg border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500 shadow-inner"
                                        autocomplete="off">
                                 
                                 <div class="absolute inset-y-0 right-0 pr-2 flex items-center space-x-1">
                                     <span class="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono px-1.5 py-0.5 rounded font-bold">
+                                        F3
+                                    </span>
+                                    <span class="text-[9px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono px-1.5 py-0.5 rounded font-bold">
                                         ENTER
                                     </span>
                                 </div>
@@ -595,7 +644,7 @@
                                         <td colspan="6" class="py-12 text-center text-slate-400 dark:text-slate-500">
                                             <div class="text-3xl mb-1.5">🛒</div>
                                             <p class="font-bold text-xs">Factura vacía</p>
-                                            <p class="text-[11px] mt-0.5" x-text="esTrelew ? '1) Seleccione el cliente (F2) y 2) Cargue el monto con ENTER (F3).' : 'Escanee un código de barras o use la carga rápida de artículos varios.'"></p>
+                                            <p class="text-[11px] mt-0.5" x-text="esTrelew ? '1) Seleccione cliente (F2), 2) Escanee código (F3) o cargue monto con ENTER (F4).' : 'Escanee un código de barras (F3) o use la carga rápida de monto (F4).'"></p>
                                         </td>
                                     </tr>
                                 </template>
@@ -607,8 +656,9 @@
                 <!-- Barra de Atajos de Teclado -->
                 <div class="flex flex-wrap items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 px-1 font-mono gap-2">
                     <span>💡 [F2] Cliente</span>
-                    <span>💡 [F3] Monto</span>
-                    <span>💡 [F4] Crédito Personal</span>
+                    <span>💡 [F3] COD: BARRA</span>
+                    <span>💡 [F4] Monto</span>
+                    <span>💡 [F5] Crédito Personal</span>
                     <span>💡 [F8] Facturar</span>
                     <span>💡 [ENTER] Avanzar</span>
                 </div>
@@ -708,14 +758,14 @@
                                 <span class="text-base" x-text="!creditoAutorizado ? '📄' : (autorizadoPorVendedor ? '⚠️' : '✓')"></span>
                                 <div>
                                     <span class="font-black uppercase tracking-tight block" 
-                                          x-text="!creditoAutorizado ? '3. Verificar Estado de Cuenta / Crédito Personal' : (autorizadoPorVendedor ? 'Crédito Autorizado por Vendedor (Excepción)' : 'Crédito Personal Verificado y Autorizado')"></span>
+                                          x-text="!creditoAutorizado ? '4. Verificar Estado de Cuenta / Crédito Personal' : (autorizadoPorVendedor ? 'Crédito Autorizado por Vendedor (Excepción)' : 'Crédito Personal Verificado y Autorizado')"></span>
                                     <span class="text-[11px] opacity-80" 
                                           x-text="'Margen disponible: $' + formatDinero(infoCredito?.detalle_compras?.limite_disponible || infoCredito?.estado_crediticio?.limite_disponible || 0)"></span>
                                 </div>
                             </div>
                             <button type="button" @click="abrirModalCredito()" 
                                     class="text-xs font-bold text-indigo-700 dark:text-indigo-300 underline hover:opacity-80 cursor-pointer flex items-center gap-1">
-                                <span x-text="creditoAutorizado ? 'Ver Estado / Reautorizar' : 'Abrir Crédito (F4)'"></span>
+                                <span x-text="creditoAutorizado ? 'Ver Estado / Reautorizar' : 'Abrir Crédito (F5)'"></span>
                             </button>
                         </div>
                     </template>
@@ -815,12 +865,12 @@
                                     : (esCredito 
                                         ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400' 
                                         : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400'),
-                                pasoActualFlujo === 4 ? 'ring-4 ring-amber-400' : ''
+                                pasoActualFlujo === 5 ? 'ring-4 ring-amber-400' : ''
                             ]"
                             class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2 cursor-pointer">
-                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? '4. Facturar y Generar Pagaré' : '3. Ir a Crédito Personal') : 'PAGAR / COBRAR AHORA')"></span>
+                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? '5. Facturar y Generar Pagaré' : '4. Ir a Crédito Personal') : 'PAGAR / COBRAR AHORA')"></span>
                         <span x-show="!procesando" class="font-mono text-sm sm:text-base font-bold" x-text="'($ ' + formatDinero(calcularTotal()) + ')'"></span>
-                        <span x-show="!procesando && items.length > 0" class="text-xs font-mono px-2 py-0.5 rounded bg-black/25 text-amber-300" x-text="esCredito ? (creditoAutorizado ? 'ENTER / F8' : 'ENTER / F4') : 'ENTER'"></span>
+                        <span x-show="!procesando && items.length > 0" class="text-xs font-mono px-2 py-0.5 rounded bg-black/25 text-amber-300" x-text="esCredito ? (creditoAutorizado ? 'ENTER / F8' : 'ENTER / F5') : 'ENTER'"></span>
                     </button>
                 </div>
 
@@ -1169,6 +1219,19 @@
                     </template>
                 </div>
 
+                <!-- Resumen Fiscal de Comprobante en Modal Cobro -->
+                <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                    <span class="text-slate-500 uppercase font-bold text-[10px]">Comprobante a emitir:</span>
+                    @if($esTdf)
+                        <span class="font-bold font-mono text-teal-700 dark:text-teal-300">FACTURA B (Exento Ley 19.640)</span>
+                    @else
+                        <span class="font-bold font-mono" 
+                              :class="tipoComprobante === 'FACTURA_A' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-slate-200'"
+                              x-text="tipoComprobante === 'FACTURA_A' ? 'FACTURA A (IVA 21% Discriminado)' : 'FACTURA B (IVA Incluido)'">
+                        </span>
+                    @endif
+                </div>
+
                 <!-- Campo de referencia / comprobante si el medio de pago lo requiere -->
                 <template x-if="medioPagoActual && medioPagoActual.requiere_referencia">
                     <div class="space-y-1.5 bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
@@ -1247,6 +1310,18 @@
                             <div class="flex items-center gap-2">
                                 <span class="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">¡Venta y Pagaré Generados Exitosamente!</span>
                                 <span class="font-mono font-black text-sm text-slate-900 dark:text-white" x-text="'#' + ventaExitosa.comprobante"></span>
+                                <template x-if="ventaExitosa.cae">
+                                    <span class="inline-flex items-center gap-1 bg-sky-100 text-sky-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-sky-300 dark:bg-sky-950/60 dark:text-sky-300">
+                                        <span>CAE:</span>
+                                        <span x-text="ventaExitosa.cae"></span>
+                                        <span class="text-[9px] text-sky-600 dark:text-sky-400" x-text="'(Vto: ' + ventaExitosa.cae_vencimiento + ')'"></span>
+                                    </span>
+                                </template>
+                                <template x-if="ventaExitosa.tipo_emision === 'fiscal_hasar'">
+                                    <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300">
+                                        <span>🖨️ Fiscal Hasar 2G</span>
+                                    </span>
+                                </template>
                             </div>
                             <span class="text-xs text-slate-600 dark:text-slate-300 font-bold" x-text="'Total Facturado: $ ' + formatDinero(ventaExitosa.total)"></span>
                         </div>
@@ -1847,6 +1922,31 @@
         function posApp() {
             return {
                 esTrelew: {{ !$esTdf ? 'true' : 'false' }},
+                esTdf: {{ $esTdf ? 'true' : 'false' }},
+                esChubut: {{ $esChubut ? 'true' : 'false' }},
+                tipoComprobante: 'FACTURA_B',
+                get esFacturaA() {
+                    return this.tipoComprobante === 'FACTURA_A';
+                },
+                get clienteTieneCuit() {
+                    if (!this.clienteSeleccionado) return false;
+                    let doc = String(this.clienteSeleccionado.dni || '').replace(/\D/g, '');
+                    return doc.length === 11;
+                },
+                seleccionarTipoComprobante(tipo) {
+                    if (tipo === 'FACTURA_A') {
+                        if (!this.clienteSeleccionado) {
+                            alert('Para emitir Factura A primero debe buscar y seleccionar un cliente con CUIT (11 dígitos).');
+                            this.focusCliente();
+                            return;
+                        }
+                        if (!this.clienteTieneCuit) {
+                            alert('El cliente seleccionado tiene DNI (' + (this.clienteSeleccionado.dni || 'Sin DNI') + '). Para emitir Factura A ante ARCA es obligatorio registrar su CUIT de 11 dígitos.');
+                            return;
+                        }
+                    }
+                    this.tipoComprobante = tipo;
+                },
                 items: [],
                 barcodeQuery: '',
                 sugerenciasProductos: [],
@@ -1869,12 +1969,15 @@
                     return (mp && (mp.tipo_base === 'efectivo' || mp.permite_vuelto)) || this.medioPago === 'efectivo';
                 },
                 get pasoActualFlujo() {
-                    if (this.modalExito) return 5;
-                    if (this.modalCredito) return 3;
+                    if (this.modalExito) return 6;
+                    if (this.modalCobro) return 5;
+                    if (this.modalCredito) return 4;
                     if (!this.clienteSeleccionado) return 1;
-                    if (this.items.length === 0) return 2;
-                    if (this.esCredito && !this.creditoAutorizado) return 3;
-                    return 4;
+                    if (this.items.length === 0) {
+                        return (this.montoGenerico && String(this.montoGenerico).trim() !== '') ? 3 : 2;
+                    }
+                    if (this.esCredito && !this.creditoAutorizado) return 4;
+                    return 5;
                 },
                 irAPaso(paso) {
                     if (paso === 1) {
@@ -1890,10 +1993,16 @@
                     if (paso === 2) {
                         this.modalCredito = false;
                         this.modalCobro = false;
-                        this.focusMontoGenerico();
+                        this.focusBarcode();
                         return;
                     }
                     if (paso === 3) {
+                        this.modalCredito = false;
+                        this.modalCobro = false;
+                        this.focusMontoGenerico();
+                        return;
+                    }
+                    if (paso === 4) {
                         if (!this.clienteSeleccionado) {
                             this.focusCliente();
                             return;
@@ -1904,7 +2013,7 @@
                         this.abrirModalCredito();
                         return;
                     }
-                    if (paso === 4) {
+                    if (paso === 5) {
                         if (!this.clienteSeleccionado && this.esCredito) {
                             this.focusCliente();
                             return;
@@ -1913,13 +2022,13 @@
                             this.agregarArticuloGenerico(false);
                         }
                         if (this.items.length === 0) {
-                            this.focusMontoGenerico();
+                            this.focusBarcode();
                             return;
                         }
                         this.abrirModalPago();
                         return;
                     }
-                    if (paso === 5 && this.modalExito) {
+                    if (paso === 6 && this.modalExito) {
                         this.imprimirComprobanteExito(this.esTrelew);
                     }
                 },
@@ -1932,12 +2041,20 @@
                             this.focusCliente();
                         }
                     } else if (paso === 2) {
+                        if (this.barcodeQuery.trim().length > 0) {
+                            this.procesarCodigoBarra();
+                        } else if (parseFloat(this.montoGenerico) > 0) {
+                            this.procesarMontoGenericoEnter();
+                        } else {
+                            this.focusBarcode();
+                        }
+                    } else if (paso === 3) {
                         if (parseFloat(this.montoGenerico) > 0) {
                             this.procesarMontoGenericoEnter();
                         } else {
                             this.focusMontoGenerico();
                         }
-                    } else if (paso === 3) {
+                    } else if (paso === 4) {
                         if (this.modalCredito) {
                             if (this.puedeAutorizarCredito) {
                                 this.confirmarAutorizacionCredito();
@@ -1945,9 +2062,9 @@
                         } else {
                             this.abrirModalCredito();
                         }
-                    } else if (paso === 4) {
-                        this.abrirModalPago();
                     } else if (paso === 5) {
+                        this.abrirModalPago();
+                    } else if (paso === 6) {
                         if (!this.yaImprimioExito) {
                             this.imprimirComprobanteExito(this.esTrelew);
                         } else {
@@ -2223,7 +2340,7 @@
                         return;
                     }
 
-                    // 2. Teclas de Función F2, F3, F4, F8, F9
+                    // 2. Teclas de Función F2, F3, F4, F5, F8, F9
                     if (e.key === 'F2') {
                         e.preventDefault();
                         if (this.modalExito) {
@@ -2242,6 +2359,13 @@
                     }
                     if (e.key === 'F4') {
                         e.preventDefault();
+                        if (!this.modalExito) {
+                            this.irAPaso(3);
+                        }
+                        return;
+                    }
+                    if (e.key === 'F5') {
+                        e.preventDefault();
                         if (this.modalExito) {
                             this.imprimirComprobanteExito(this.esTrelew);
                             return;
@@ -2252,7 +2376,7 @@
                             }
                             return;
                         }
-                        this.irAPaso(3);
+                        this.irAPaso(4);
                         return;
                     }
                     if (e.key === 'F8') {
@@ -2262,7 +2386,7 @@
                             return;
                         }
                         if (!this.modalExito) {
-                            this.irAPaso(4);
+                            this.irAPaso(5);
                         }
                         return;
                     }
@@ -3173,6 +3297,8 @@
                     let payload = {
                         _token: '{{ csrf_token() }}',
                         id_sucursal: {{ $sucursalActiva->id ?? 1 }},
+                        id_punto_venta: localStorage.getItem('lamarina_terminal_pv_id') || null,
+                        tipo_comprobante: this.tipoComprobante,
                         id_cliente: this.clienteSeleccionado ? this.clienteSeleccionado.id : null,
                         cliente_nombre: this.clienteSeleccionado ? String(this.clienteSeleccionado.nombre) : 'CONSUMIDOR FINAL',
                         cliente_documento: (this.clienteSeleccionado && this.clienteSeleccionado.dni) ? String(this.clienteSeleccionado.dni) : null,
@@ -3206,7 +3332,12 @@
                             if (data.requiere_apertura) {
                                 this.modalAbrirCaja = true;
                             } else if (data.requiere_cierre_anterior) {
-                                this.modalCierreAnterior = true;
+                                let targetId = data.caja_anterior_id || {{ $cajaActiva->id ?? 'null' }};
+                                alert((data.error || 'La caja anterior no fue cerrada.') + '\n\nSerá redirigido a la pantalla oficial para emitir el Cierre Z de los controladores fiscales y asentar el arqueo.');
+                                if (targetId) {
+                                    window.location.href = "{{ url('cajas') }}/" + targetId + "/cerrar";
+                                    return;
+                                }
                             }
                             let errorMsg = data.error || data.message;
                             if (data.errors) {
@@ -3218,6 +3349,48 @@
                             alert(errorMsg || 'Ocurrió un error al procesar la venta.');
                             this.procesando = false;
                             return;
+                        }
+
+                        // Si el punto de venta es Controlador Fiscal Hasar, enviar comando al simulador / puente local
+                        if (data.tipo_emision === 'fiscal_hasar') {
+                            let puertoLocal = (data.hasar_config && data.hasar_config.puerto_local) ? data.hasar_config.puerto_local : 8585;
+                            let letraComprobante = (this.tipoComprobante === 'FACTURA_A') ? 'A' : 'B';
+                            let descMedio = this.medioPagoActual ? this.medioPagoActual.nombre : (this.medioPago === 'efectivo' ? 'Efectivo' : (this.medioPago === 'tarjeta_debito' ? 'Tarjeta Débito' : (this.medioPago === 'tarjeta_credito' ? 'Tarjeta Crédito' : 'Transferencia')));
+
+                            let bodyHasar = {
+                                accion: "factura",
+                                tipo_comprobante: letraComprobante,
+                                cliente: {
+                                    nombre: this.clienteSeleccionado ? (this.clienteSeleccionado.nombre || this.clienteSeleccionado.razon_social) : 'CONSUMIDOR FINAL',
+                                    tipo_documento: (this.clienteSeleccionado && this.clienteSeleccionado.cuit && this.clienteSeleccionado.cuit.length > 8) ? 'CUIT' : 'DNI',
+                                    numero_documento: this.clienteSeleccionado ? String(this.clienteSeleccionado.cuit || this.clienteSeleccionado.dni || '0').trim() : '0',
+                                    responsabilidad: (this.tipoComprobante === 'FACTURA_A') ? 'I' : 'C',
+                                    domicilio: (this.clienteSeleccionado && this.clienteSeleccionado.domicilio) ? this.clienteSeleccionado.domicilio : 'Av. Fontana 123'
+                                },
+                                items: (this.items || []).map(it => ({
+                                    descripcion: it.descripcion,
+                                    cantidad: parseFloat(it.cantidad) || 1,
+                                    precio_unitario: parseFloat(it.precio_unitario) || 0,
+                                    alicuota_iva: this.esTdf ? 0.0 : 21.0
+                                })),
+                                pagos: [
+                                    {
+                                        descripcion: descMedio,
+                                        monto: parseFloat(data.total)
+                                    }
+                                ]
+                            };
+
+                            try {
+                                // Enviar a endpoint /imprimir probado en el simulador Hasar
+                                await fetch(`http://127.0.0.1:${puertoLocal}/imprimir`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                                    body: JSON.stringify(bodyHasar)
+                                });
+                            } catch (eHasar) {
+                                console.warn('Aviso: No se pudo contactar el simulador Hasar en http://127.0.0.1:' + puertoLocal + '/imprimir', eHasar);
+                            }
                         }
 
                         // Éxito: cerrar modales de cobro y mostrar modal final
@@ -3232,6 +3405,10 @@
                             id: data.venta_id,
                             comprobante: data.comprobante,
                             total: data.total,
+                            tipo_emision: data.tipo_emision,
+                            cae: data.cae,
+                            cae_vencimiento: data.cae_vencimiento,
+                            afip_qr: data.afip_qr,
                             ticket_url: data.ticket_url,
                             a4_url: data.a4_url,
                             redirect_url: data.redirect_url,

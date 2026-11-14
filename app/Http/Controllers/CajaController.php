@@ -145,6 +145,13 @@ class CajaController extends Controller
         // Verificar si ya existe una caja abierta para esta sucursal
         $existente = CajaSesion::activaParaSucursal($sucursalId);
         if ($existente) {
+            if (!$existente->esDeHoy()) {
+                $msg = "La sucursal {$sucursal->nombre} posee una caja de la jornada anterior (#{$existente->id}) sin cerrar. Debe realizar el Cierre Z de los controladores fiscales y asentar el arqueo antes de abrir una nueva caja.";
+                return $request->wantsJson() 
+                    ? response()->json(['error' => $msg, 'requiere_cierre_anterior' => true, 'redirect_url' => route('cajas.cerrar', $existente->id)], 422) 
+                    : redirect()->route('cajas.cerrar', $existente->id)->with('error', $msg);
+            }
+
             $msg = "La sucursal {$sucursal->nombre} ya posee una caja abierta (Sesión #{$existente->id}) desde el {$existente->fecha_apertura?->format('d/m/Y H:i')}.";
             return $request->wantsJson() ? response()->json(['error' => $msg], 422) : back()->with('error', $msg);
         }
@@ -192,15 +199,28 @@ class CajaController extends Controller
             return back()->with('error', 'La caja anterior ya se encuentra cerrada.');
         }
 
+        // Validar que la caja anterior no tenga controladores Hasar con tickets pendientes de Cierre Z
+        $resumenFiscal = $cajaAnterior->calcularResumenFiscal();
+        foreach ($resumenFiscal['hasar_controladores'] ?? [] as $ctrl) {
+            if (!empty($ctrl['cant_tickets']) && empty($ctrl['cierre_z_emitido'])) {
+                $nombreCtrl = ($ctrl['modelo'] ?? 'Hasar') . ' (' . ($ctrl['hasar_ip'] ?? '') . ')';
+                $msg = "No se puede cerrar la caja: El controlador fiscal {$nombreCtrl} tiene {$ctrl['cant_tickets']} tickets emitidos sin Cierre Z. Debe realizar el Cierre Z completo desde la pantalla oficial de Cierre Z antes de abrir hoy.";
+                return $request->wantsJson()
+                    ? response()->json(['error' => $msg, 'redirect_url' => route('cajas.cerrar', $cajaAnterior->id)], 422)
+                    : redirect()->route('cajas.cerrar', $cajaAnterior->id)->with('error', $msg);
+            }
+        }
+
         $user = auth()->user();
         $sucursalId = $cajaAnterior->id_sucursal;
 
-        $resultado = DB::transaction(function () use ($cajaAnterior, $validated, $user, $sucursalId) {
+        $resultado = DB::transaction(function () use ($cajaAnterior, $validated, $user, $sucursalId, $resumenFiscal) {
             // 1. Cerrar caja anterior y computar arqueo
             $cajaAnterior->cerrar(
                 (float) $validated['monto_final_efectivo_real'],
                 $validated['observaciones_cierre'] ?? 'Cierre automático al inicio de la jornada siguiente',
-                $user?->id
+                $user?->id,
+                $resumenFiscal
             );
 
             // 2. Abrir la nueva caja de hoy
@@ -240,8 +260,9 @@ class CajaController extends Controller
 
         $caja->load(['sucursal', 'usuarioApertura', 'movimientos.usuario']);
         $totales = $caja->calcularTotales();
+        $resumenFiscal = $caja->calcularResumenFiscal();
 
-        return view('cajas.cerrar', compact('caja', 'totales'));
+        return view('cajas.cerrar', compact('caja', 'totales', 'resumenFiscal'));
     }
 
     /**
@@ -257,13 +278,122 @@ class CajaController extends Controller
         $validated = $request->validate([
             'monto_final_efectivo_real' => 'required|numeric|min:0',
             'observaciones'             => 'nullable|string|max:500',
+            'resumen_fiscal'            => 'nullable',
+            'monto_inicial_hoy'         => 'nullable|numeric|min:0',
         ]);
+
+        $resumenFiscalInput = $request->input('resumen_fiscal');
+        if (is_string($resumenFiscalInput)) {
+            $resumenFiscalInput = json_decode($resumenFiscalInput, true);
+        }
+        $resumenFiscal = is_array($resumenFiscalInput) ? $resumenFiscalInput : $caja->calcularResumenFiscal();
+
+        // 1. Si en la base de datos ya se registraron cierres Z previos en $caja->resumen_fiscal, conservarlos para no sobreescribir con un payload stale
+        $dbFiscal = $caja->resumen_fiscal ?? [];
+        if (!empty($dbFiscal['hasar_controladores']) && is_array($dbFiscal['hasar_controladores'])) {
+            foreach ($dbFiscal['hasar_controladores'] as $dbH) {
+                if (!empty($dbH['cierre_z_emitido'])) {
+                    foreach ($resumenFiscal['hasar_controladores'] as $rfIdx => $rfH) {
+                        if (($rfH['key'] ?? '') === ($dbH['key'] ?? '') || ($rfH['hasar_ip'] ?? '') === ($dbH['hasar_ip'] ?? '')) {
+                            $resumenFiscal['hasar_controladores'][$rfIdx]['cierre_z_emitido'] = true;
+                            $resumenFiscal['hasar_controladores'][$rfIdx]['cierre_z_numero'] = $dbH['cierre_z_numero'] ?? ($rfH['cierre_z_numero'] ?? null);
+                            $resumenFiscal['hasar_controladores'][$rfIdx]['cierre_z_fecha'] = $dbH['cierre_z_fecha'] ?? ($rfH['cierre_z_fecha'] ?? null);
+                            if (!empty($dbH['cierre_z_respuesta'])) {
+                                $resumenFiscal['hasar_controladores'][$rfIdx]['cierre_z_respuesta'] = $dbH['cierre_z_respuesta'];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Si todavía existen controladores con tickets pendientes de Cierre Z, intentar emitirlo automáticamente por backend con el puente local
+        if (!empty($resumenFiscal['hasar_controladores']) && is_array($resumenFiscal['hasar_controladores'])) {
+            foreach ($resumenFiscal['hasar_controladores'] as $idx => $ctrl) {
+                if (!empty($ctrl['cant_tickets']) && empty($ctrl['cierre_z_emitido'])) {
+                    $puertoLocal = (int) ($ctrl['puerto_local'] ?? 8585);
+                    $hasarIp = $ctrl['hasar_ip'] ?? '127.0.0.1';
+                    $hasarPuerto = (int) ($ctrl['hasar_puerto'] ?? 2000);
+                    $modelo = $ctrl['modelo'] ?? 'SMH/PT-250F';
+
+                    $payload = [
+                        'accion'       => 'cierre_z',
+                        'hasar_ip'     => $hasarIp,
+                        'hasar_puerto' => $hasarPuerto,
+                        'modelo'       => $modelo,
+                        'caja_id'      => $caja->id,
+                        'sucursal'     => $caja->sucursal?->nombre ?? '',
+                    ];
+
+                    $ch = curl_init("http://127.0.0.1:{$puertoLocal}/imprimir");
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+                    $bridgeRes = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    curl_close($ch);
+
+                    if ($httpCode === 200 && $bridgeRes) {
+                        $dataBridge = json_decode($bridgeRes, true);
+                        $numeroZ = $dataBridge['numero_comprobante'] 
+                            ?? $dataBridge['numero_z'] 
+                            ?? $dataBridge['numero'] 
+                            ?? $dataBridge['nro_z'] 
+                            ?? ('Z-' . date('His'));
+                        $resumenFiscal['hasar_controladores'][$idx]['cierre_z_emitido'] = true;
+                        $resumenFiscal['hasar_controladores'][$idx]['cierre_z_numero'] = $numeroZ;
+                        $resumenFiscal['hasar_controladores'][$idx]['cierre_z_fecha'] = now()->toDateTimeString();
+                        $resumenFiscal['hasar_controladores'][$idx]['cierre_z_respuesta'] = $dataBridge;
+                    }
+                }
+            }
+        }
+
+        // 3. Validar obligatoriedad de Cierre Z en controladores Hasar que registraron tickets
+        foreach ($resumenFiscal['hasar_controladores'] ?? [] as $ctrl) {
+            if (!empty($ctrl['cant_tickets']) && empty($ctrl['cierre_z_emitido'])) {
+                $nombreCtrl = ($ctrl['modelo'] ?? 'Hasar 2G') . ' (' . ($ctrl['hasar_ip'] ?? 'IP') . ')';
+                $cantTickets = $ctrl['cant_tickets'] ?? 0;
+                $msg = "No se puede cerrar la caja: El controlador fiscal {$nombreCtrl} registró {$cantTickets} ticket(s) en este turno y aún NO ha emitido su Cierre Z. Debe presionar '⚡ Emitir Cierre Z' (o registrar el número manual de Z) en cada equipo antes de confirmar el cierre.";
+                return $request->wantsJson() 
+                    ? response()->json(['error' => $msg], 422) 
+                    : back()->with('error', $msg)->withInput();
+            }
+        }
 
         $caja->cerrar(
             (float) $validated['monto_final_efectivo_real'],
             $validated['observaciones'] ?? null,
-            auth()->id()
+            auth()->id(),
+            $resumenFiscal
         );
+
+        // Si la caja cerrada era de una jornada anterior y se ingresó fondo para hoy, abrir la caja de hoy automáticamente
+        if (!$caja->esDeHoy() && $request->filled('monto_inicial_hoy')) {
+            $nuevaCaja = CajaSesion::create([
+                'id_sucursal'            => $caja->id_sucursal,
+                'id_usuario_apertura'    => auth()->id() ?? 1,
+                'fecha_apertura'         => now(),
+                'monto_inicial_efectivo' => (float) $validated['monto_inicial_hoy'],
+                'estado'                 => 'abierta',
+                'observaciones_apertura' => 'Apertura automática tras Cierre Z de jornada previa #' . $caja->id,
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success'       => true,
+                    'message'       => "Cierre Z de la sesión anterior #{$caja->id} registrado correctamente y caja de hoy #{$nuevaCaja->id} abierta.",
+                    'caja_id'       => $caja->id,
+                    'nueva_caja_id' => $nuevaCaja->id,
+                    'redirect_url'  => route('ventas.create'),
+                ]);
+            }
+
+            return redirect()->route('ventas.create')
+                ->with('success', "Cierre Z de la sesión previa #{$caja->id} asentado correctamente y Caja de hoy #{$nuevaCaja->id} abierta ($ " . number_format($nuevaCaja->monto_inicial_efectivo, 2, ',', '.') . "). ¡Listo para facturar!");
+        }
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -276,6 +406,95 @@ class CajaController extends Controller
 
         return redirect()->route('cajas.comprobante', ['caja' => $caja->id, 'formato' => 'ticket'])
             ->with('success', "Cierre Z de la sesión #{$caja->id} registrado correctamente.");
+    }
+
+    /**
+     * Registra el resultado de la emisión de un Cierre Z en un controlador Hasar específico.
+     * Si no se envía numero_z, el servidor intenta disparar el Cierre Z directamente en el puente Hasar.
+     */
+    public function registrarCierreZHasar(Request $request, CajaSesion $caja)
+    {
+        $validated = $request->validate([
+            'hasar_ip'     => 'required|string',
+            'hasar_puerto' => 'nullable|integer',
+            'puerto_local' => 'nullable|integer',
+            'modelo'       => 'nullable|string',
+            'numero_z'     => 'nullable|string',
+            'respuesta'    => 'nullable|array',
+        ]);
+
+        $puertoLocal = (int) ($validated['puerto_local'] ?? 8585);
+        $hasarIp = $validated['hasar_ip'];
+        $hasarPuerto = (int) ($validated['hasar_puerto'] ?? 2000);
+        $modelo = $validated['modelo'] ?? 'SMH/PT-250F';
+        $key = "{$hasarIp}:{$hasarPuerto}";
+
+        // Si no se proveyó número de Z desde el frontend, intentar emitirlo llamando directamente al puente Hasar local desde PHP
+        if (empty($validated['numero_z'])) {
+            $payload = [
+                'accion'       => 'cierre_z',
+                'hasar_ip'     => $hasarIp,
+                'hasar_puerto' => $hasarPuerto,
+                'modelo'       => $modelo,
+                'caja_id'      => $caja->id,
+                'sucursal'     => $caja->sucursal?->nombre ?? '',
+            ];
+
+            $ch = curl_init("http://127.0.0.1:{$puertoLocal}/imprimir");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+            $bridgeRes = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($httpCode === 200 && $bridgeRes) {
+                $dataBridge = json_decode($bridgeRes, true);
+                $numeroZ = $dataBridge['numero_comprobante'] 
+                    ?? $dataBridge['numero_z'] 
+                    ?? $dataBridge['numero'] 
+                    ?? $dataBridge['nro_z'] 
+                    ?? ('Z-' . date('His'));
+                $validated['numero_z'] = $numeroZ;
+                $validated['respuesta'] = $dataBridge;
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'bridge_offline',
+                    'message' => "No se pudo contactar el simulador/puente Hasar en http://127.0.0.1:{$puertoLocal}/imprimir. " . ($curlError ? "Error de conexión: {$curlError}" : "Código HTTP: {$httpCode}"),
+                ], 503);
+            }
+        }
+
+        $resumen = $caja->calcularResumenFiscal();
+
+        $actualizado = false;
+        if (!empty($resumen['hasar_controladores']) && is_array($resumen['hasar_controladores'])) {
+            foreach ($resumen['hasar_controladores'] as $idx => $ctrl) {
+                if (($ctrl['key'] ?? '') === $key || ($ctrl['hasar_ip'] ?? '') === $hasarIp) {
+                    $resumen['hasar_controladores'][$idx]['cierre_z_emitido'] = true;
+                    $resumen['hasar_controladores'][$idx]['cierre_z_numero'] = $validated['numero_z'] ?? ($ctrl['cierre_z_numero'] ?: 'Z-' . date('His'));
+                    $resumen['hasar_controladores'][$idx]['cierre_z_fecha'] = now()->toDateTimeString();
+                    if (!empty($validated['respuesta'])) {
+                        $resumen['hasar_controladores'][$idx]['cierre_z_respuesta'] = $validated['respuesta'];
+                    }
+                    $actualizado = true;
+                }
+            }
+        }
+
+        $caja->update(['resumen_fiscal' => $resumen]);
+
+        return response()->json([
+            'success'        => true,
+            'message'        => "Cierre Z registrado exitosamente para controlador Hasar {$key}.",
+            'numero_z'       => $validated['numero_z'],
+            'respuesta'      => $validated['respuesta'] ?? null,
+            'resumen_fiscal' => $resumen,
+        ]);
     }
 
     /**
@@ -292,9 +511,10 @@ class CajaController extends Controller
             ->paginate(50);
 
         $totales = $caja->calcularTotales();
+        $resumenFiscal = $caja->resumen_fiscal ?: $caja->calcularResumenFiscal();
         $movimientos = $caja->movimientos()->orderBy('id', 'desc')->get();
 
-        return view('cajas.show', compact('caja', 'totales', 'ventas', 'movimientos'));
+        return view('cajas.show', compact('caja', 'totales', 'resumenFiscal', 'ventas', 'movimientos'));
     }
 
     /**
@@ -304,6 +524,7 @@ class CajaController extends Controller
     {
         $caja->load(['sucursal.provincia', 'usuarioApertura', 'usuarioCierre', 'ventas', 'movimientos.usuario']);
         $totales = $caja->calcularTotales();
+        $resumenFiscal = $caja->resumen_fiscal ?: $caja->calcularResumenFiscal();
 
         $formato = $request->get('formato', 'ticket');
 
@@ -311,7 +532,7 @@ class CajaController extends Controller
         $primerComprobante = $caja->ventas()->orderBy('id', 'asc')->value('comprobante');
         $ultimoComprobante = $caja->ventas()->orderBy('id', 'desc')->value('comprobante');
 
-        return view('cajas.comprobante', compact('caja', 'totales', 'primerComprobante', 'ultimoComprobante', 'formato'));
+        return view('cajas.comprobante', compact('caja', 'totales', 'resumenFiscal', 'primerComprobante', 'ultimoComprobante', 'formato'));
     }
 
     /**

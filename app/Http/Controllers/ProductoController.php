@@ -1084,5 +1084,83 @@ class ProductoController extends Controller
 
         return view('productos.etiqueta', compact('producto', 'barcodeSvg', 'precioVenta', 'cantidad', 'code', 'sucursalId', 'esAlta', 'motivo'));
     }
+
+    /**
+     * Impresión en lote de etiquetas térmicas (50mm x 25mm CODE128)
+     * Utilizado para productos generados o rectificados en traslados o ingresos por lote.
+     */
+    public function imprimirEtiquetasLote(Request $request)
+    {
+        $items = [];
+
+        // 1. Probar desde sesión si se solicitó o si existe en sesión
+        if ($request->has('desde_sesion') && session()->has('etiquetas_lote_pendientes')) {
+            $items = session('etiquetas_lote_pendientes');
+        } elseif ($request->filled('items')) {
+            $raw = $request->input('items');
+            $items = is_string($raw) ? json_decode($raw, true) : $raw;
+        } elseif ($request->filled('producto_id')) {
+            $items = [[
+                'producto_id' => (int)$request->input('producto_id'),
+                'cantidad' => max(1, (int)$request->input('cantidad', 1))
+            ]];
+        } elseif (session()->has('etiquetas_lote_pendientes')) {
+            $items = session('etiquetas_lote_pendientes');
+        }
+
+        if (empty($items)) {
+            return redirect()->route('productos.traslado')->with('error', 'No hay etiquetas pendientes para imprimir.');
+        }
+
+        $generator = new \Picqer\Barcode\BarcodeGeneratorSVG();
+        $etiquetasAImprimir = [];
+        $totalEtiquetas = 0;
+
+        foreach ($items as $it) {
+            $prodId = $it['producto_id'] ?? null;
+            if (!$prodId) continue;
+
+            $producto = Producto::with('proveedor', 'stocks')->find($prodId);
+            if (!$producto) continue;
+
+            $cant = max(1, min(500, (int)($it['cantidad'] ?? 1)));
+            $code = trim((string)($it['codigo_barra'] ?? $producto->codigo_barra ?: $producto->codigo));
+
+            $barcodeSvg = null;
+            try {
+                $rawSvg = $generator->getBarcode($code, $generator::TYPE_CODE_128, 1.15, 26);
+                $barcodeSvg = preg_replace('/<\?xml.*?\?>/i', '', $rawSvg);
+                $barcodeSvg = preg_replace('/<!DOCTYPE.*?>/i', '', $barcodeSvg);
+            } catch (\Exception $e) {
+                try {
+                    $rawSvg = $generator->getBarcode($code, $generator::TYPE_CODE_39, 1.0, 26);
+                    $barcodeSvg = preg_replace('/<\?xml.*?\?>/i', '', $rawSvg);
+                    $barcodeSvg = preg_replace('/<!DOCTYPE.*?>/i', '', $barcodeSvg);
+                } catch (\Exception $e2) {
+                    $barcodeSvg = null;
+                }
+            }
+
+            $precioVenta = isset($it['precio_venta']) && (float)$it['precio_venta'] > 0 
+                ? (float)$it['precio_venta'] 
+                : (float)($producto->stocks->first()?->precio_venta ?? $producto->precio_venta ?? 0);
+
+            $etiquetasAImprimir[] = [
+                'producto' => $producto,
+                'code' => $code,
+                'barcodeSvg' => $barcodeSvg,
+                'precioVenta' => $precioVenta,
+                'talle' => $it['talle'] ?? $producto->talle,
+                'color' => $it['color'] ?? $producto->color,
+                'cantidad' => $cant,
+                'es_nuevo' => !empty($it['es_nuevo']),
+                'codigo_original' => $it['codigo_original'] ?? null,
+            ];
+
+            $totalEtiquetas += $cant;
+        }
+
+        return view('productos.etiquetas-lote', compact('etiquetasAImprimir', 'totalEtiquetas'));
+    }
 }
 

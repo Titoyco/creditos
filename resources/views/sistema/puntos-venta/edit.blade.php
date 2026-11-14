@@ -24,8 +24,36 @@
         @endif
     </div>
 
-    <form action="{{ route('sistema.puntos-venta.update', $puntoVenta) }}" method="POST" autocomplete="off"
-          x-data="{ tipo: '{{ old('tipo_emision', $puntoVenta->tipo_emision) }}' }">
+    <form action="{{ route('sistema.puntos-venta.update', $puntoVenta) }}" method="POST" enctype="multipart/form-data" autocomplete="off"
+          x-data="{ 
+              tipo: '{{ old('tipo_emision', $puntoVenta->tipo_emision) }}',
+              probandoArca: false,
+              mensajeArca: '',
+              arcaOk: null,
+              async probarConexionArca() {
+                  this.probandoArca = true;
+                  this.mensajeArca = '';
+                  this.arcaOk = null;
+                  try {
+                      let res = await fetch('{{ route('sistema.puntos-venta.probar-arca', $puntoVenta) }}', {
+                          method: 'POST',
+                          headers: {
+                              'Content-Type': 'application/json',
+                              'Accept': 'application/json',
+                              'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                          }
+                      });
+                      let data = await res.json();
+                      this.arcaOk = data.success;
+                      this.mensajeArca = data.message;
+                  } catch (e) {
+                      this.arcaOk = false;
+                      this.mensajeArca = 'Error de red al intentar conectar con el servidor ARCA.';
+                  } finally {
+                      this.probandoArca = false;
+                  }
+              }
+          }">
         @csrf
         @method('PUT')
 
@@ -180,26 +208,108 @@
                 <div class="p-4 space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
                         <!-- Ambiente -->
-                        <div class="sm:col-span-6">
+                        <div class="sm:col-span-4">
                             <label for="ambiente" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Ambiente ARCA *</label>
                             <select id="ambiente" name="ambiente"
                                     class="w-full text-xs font-bold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm">
-                                <option value="produccion" {{ old('ambiente', $puntoVenta->configuracion['ambiente'] ?? 'produccion') === 'produccion' ? 'selected' : '' }}>Producción Oficial (Comprobantes con validez fiscal)</option>
-                                <option value="homologacion" {{ old('ambiente', $puntoVenta->configuracion['ambiente'] ?? '') === 'homologacion' ? 'selected' : '' }}>Homologación / Testing (Pruebas de desarrollo)</option>
+                                <option value="produccion" {{ old('ambiente', $puntoVenta->configuracion['ambiente'] ?? 'produccion') === 'produccion' ? 'selected' : '' }}>Producción Oficial (Validez Fiscal)</option>
+                                <option value="homologacion" {{ old('ambiente', $puntoVenta->configuracion['ambiente'] ?? '') === 'homologacion' ? 'selected' : '' }}>Homologación / Testing (Pruebas)</option>
                             </select>
                             <x-input-error :messages="$errors->get('ambiente')" class="mt-1"/>
                         </div>
 
+                        <!-- CUIT Emisor -->
+                        <div class="sm:col-span-4">
+                            <label for="cuit" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">CUIT Emisor ante ARCA *</label>
+                            <input id="cuit" name="cuit" type="text" maxlength="14"
+                                   value="{{ old('cuit', $puntoVenta->configuracion['cuit'] ?? '30-71234567-8') }}"
+                                   placeholder="30712345678"
+                                   class="w-full text-xs font-mono font-bold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm tabular-nums">
+                            <x-input-error :messages="$errors->get('cuit')" class="mt-1"/>
+                        </div>
+
                         <!-- Concepto -->
-                        <div class="sm:col-span-6">
-                            <label for="concepto" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Concepto AFIP Predeterminado</label>
+                        <div class="sm:col-span-4">
+                            <label for="concepto" class="block text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase mb-0.5">Concepto Predeterminado</label>
                             <select id="concepto" name="concepto"
                                     class="w-full text-xs font-semibold rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:border-blue-500 focus:ring-blue-500 py-1.5 px-2.5 shadow-sm">
-                                <option value="1" {{ old('concepto', $puntoVenta->configuracion['concepto'] ?? 1) == 1 ? 'selected' : '' }}>1 - Productos / Mercaderías (Venta minorista)</option>
+                                <option value="1" {{ old('concepto', $puntoVenta->configuracion['concepto'] ?? 1) == 1 ? 'selected' : '' }}>1 - Productos / Mercaderías</option>
                                 <option value="2" {{ old('concepto', $puntoVenta->configuracion['concepto'] ?? 1) == 2 ? 'selected' : '' }}>2 - Servicios</option>
                                 <option value="3" {{ old('concepto', $puntoVenta->configuracion['concepto'] ?? 1) == 3 ? 'selected' : '' }}>3 - Productos y Servicios</option>
                             </select>
                             <x-input-error :messages="$errors->get('concepto')" class="mt-1"/>
+                        </div>
+                    </div>
+
+                    <!-- Claves Digitales y Certificado X.509 -->
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-700/80">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                </svg>
+                                <span>Certificado Digital y Clave Privada (WSAA)</span>
+                            </h3>
+
+                            <button type="button" @click="probarConexionArca()" :disabled="probandoArca"
+                                    class="bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-700 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1.5 shadow-sm">
+                                <svg class="w-3.5 h-3.5" :class="probandoArca ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                <span x-text="probandoArca ? 'Verificando...' : 'Probar Conexión ARCA'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Feedback de Conexión en Vivo -->
+                        <div x-show="mensajeArca" x-cloak class="mb-3 p-2.5 rounded-lg text-xs font-semibold"
+                             :class="arcaOk ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-200'">
+                            <span x-text="mensajeArca"></span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <!-- Archivo Certificado -->
+                            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label for="certificado" class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">
+                                        Certificado Digital (.crt / .pem)
+                                    </label>
+                                    @if(!empty($puntoVenta->configuracion['certificado_path']))
+                                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                            ✓ Cargado
+                                        </span>
+                                    @else
+                                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300">
+                                            Pendiente
+                                        </span>
+                                    @endif
+                                </div>
+                                <input id="certificado" name="certificado" type="file" accept=".crt,.pem,.cert"
+                                       class="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                <span class="text-[9px] text-slate-400">Seleccione un archivo solo si desea reemplazar el actual.</span>
+                                <x-input-error :messages="$errors->get('certificado')" class="mt-1"/>
+                            </div>
+
+                            <!-- Archivo Clave Privada -->
+                            <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                                <div class="flex items-center justify-between mb-1">
+                                    <label for="clave_privada" class="block text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase">
+                                        Clave Privada (.key)
+                                    </label>
+                                    @if(!empty($puntoVenta->configuracion['clave_privada_path']))
+                                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                            ✓ Cargada
+                                        </span>
+                                    @else
+                                        <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300">
+                                            Pendiente
+                                        </span>
+                                    @endif
+                                </div>
+                                <input id="clave_privada" name="clave_privada" type="file" accept=".key,.pem,.txt"
+                                       class="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                                <span class="text-[9px] text-slate-400">Seleccione un archivo solo si desea reemplazar la clave actual.</span>
+                                <x-input-error :messages="$errors->get('clave_privada')" class="mt-1"/>
+                            </div>
                         </div>
                     </div>
                 </div>

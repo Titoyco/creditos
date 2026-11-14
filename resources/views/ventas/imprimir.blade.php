@@ -96,9 +96,14 @@
             <!-- Datos del Comprobante -->
             <div class="space-y-0.5 text-[10px]">
                 <div class="flex justify-between font-bold">
-                    <span>FACTURA B</span>
+                    <span>FACTURA {{ $venta->isFacturaA() ? 'A' : 'B' }}</span>
                     <span>N° {{ $venta->comprobante }}</span>
                 </div>
+                @if($venta->esExentoIva())
+                    <div class="text-[9px] font-bold text-slate-700 bg-slate-100 p-0.5 text-center rounded">
+                        Operación Exenta de IVA - Ley 19.640 (Área Aduanera Especial)
+                    </div>
+                @endif
                 <div class="flex justify-between text-slate-600">
                     <span>Fecha: {{ $venta->fecha ? $venta->fecha->format('d/m/Y') : '-' }}</span>
                     <span>Hora: {{ $venta->fecha ? $venta->fecha->format('H:i:s') : '-' }}</span>
@@ -116,9 +121,9 @@
                     Cliente: {{ $venta->cliente_nombre }}
                 </div>
                 @if($venta->cliente_documento)
-                    <div class="text-slate-600">DNI/CUIT: {{ $venta->cliente_documento }}</div>
+                    <div class="text-slate-600">{{ $venta->isFacturaA() ? 'CUIT' : 'DNI/CUIT' }}: {{ $venta->cliente_documento }}</div>
                 @endif
-                <div class="text-slate-600">Cond. IVA: Consumidor Final</div>
+                <div class="text-slate-600">Cond. IVA: {{ $venta->isFacturaA() ? 'Responsable Inscripto' : 'Consumidor Final' }}</div>
             </div>
 
             <div class="border-t border-dashed border-slate-400 my-2"></div>
@@ -155,6 +160,21 @@
                         <span>${{ number_format((float)$venta->recargo, 2, ',', '.') }}</span>
                     </div>
                 @endif
+                @if($venta->esExentoIva())
+                    <div class="flex justify-between text-[10px] text-teal-800 font-bold">
+                        <span>IVA (0% - Ley 19.640):</span>
+                        <span>$0,00</span>
+                    </div>
+                @elseif($venta->isFacturaA())
+                    <div class="flex justify-between text-[10px] text-slate-600">
+                        <span>Neto Gravado:</span>
+                        <span>${{ number_format($venta->netoGravado(), 2, ',', '.') }}</span>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-indigo-700 font-bold">
+                        <span>IVA (21%):</span>
+                        <span>${{ number_format($venta->ivaLiquidado(), 2, ',', '.') }}</span>
+                    </div>
+                @endif
                 <div class="flex justify-between text-sm font-black border-t border-slate-400 pt-1 mt-1">
                     <span>TOTAL:</span>
                     <span>${{ number_format((float)$venta->total, 2, ',', '.') }}</span>
@@ -187,6 +207,18 @@
             </div>
 
             <div class="border-t border-dashed border-slate-400 my-2"></div>
+
+            @if($venta->cae)
+                <div class="border-b border-dashed border-slate-400 pb-2 mb-2 text-center">
+                    @if($venta->afip_qr)
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={{ urlencode($venta->afip_qr) }}"
+                             alt="QR ARCA" class="w-24 h-24 mx-auto my-1 border border-slate-300 p-1">
+                    @endif
+                    <div class="font-mono text-[9px] font-bold">CAE: {{ $venta->cae }}</div>
+                    <div class="font-mono text-[8px] text-slate-600">Vto. CAE: {{ $venta->cae_vencimiento ? $venta->cae_vencimiento->format('d/m/Y') : '' }}</div>
+                    <div class="text-[8px] uppercase font-bold text-slate-700 mt-0.5">Comprobante Autorizado por ARCA</div>
+                </div>
+            @endif
 
             <div class="text-center text-[8px] text-slate-500 uppercase space-y-0.5 pt-1">
                 <p>Comprobante de Control Comercial Interno</p>
@@ -236,17 +268,22 @@
                             </div>
                         </div>
 
-                        <!-- Letra B Centrada -->
+                        <!-- Letra Comprobante Centrada -->
                         <div class="w-16 h-16 border-2 border-slate-800 rounded flex flex-col items-center justify-center bg-slate-50">
-                            <span class="text-2xl font-black text-slate-900 leading-none">B</span>
-                            <span class="text-[8px] font-bold text-slate-600 uppercase">Cód. 06</span>
+                            <span class="text-2xl font-black text-slate-900 leading-none">{{ $venta->isFacturaA() ? 'A' : 'B' }}</span>
+                            <span class="text-[8px] font-bold text-slate-600 uppercase">{{ $venta->isFacturaA() ? 'Cód. 01' : 'Cód. 06' }}</span>
                         </div>
 
                         <!-- Número y Ejemplar -->
                         <div class="w-1/2 text-right">
                             <span class="text-[10px] font-black uppercase text-slate-500 block">{{ $ejemplar }}</span>
-                            <h2 class="text-lg font-black font-mono text-slate-900">FACTURA</h2>
+                            <h2 class="text-lg font-black font-mono text-slate-900">FACTURA {{ $venta->isFacturaA() ? 'A' : 'B' }}</h2>
                             <p class="text-xs font-mono font-bold text-indigo-700">N° {{ $venta->comprobante }}</p>
+                            @if($venta->esExentoIva())
+                                <span class="inline-block text-[9px] font-bold text-teal-800 bg-teal-50 border border-teal-300 px-1.5 py-0.5 rounded mt-0.5">
+                                    Operación Exenta de IVA - Ley 19.640 (AAE)
+                                </span>
+                            @endif
                             <p class="text-[10px] text-slate-600">Fecha: {{ $venta->fecha ? $venta->fecha->format('d/m/Y H:i') : '-' }} hs</p>
                             <p class="text-[10px] text-slate-500">P.Venta: {{ str_pad($venta->punto_venta, 4, '0', STR_PAD_LEFT) }}</p>
                         </div>
@@ -302,11 +339,31 @@
                             @endif
                         </div>
 
-                        <div class="w-1/3 space-y-1 text-right font-mono">
-                            <div class="flex justify-between text-slate-600">
-                                <span>Subtotal:</span>
-                                <span>${{ number_format((float)$venta->subtotal, 2, ',', '.') }}</span>
-                            </div>
+                        <div class="w-1/2 space-y-1 text-right font-mono text-xs">
+                            @if($venta->esExentoIva())
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Op. Exentas (Ley 19.640):</span>
+                                    <span>${{ number_format((float)$venta->total, 2, ',', '.') }}</span>
+                                </div>
+                                <div class="flex justify-between text-teal-700 font-bold">
+                                    <span>IVA Liquidado (0%):</span>
+                                    <span>$0,00</span>
+                                </div>
+                            @elseif($venta->isFacturaA())
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Subtotal Neto Gravado:</span>
+                                    <span>${{ number_format($venta->netoGravado(), 2, ',', '.') }}</span>
+                                </div>
+                                <div class="flex justify-between text-indigo-700 font-bold">
+                                    <span>IVA Liquidado (21%):</span>
+                                    <span>${{ number_format($venta->ivaLiquidado(), 2, ',', '.') }}</span>
+                                </div>
+                            @else
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Subtotal:</span>
+                                    <span>${{ number_format((float)$venta->subtotal, 2, ',', '.') }}</span>
+                                </div>
+                            @endif
                             @if((float)$venta->recargo > 0)
                                 <div class="flex justify-between text-indigo-700">
                                     <span>Recargo:</span>
@@ -325,6 +382,30 @@
                             <div class="w-64 text-center">
                                 <div class="border-b border-slate-600 mb-1"></div>
                                 <span class="text-[10px] font-bold uppercase text-slate-600">Firma del Titular / Deudor</span>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($venta->cae)
+                        <div class="mt-4 pt-3 border-t-2 border-slate-800 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                @if($venta->afip_qr)
+                                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data={{ urlencode($venta->afip_qr) }}"
+                                         alt="QR ARCA" class="w-24 h-24 border border-slate-300 p-1 rounded">
+                                @endif
+                                <div class="text-xs space-y-0.5">
+                                    <div class="font-black text-slate-900 tracking-wider">ARCA / AFIP - Factura Electrónica</div>
+                                    <div class="text-[10px] text-slate-500">Comprobante Autorizado con Validez Fiscal Oficial</div>
+                                    <div class="text-[10px] font-mono text-slate-700">Régimen de Facturación RG 5003</div>
+                                </div>
+                            </div>
+                            <div class="text-right font-mono space-y-1">
+                                <div class="text-xs font-bold text-slate-800">
+                                    <span class="text-slate-500 uppercase font-sans text-[10px]">CAE N°:</span> {{ $venta->cae }}
+                                </div>
+                                <div class="text-xs font-semibold text-slate-700">
+                                    <span class="text-slate-500 uppercase font-sans text-[10px]">Fecha Vto. CAE:</span> {{ $venta->cae_vencimiento ? $venta->cae_vencimiento->format('d/m/Y') : '' }}
+                                </div>
                             </div>
                         </div>
                     @endif

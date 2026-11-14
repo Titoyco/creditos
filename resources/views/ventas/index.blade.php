@@ -306,9 +306,28 @@
                             <tr class="hover:bg-indigo-50/40 dark:hover:bg-slate-700/40 transition-colors {{ $v->estado === 'anulada' ? 'bg-rose-50/30 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400' : '' }}">
                                 {{-- Comprobante --}}
                                 <td class="py-2 px-3 font-mono font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                                    <a href="{{ route('ventas.show', $v->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">
-                                        {{ $v->comprobante }}
-                                    </a>
+                                    <div class="flex items-center gap-1.5">
+                                        <a href="{{ route('ventas.show', $v->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            {{ $v->comprobante }}
+                                        </a>
+                                        <span class="text-[9px] font-bold px-1 rounded font-mono {{ $v->isFacturaA() ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200' : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200' }}" title="{{ $v->isFacturaA() ? 'Factura A (Responsable Inscripto)' : 'Factura B (Consumidor Final)' }}">
+                                            {{ $v->isFacturaA() ? 'A' : 'B' }}
+                                        </span>
+                                        @if($v->esExentoIva())
+                                            <span class="text-[9px] font-bold px-1 rounded font-mono bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-300 dark:border-teal-800" title="Operación Exenta de IVA (Ley 19.640 - Tierra del Fuego)">
+                                                EX
+                                            </span>
+                                        @endif
+                                        @if($v->cae)
+                                            <span class="text-[9px] bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800 font-mono font-bold px-1 rounded" title="Factura Digital ARCA - CAE: {{ $v->cae }}">
+                                                ARCA
+                                            </span>
+                                        @elseif($v->tipo_emision === 'fiscal_hasar')
+                                            <span class="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono font-bold px-1 rounded" title="Controlador Fiscal Hasar 2G Local">
+                                                HASAR
+                                            </span>
+                                        @endif
+                                    </div>
                                 </td>
 
                                 {{-- Fecha / Hora --}}

@@ -649,11 +649,14 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
 |---|---|---|---|---|---|
 | GET | `/sistema/puntos-venta` | `sistema.puntos-venta.index` | `PuntoVentaController@index` | `auth` | Data-Grid compacta con filtros por sucursal y tipo de emisión |
 | GET | `/sistema/puntos-venta/create` | `sistema.puntos-venta.create` | `PuntoVentaController@create` | `auth` | Formulario reactivo Alpine.js para alta de punto de venta |
-| POST | `/sistema/puntos-venta` | `sistema.puntos-venta.store` | `PuntoVentaController@store` | `auth` | Almacena punto de venta con validaciones compuestas y JSON de red |
-| GET | `/sistema/puntos-venta/{puntoVenta}/edit` | `sistema.puntos-venta.edit` | `PuntoVentaController@edit` | `auth` | Formulario de edición con precarga y descarga de configuración |
-| PUT | `/sistema/puntos-venta/{puntoVenta}` | `sistema.puntos-venta.update` | `PuntoVentaController@update` | `auth` | Actualización de datos maestros y parámetros técnicos |
+| POST | `/sistema/puntos-venta` | `sistema.puntos-venta.store` | `PuntoVentaController@store` | `auth` | Almacena punto de venta con validaciones compuestas y carga de certificados ARCA |
+| GET | `/sistema/puntos-venta/{puntoVenta}/edit` | `sistema.puntos-venta.edit` | `PuntoVentaController@edit` | `auth` | Formulario de edición con precarga y prueba de conexión ARCA |
+| PUT | `/sistema/puntos-venta/{puntoVenta}` | `sistema.puntos-venta.update` | `PuntoVentaController@update` | `auth` | Actualización de datos maestros, certificados y parámetros técnicos |
 | DELETE | `/sistema/puntos-venta/{puntoVenta}` | `sistema.puntos-venta.destroy` | `PuntoVentaController@destroy` | `auth` | Eliminación de punto de venta |
 | GET | `/sistema/puntos-venta/{puntoVenta}/descargar-config` | `sistema.puntos-venta.descargar-config` | `PuntoVentaController@descargarConfig` | `auth` | Descarga de archivo `config.json` listo para el puente local Windows |
+| POST | `/sistema/puntos-venta/{puntoVenta}/probar-arca` | `sistema.puntos-venta.probar-arca` | `PuntoVentaController@probarArca` | `auth` | Prueba en vivo de autenticación WSAA y estado de servidores WSFE |
+| POST | `/sistema/puntos-venta/seleccionar-terminal` | `sistema.puntos-venta.seleccionar-terminal` | `PuntoVentaController@seleccionarTerminal` | `auth` | Persiste en sesión el punto de venta activo del navegador/terminal |
+| GET | `/sistema/puntos-venta/activos-sucursal` | `sistema.puntos-venta.activos-sucursal` | `PuntoVentaController@activosPorSucursal` | `auth` | Listado JSON de bocas activas de la sucursal para el selector de cabecera |
 
 ### 11.2 Métodos y Lógica de Negocio
 

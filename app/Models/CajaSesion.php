@@ -47,6 +47,7 @@ class CajaSesion extends Model implements Auditable
         'estado',
         'observaciones_apertura',
         'observaciones_cierre',
+        'resumen_fiscal',
     ];
 
     protected $casts = [
@@ -74,6 +75,7 @@ class CajaSesion extends Model implements Auditable
         'total_retiros_efectivo'        => 'float',
         'cant_ingresos_efectivo'        => 'integer',
         'cant_retiros_efectivo'         => 'integer',
+        'resumen_fiscal'                => 'array',
     ];
 
     public function sucursal(): BelongsTo
@@ -371,13 +373,198 @@ class CajaSesion extends Model implements Auditable
     }
 
     /**
+     * Calcula en tiempo real la discriminación fiscal de la jornada:
+     * - Facturación Digital ARCA (AFIP Web Services)
+     * - Controladores Fiscales Hasar 2G unificados por sucursal y por IP/Puerto físico.
+     */
+    public function calcularResumenFiscal(): array
+    {
+        // 1. Obtener todas las ventas activas de esta sesión de caja
+        $ventas = $this->ventas()
+            ->with(['puntoVenta'])
+            ->where('estado', '!=', 'anulada')
+            ->get();
+
+        // 2. Estructura base para ARCA
+        $arca = [
+            'cant_comprobantes' => 0,
+            'total'             => 0.0,
+            'facturas_b_cant'   => 0,
+            'facturas_b_total'  => 0.0,
+            'facturas_a_cant'   => 0,
+            'facturas_a_total'  => 0.0,
+            'puntos_venta'      => [],
+        ];
+
+        // 3. Estructura de Controladores Hasar configurados para la sucursal (unificados por IP:Puerto)
+        $pvsHasarSucursal = PuntoVenta::where('id_sucursal', $this->id_sucursal)
+            ->where('tipo_emision', 'fiscal_hasar')
+            ->where('activo', true)
+            ->orderBy('numero')
+            ->get();
+
+        $controladoresHasar = [];
+
+        foreach ($pvsHasarSucursal as $pv) {
+            $config = $pv->configuracion ?? [];
+            $ip = $config['hasar_ip'] ?? '127.0.0.1';
+            $puerto = (int) ($config['hasar_puerto'] ?? 2000);
+            $puertoLocal = (int) ($config['puerto_local'] ?? 8585);
+            $modelo = $config['modelo'] ?? 'SMH/PT-250F';
+            $key = "{$ip}:{$puerto}";
+
+            if (!isset($controladoresHasar[$key])) {
+                $controladoresHasar[$key] = [
+                    'key'                  => $key,
+                    'hasar_ip'             => $ip,
+                    'hasar_puerto'         => $puerto,
+                    'puerto_local'         => $puertoLocal,
+                    'modelo'               => $modelo,
+                    'puntos_venta_ids'     => [],
+                    'puntos_venta_numeros' => [],
+                    'puntos_venta_nombres' => [],
+                    'cant_tickets'         => 0,
+                    'total'                => 0.0,
+                    'facturas_b_cant'      => 0,
+                    'facturas_b_total'     => 0.0,
+                    'facturas_a_cant'      => 0,
+                    'facturas_a_total'     => 0.0,
+                    'cierre_z_emitido'     => false,
+                    'cierre_z_numero'      => null,
+                    'cierre_z_fecha'       => null,
+                ];
+            }
+
+            $controladoresHasar[$key]['puntos_venta_ids'][] = $pv->id;
+            $controladoresHasar[$key]['puntos_venta_numeros'][] = $pv->numero;
+            $controladoresHasar[$key]['puntos_venta_nombres'][] = "P.V. {$pv->numero_formateado} ({$pv->nombre})";
+        }
+
+        // 4. Procesar ventas activas y clasificar
+        foreach ($ventas as $v) {
+            $monto = (float) $v->total;
+            $tipoEmision = $v->tipo_emision;
+            $pv = $v->puntoVenta;
+            $esFacturaA = $v->isFacturaA();
+
+            if ($tipoEmision === 'arca_wsfe' || (!empty($v->cae) && $tipoEmision !== 'fiscal_hasar')) {
+                // Factura Digital ARCA
+                $arca['cant_comprobantes']++;
+                $arca['total'] += $monto;
+                if ($esFacturaA) {
+                    $arca['facturas_a_cant']++;
+                    $arca['facturas_a_total'] += $monto;
+                } else {
+                    $arca['facturas_b_cant']++;
+                    $arca['facturas_b_total'] += $monto;
+                }
+
+                $pvNum = $v->punto_venta ?: ($pv?->numero ?? 1);
+                if (!in_array($pvNum, $arca['puntos_venta'])) {
+                    $arca['puntos_venta'][] = $pvNum;
+                }
+            } else {
+                // Controlador Fiscal Hasar
+                // Resolver a qué IP pertenece el punto de venta
+                $config = $pv?->configuracion ?? $v->datos_fiscales ?? [];
+                $ip = $config['hasar_ip'] ?? '127.0.0.1';
+                $puerto = (int) ($config['hasar_puerto'] ?? 2000);
+                $key = "{$ip}:{$puerto}";
+
+                if (!isset($controladoresHasar[$key])) {
+                    $puertoLocal = (int) ($config['puerto_local'] ?? 8585);
+                    $modelo = $config['modelo'] ?? 'SMH/PT-250F';
+                    $controladoresHasar[$key] = [
+                        'key'                  => $key,
+                        'hasar_ip'             => $ip,
+                        'hasar_puerto'         => $puerto,
+                        'puerto_local'         => $puertoLocal,
+                        'modelo'               => $modelo,
+                        'puntos_venta_ids'     => $pv ? [$pv->id] : [],
+                        'puntos_venta_numeros' => [$v->punto_venta],
+                        'puntos_venta_nombres' => [$pv ? "P.V. {$pv->numero_formateado} ({$pv->nombre})" : "P.V. {$v->punto_venta}"],
+                        'cant_tickets'         => 0,
+                        'total'                => 0.0,
+                        'facturas_b_cant'      => 0,
+                        'facturas_b_total'     => 0.0,
+                        'facturas_a_cant'      => 0,
+                        'facturas_a_total'     => 0.0,
+                        'cierre_z_emitido'     => false,
+                        'cierre_z_numero'      => null,
+                        'cierre_z_fecha'       => null,
+                    ];
+                }
+
+                $controladoresHasar[$key]['cant_tickets']++;
+                $controladoresHasar[$key]['total'] += $monto;
+                if ($esFacturaA) {
+                    $controladoresHasar[$key]['facturas_a_cant']++;
+                    $controladoresHasar[$key]['facturas_a_total'] += $monto;
+                } else {
+                    $controladoresHasar[$key]['facturas_b_cant']++;
+                    $controladoresHasar[$key]['facturas_b_total'] += $monto;
+                }
+            }
+        }
+
+        // 5. Si la caja ya tenía registros de cierres Z emitidos previamente en resumen_fiscal, conservarlos
+        $prevFiscal = $this->resumen_fiscal ?? [];
+        if (!empty($prevFiscal['hasar_controladores'])) {
+            foreach ($prevFiscal['hasar_controladores'] as $prevH) {
+                $prevKey = $prevH['key'] ?? null;
+                $prevIp = $prevH['hasar_ip'] ?? null;
+                foreach ($controladoresHasar as $k => &$ctrlRef) {
+                    if (($prevKey && $k === $prevKey) || ($prevIp && $ctrlRef['hasar_ip'] === $prevIp)) {
+                        if (!empty($prevH['cierre_z_emitido'])) {
+                            $ctrlRef['cierre_z_emitido'] = true;
+                            $ctrlRef['cierre_z_numero'] = $prevH['cierre_z_numero'] ?? ($ctrlRef['cierre_z_numero'] ?? null);
+                            $ctrlRef['cierre_z_fecha'] = $prevH['cierre_z_fecha'] ?? ($ctrlRef['cierre_z_fecha'] ?? null);
+                            if (!empty($prevH['cierre_z_respuesta'])) {
+                                $ctrlRef['cierre_z_respuesta'] = $prevH['cierre_z_respuesta'];
+                            }
+                        }
+                    }
+                }
+                unset($ctrlRef);
+            }
+        }
+
+        // Redondear totales
+        $arca['total'] = round($arca['total'], 2);
+        $arca['facturas_a_total'] = round($arca['facturas_a_total'], 2);
+        $arca['facturas_b_total'] = round($arca['facturas_b_total'], 2);
+
+        $hasarTotalGeneral = 0.0;
+        $hasarCantTotal = 0;
+        $listaControladores = [];
+
+        foreach ($controladoresHasar as $ctrl) {
+            $ctrl['total'] = round($ctrl['total'], 2);
+            $ctrl['facturas_a_total'] = round($ctrl['facturas_a_total'], 2);
+            $ctrl['facturas_b_total'] = round($ctrl['facturas_b_total'], 2);
+            $ctrl['puntos_venta_info'] = implode(', ', array_unique($ctrl['puntos_venta_nombres']));
+            $hasarTotalGeneral += $ctrl['total'];
+            $hasarCantTotal += $ctrl['cant_tickets'];
+            $listaControladores[] = $ctrl;
+        }
+
+        return [
+            'arca'                => $arca,
+            'hasar_controladores' => $listaControladores,
+            'hasar_total_general' => round($hasarTotalGeneral, 2),
+            'hasar_cant_total'    => $hasarCantTotal,
+        ];
+    }
+
+    /**
      * Ejecuta el Cierre Z de la caja guardando el arqueo y los totales definitivos.
      */
-    public function cerrar(float $efectivoRealContado, ?string $observaciones = null, ?int $usuarioId = null): self
+    public function cerrar(float $efectivoRealContado, ?string $observaciones = null, ?int $usuarioId = null, ?array $resumenFiscal = null): self
     {
         $totales = $this->calcularTotales();
         $esperado = $totales['efectivo_esperado'];
         $diferencia = round($efectivoRealContado - $esperado, 2);
+        $resumenFiscalFinal = $resumenFiscal ?: $this->calcularResumenFiscal();
 
         $this->update([
             'fecha_cierre'                  => now(),
@@ -405,6 +592,7 @@ class CajaSesion extends Model implements Auditable
             'cant_retiros_efectivo'         => $totales['cant_retiros'],
             'estado'                        => 'cerrada',
             'observaciones_cierre'          => $observaciones,
+            'resumen_fiscal'                => $resumenFiscalFinal,
         ]);
 
         return $this;
