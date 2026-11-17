@@ -27,15 +27,42 @@ class PuntoVentaController extends Controller
             $query->where('tipo_emision', $request->tipo_emision);
         }
 
-        $puntosVenta = $query
-            ->orderBy('id_sucursal')
-            ->orderBy('numero')
-            ->paginate(15)
-            ->withQueryString();
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'numero'       => 'puntos_venta.numero',
+            'nombre'       => 'puntos_venta.nombre',
+            'sucursal'     => 'sucursal',
+            'tipo_emision' => 'puntos_venta.tipo_emision',
+            'activo'       => 'puntos_venta.activo',
+        ];
+
+        $sort = $request->get('sort', 'numero');
+        $direction = strtolower($request->get('direction', 'asc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'numero';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        if ($sort === 'sucursal') {
+            $query->leftJoin('sucursales', 'puntos_venta.id_sucursal', '=', 'sucursales.id')
+                ->select('puntos_venta.*')
+                ->orderBy('sucursales.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id' && $sort !== 'numero') {
+            $query->orderBy('puntos_venta.numero', 'asc');
+        }
+
+        $puntosVenta = $query->paginate(15)->withQueryString();
 
         $sucursales = Sucursal::orderBy('nombre')->get();
 
-        return view('sistema.puntos-venta.index', compact('puntosVenta', 'sucursales'));
+        return view('sistema.puntos-venta.index', compact('puntosVenta', 'sucursales', 'sort', 'direction'));
     }
 
     /**

@@ -56,11 +56,96 @@ class RemitoProveedorController extends Controller
             $query->whereDate('fecha_recepcion', '<=', $fechaHasta);
         }
 
-        $remitos = $query->latest('id')->paginate(20);
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'numero_remito'        => 'remitos_proveedores.numero_remito',
+            'fecha_recepcion'      => 'remitos_proveedores.fecha_recepcion',
+            'proveedor'            => 'proveedor',
+            'sucursal'             => 'sucursal',
+            'total_costo'          => 'remitos_proveedores.total_costo',
+            'total_venta_estimado' => 'remitos_proveedores.total_venta_estimado',
+            'estado'               => 'remitos_proveedores.estado',
+        ];
+
+        $sort = $request->get('sort', 'fecha_recepcion');
+        $direction = strtolower($request->get('direction', 'desc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'fecha_recepcion';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        if ($sort === 'proveedor') {
+            $query->leftJoin('proveedores', 'remitos_proveedores.proveedor_id', '=', 'proveedores.id')
+                ->select('remitos_proveedores.*')
+                ->orderBy('proveedores.nombre', $direction);
+        } elseif ($sort === 'sucursal') {
+            $query->leftJoin('sucursales', 'remitos_proveedores.sucursal_id', '=', 'sucursales.id')
+                ->select('remitos_proveedores.*')
+                ->orderBy('sucursales.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id' && $sort !== 'numero_remito') {
+            $query->orderBy('remitos_proveedores.id', 'desc');
+        }
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'remitos_compras_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'Nro Remito',
+                    'Fecha Recepcion',
+                    'Proveedor',
+                    'Legajo Proveedor',
+                    'CUIT Proveedor',
+                    'Sucursal Ingreso',
+                    'Cantidad Renglones',
+                    'Total Costo',
+                    'Total Venta Estimado',
+                    'Estado',
+                    'Operador',
+                ], ';');
+
+                $exportQuery->chunk(500, function ($chunk) use ($handle) {
+                    foreach ($chunk as $rem) {
+                        fputcsv($handle, [
+                            $rem->numero_remito,
+                            $rem->fecha_recepcion ? \Carbon\Carbon::parse($rem->fecha_recepcion)->format('d/m/Y') : '-',
+                            $rem->proveedor?->nombre ?? '-',
+                            $rem->proveedor?->legajo ?? '-',
+                            $rem->proveedor?->cuit ?? '-',
+                            $rem->sucursal?->nombre ?? '-',
+                            $rem->items ? $rem->items->count() : 0,
+                            number_format((float)$rem->total_costo, 2, ',', ''),
+                            number_format((float)$rem->total_venta_estimado, 2, ',', ''),
+                            ucfirst($rem->estado),
+                            $rem->usuario?->name ?? '-',
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
+        $remitos = $query->paginate(20)->withQueryString();
         $proveedores = Proveedor::orderBy('nombre')->get();
         $sucursales = Sucursal::orderBy('nombre')->get();
 
-        return view('proveedores.remitos.index', compact('remitos', 'proveedores', 'sucursales'));
+        return view('proveedores.remitos.index', compact('remitos', 'proveedores', 'sucursales', 'sort', 'direction'));
     }
 
     /**

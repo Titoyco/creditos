@@ -182,12 +182,19 @@
                 <!-- Botones -->
                 <div class="flex items-center gap-2">
                     <button type="submit" 
-                            class="w-full bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs py-2 px-4 rounded-xl transition uppercase flex items-center justify-center gap-1">
+                            class="flex-1 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition uppercase flex items-center justify-center gap-1">
                         <span>🔍 Filtrar</span>
                     </button>
+                    <a href="{{ route('cajas.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition uppercase flex items-center gap-1 shadow-xs"
+                       title="Exportar todas las cajas filtradas a Excel">
+                        <span>📥</span>
+                        <span class="hidden sm:inline">Excel</span>
+                    </a>
                     @if(request()->hasAny(['sucursal', 'estado', 'fecha_desde', 'fecha_hasta']))
                         <a href="{{ route('cajas.index') }}" 
-                           class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs py-2 px-3 rounded-xl transition uppercase">
+                           class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs py-2 px-3 rounded-xl transition uppercase"
+                           title="Limpiar filtros">
                             ✕
                         </a>
                     @endif
@@ -276,21 +283,80 @@
             </div>
         @endif
 
+        @php
+            $sort = $sort ?? request()->get('sort', 'fecha_apertura');
+            $direction = $direction ?? request()->get('direction', 'desc');
+            $nextDirection = function($col) use ($sort, $direction) {
+                return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+            };
+            $sortUrl = function($col) use ($nextDirection) {
+                return route('cajas.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+            };
+            $sortIndicator = function($col) use ($sort, $direction) {
+                if ($sort === $col) {
+                    return $direction === 'asc' 
+                        ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                        : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+                }
+                return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+            };
+        @endphp
+
         <!-- TABLA DE HISTORIAL DE CAJAS -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 uppercase text-[10px] font-black border-b border-slate-200 dark:border-slate-700">
+                    <thead class="bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 uppercase text-[10px] font-black border-b border-slate-200 dark:border-slate-700 select-none">
                         <tr>
-                            <th class="py-3 px-3"># Turno</th>
-                            <th class="py-3 px-3">Sucursal</th>
-                            <th class="py-3 px-3">Fecha</th>
-                            <th class="py-3 px-3 text-right">Fondo Apertura</th>
-                            <th class="py-3 px-3 text-right">Efectivo Cierre</th>
-                            <th class="py-3 px-3 text-right">Fallo / Dif</th>
+                            <th class="py-3 px-3">
+                                <a href="{{ $sortUrl('id') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por # Turno">
+                                    <span># Turno</span>
+                                    {!! $sortIndicator('id') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3">
+                                <a href="{{ $sortUrl('sucursal') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Sucursal">
+                                    <span>Sucursal</span>
+                                    {!! $sortIndicator('sucursal') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3">
+                                <a href="{{ $sortUrl('fecha_apertura') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fecha">
+                                    <span>Fecha</span>
+                                    {!! $sortIndicator('fecha_apertura') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3 text-right">
+                                <a href="{{ $sortUrl('monto_inicial_efectivo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fondo de Apertura">
+                                    <span>Fondo Apertura</span>
+                                    {!! $sortIndicator('monto_inicial_efectivo') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3 text-right">
+                                <a href="{{ $sortUrl('monto_final_efectivo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Efectivo de Cierre">
+                                    <span>Efectivo Cierre</span>
+                                    {!! $sortIndicator('monto_final_efectivo') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3 text-right">
+                                <a href="{{ $sortUrl('diferencia_efectivo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fallo o Diferencia">
+                                    <span>Fallo / Dif</span>
+                                    {!! $sortIndicator('diferencia_efectivo') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-3">Totales por Medio de Pago</th>
-                            <th class="py-3 px-3 text-right">Total Facturado</th>
-                            <th class="py-3 px-3 text-center">Estado</th>
+                            <th class="py-3 px-3 text-right">
+                                <a href="{{ $sortUrl('total_general') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Total Facturado">
+                                    <span>Total Facturado</span>
+                                    {!! $sortIndicator('total_general') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-3 text-center">
+                                <a href="{{ $sortUrl('estado') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Estado">
+                                    <span>Estado</span>
+                                    {!! $sortIndicator('estado') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-3 text-center">Acciones</th>
                         </tr>
                     </thead>

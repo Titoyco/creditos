@@ -19,12 +19,33 @@
         <div class="bg-white p-8 rounded-2xl shadow-xl border-t-4 border-blue-700">
             <h2 class="text-xl font-bold text-center text-slate-800 mb-6 uppercase tracking-tight">Iniciar Sesión</h2>
 
+            @if (session('warning'))
+                <div class="mb-5 p-3.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-xs font-semibold flex items-start gap-2.5 shadow-2xs">
+                    <span class="text-base leading-none">⚠️</span>
+                    <span>{{ session('warning') }}</span>
+                </div>
+            @endif
+
+            @if (session('status'))
+                <div class="mb-5 p-3.5 bg-blue-50 border border-blue-300 text-blue-900 rounded-xl text-xs font-semibold flex items-start gap-2.5 shadow-2xs">
+                    <span class="text-base leading-none">ℹ️</span>
+                    <span>{{ session('status') }}</span>
+                </div>
+            @endif
+
+            @if (session('error'))
+                <div class="mb-5 p-3.5 bg-rose-50 border border-rose-300 text-rose-900 rounded-xl text-xs font-semibold flex items-start gap-2.5 shadow-2xs">
+                    <span class="text-base leading-none">✕</span>
+                    <span>{{ session('error') }}</span>
+                </div>
+            @endif
+
             <form method="POST" action="{{ route('login') }}" id="loginForm">
                 @csrf
 
                 <div class="mb-5">
                     <label for="username" class="block text-xs font-black text-slate-700 uppercase mb-2 ml-1">Usuario</label>
-                    <input type="text" id="username" name="username" required autofocus 
+                    <input type="text" id="username" name="username" value="{{ old('username') }}" required autofocus 
                         class="w-full px-4 py-3 rounded-xl border-slate-300 focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-sm font-semibold"
                         placeholder="Ingrese su nombre de usuario">
                     @error('username')
@@ -87,6 +108,18 @@
                 eyePath2.setAttribute('d', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z');
             }
         }
+
+        // Si la página se recupera de la caché del navegador (bfcache / botón volver), recargar para obtener token CSRF fresco
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+
+        // Heartbeat para mantener activa la sesión si la pestaña de login queda abierta en el mostrador
+        setInterval(function () {
+            fetch('{{ route("login") }}', { method: 'HEAD', cache: 'no-store' }).catch(function () {});
+        }, 15 * 60 * 1000); // Cada 15 minutos
     </script>
 </body>
 </html>

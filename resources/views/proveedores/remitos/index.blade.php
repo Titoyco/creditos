@@ -27,6 +27,13 @@
                     Padrón de Proveedores
                 </a>
 
+                <a href="{{ route('remitos.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+                   class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition"
+                   title="Exportar todos los remitos filtrados a Excel / CSV">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>EXPORTAR EXCEL</span>
+                </a>
+
                 <a href="{{ route('remitos.create') }}" 
                    class="inline-flex items-center gap-2 px-4 py-2 text-xs font-black uppercase text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-md transition transform active:scale-95">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -151,20 +158,74 @@
             </form>
         </div>
 
+        @php
+            $sort = $sort ?? request()->get('sort', 'fecha_recepcion');
+            $direction = $direction ?? request()->get('direction', 'desc');
+            $nextDirection = function($col) use ($sort, $direction) {
+                return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+            };
+            $sortUrl = function($col) use ($nextDirection) {
+                return route('remitos.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+            };
+            $sortIndicator = function($col) use ($sort, $direction) {
+                if ($sort === $col) {
+                    return $direction === 'asc' 
+                        ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                        : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+                }
+                return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+            };
+        @endphp
+
         <!-- Tabla de Remitos -->
         <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-md overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
-                        <tr class="bg-slate-50/70 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-700">
-                            <th class="py-3 px-4">N° Remito</th>
-                            <th class="py-3 px-4">Fecha Recep.</th>
-                            <th class="py-3 px-4">Proveedor</th>
-                            <th class="py-3 px-4">Sede Ingreso</th>
+                        <tr class="bg-slate-50/70 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-black uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-700 select-none">
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('numero_remito') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por N° Remito">
+                                    <span>N° Remito</span>
+                                    {!! $sortIndicator('numero_remito') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('fecha_recepcion') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fecha Recepción">
+                                    <span>Fecha Recep.</span>
+                                    {!! $sortIndicator('fecha_recepcion') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('proveedor') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Proveedor">
+                                    <span>Proveedor</span>
+                                    {!! $sortIndicator('proveedor') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('sucursal') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Sede">
+                                    <span>Sede Ingreso</span>
+                                    {!! $sortIndicator('sucursal') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-4 text-center">Ítems</th>
-                            <th class="py-3 px-4 text-right">Total Costo</th>
-                            <th class="py-3 px-4 text-right">Total Venta Est.</th>
-                            <th class="py-3 px-4 text-center">Estado</th>
+                            <th class="py-3 px-4 text-right">
+                                <a href="{{ $sortUrl('total_costo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Total Costo">
+                                    <span>Total Costo</span>
+                                    {!! $sortIndicator('total_costo') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4 text-right">
+                                <a href="{{ $sortUrl('total_venta_estimado') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Total Venta Estimado">
+                                    <span>Total Venta Est.</span>
+                                    {!! $sortIndicator('total_venta_estimado') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4 text-center">
+                                <a href="{{ $sortUrl('estado') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Estado">
+                                    <span>Estado</span>
+                                    {!! $sortIndicator('estado') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-4 text-right">Acciones</th>
                         </tr>
                     </thead>

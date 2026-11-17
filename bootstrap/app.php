@@ -18,5 +18,20 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+            $is419 = ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException && $e->getStatusCode() === 419)
+                || $e instanceof \Illuminate\Session\TokenMismatchException;
+
+            if ($is419) {
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json([
+                        'message' => 'La sesión o el formulario ha expirado por inactividad. Por favor recargue la página e intente nuevamente.',
+                    ], 419);
+                }
+
+                return redirect()->route('login')
+                    ->withInput($request->only('username', 'email'))
+                    ->with('warning', 'La sesión o el formulario expiró por inactividad. Por favor ingrese sus credenciales nuevamente.');
+            }
+        });
     })->create();

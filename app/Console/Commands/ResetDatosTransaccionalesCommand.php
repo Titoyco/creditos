@@ -26,6 +26,10 @@ class ResetDatosTransaccionalesCommand extends Command
         DB::statement('SET FOREIGN_KEY_CHECKS = 0;');
 
         $tables = [
+            'venta_items',
+            'ventas',
+            'cajas_movimientos',
+            'cajas_sesiones',
             'recibo_detalles',
             'recibos',
             'cuotas',

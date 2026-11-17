@@ -42,14 +42,38 @@ class CajaController extends Controller
             $query->whereDate('fecha_apertura', '<=', $request->fecha_hasta);
         }
 
-        // Click-to-Sort
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'id'                     => 'cajas_sesiones.id',
+            'sucursal'               => 'sucursales.nombre',
+            'fecha_apertura'         => 'cajas_sesiones.fecha_apertura',
+            'monto_inicial_efectivo' => 'cajas_sesiones.monto_inicial_efectivo',
+            'monto_final_efectivo'   => 'cajas_sesiones.monto_final_efectivo_real',
+            'diferencia_efectivo'    => 'cajas_sesiones.diferencia_efectivo',
+            'total_general'          => 'cajas_sesiones.total_general',
+            'estado'                 => 'cajas_sesiones.estado',
+        ];
+
         $sort = $request->get('sort', 'fecha_apertura');
         $direction = strtolower($request->get('direction', 'desc'));
-        if (!in_array($sort, ['id', 'fecha_apertura', 'fecha_cierre', 'total_general', 'monto_inicial_efectivo', 'diferencia_efectivo', 'estado'])) {
+
+        if (!array_key_exists($sort, $sortableColumns)) {
             $sort = 'fecha_apertura';
         }
-        if (!in_array($direction, ['asc', 'desc'])) {
+        if (!in_array($direction, ['asc', 'desc'], true)) {
             $direction = 'desc';
+        }
+
+        if ($sort === 'sucursal') {
+            $query->leftJoin('sucursales', 'cajas_sesiones.id_sucursal', '=', 'sucursales.id')
+                ->select('cajas_sesiones.*')
+                ->orderBy('sucursales.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id') {
+            $query->orderBy('cajas_sesiones.id', 'desc');
         }
 
         // Totales agregados de la consulta filtrada (por medio de pago, ventas e ingresos/egresos)
@@ -65,6 +89,74 @@ class CajaController extends Controller
             COALESCE(SUM(total_retiros_efectivo), 0) as total_retiros,
             COALESCE(SUM(cant_ventas_total), 0) as cant_ventas
         ')->first();
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'cajas_turnos_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'Turno ID',
+                    'Sucursal',
+                    'Fecha Apertura',
+                    'Hora Apertura',
+                    'Fecha Cierre',
+                    'Hora Cierre',
+                    'Fondo Apertura',
+                    'Efectivo Cierre Real',
+                    'Efectivo Sistema',
+                    'Diferencia Efectivo',
+                    'Total Facturado',
+                    'Total Efectivo',
+                    'Total Tarjeta Debito',
+                    'Total Tarjeta Credito',
+                    'Total Credito Personal',
+                    'Total Transferencia',
+                    'Total Otros',
+                    'Ingresos Manuales',
+                    'Retiros Manuales',
+                    'Cantidad Ventas',
+                    'Estado',
+                ], ';');
+
+                $exportQuery->chunk(500, function ($chunk) use ($handle) {
+                    foreach ($chunk as $c) {
+                        fputcsv($handle, [
+                            $c->id,
+                            $c->sucursal?->nombre ?? '-',
+                            $c->fecha_apertura ? $c->fecha_apertura->format('d/m/Y') : '-',
+                            $c->fecha_apertura ? $c->fecha_apertura->format('H:i') : '-',
+                            $c->fecha_cierre ? $c->fecha_cierre->format('d/m/Y') : 'En curso',
+                            $c->fecha_cierre ? $c->fecha_cierre->format('H:i') : '-',
+                            number_format((float)$c->monto_inicial_efectivo, 2, ',', ''),
+                            number_format((float)$c->monto_final_efectivo_real, 2, ',', ''),
+                            number_format((float)$c->monto_final_efectivo_sistema, 2, ',', ''),
+                            number_format((float)$c->diferencia_efectivo, 2, ',', ''),
+                            number_format((float)$c->total_general, 2, ',', ''),
+                            number_format((float)$c->total_efectivo, 2, ',', ''),
+                            number_format((float)$c->total_tarjeta_debito, 2, ',', ''),
+                            number_format((float)$c->total_tarjeta_credito, 2, ',', ''),
+                            number_format((float)$c->total_credito_personal, 2, ',', ''),
+                            number_format((float)$c->total_transferencia, 2, ',', ''),
+                            number_format((float)$c->total_otros, 2, ',', ''),
+                            number_format((float)$c->total_ingresos_efectivo, 2, ',', ''),
+                            number_format((float)$c->total_retiros_efectivo, 2, ',', ''),
+                            (int)$c->cant_ventas_total,
+                            ucfirst($c->estado),
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
 
         $cajas = $query->paginate(20)->withQueryString();
 
@@ -645,19 +737,21 @@ class CajaController extends Controller
             ->orderByDesc('total_monto')
             ->get();
 
-        // Exportación CSV
-        if ($request->get('export') === 'csv') {
+        // Exportación CSV / Excel (con filtros aplicados)
+        if ($request->get('export') === 'csv' || $request->get('export') === 'excel') {
             return response()->streamDownload(function () use ($porMedio, $totalGeneral, $cantidadGeneral) {
                 $handle = fopen('php://output', 'w');
-                fputcsv($handle, ['Medio de Pago', 'Cantidad Ventas', 'Total Facturado ($ ARS)', 'Participacion (%)']);
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+                fputcsv($handle, ['Medio de Pago', 'Cantidad Ventas', 'Total Facturado ($ ARS)', 'Participacion (%)'], ';');
                 foreach ($porMedio as $fila) {
                     $pct = $totalGeneral > 0 ? round(($fila->total_monto / $totalGeneral) * 100, 2) : 0;
-                    fputcsv($handle, [$fila->medio_pago_nombre ?? $fila->medio_pago, $fila->cant_ventas, $fila->total_monto, $pct]);
+                    fputcsv($handle, [$fila->medio_pago_nombre ?? $fila->medio_pago, $fila->cant_ventas, number_format((float)$fila->total_monto, 2, ',', ''), $pct . '%'], ';');
                 }
-                fputcsv($handle, ['TOTAL GENERAL', $cantidadGeneral, $totalGeneral, 100.0]);
+                fputcsv($handle, ['TOTAL GENERAL', $cantidadGeneral, number_format((float)$totalGeneral, 2, ',', ''), '100.0%'], ';');
                 fclose($handle);
             }, 'reporte_historico_medios_' . date('Ymd_His') . '.csv', [
                 'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="reporte_historico_medios_' . date('Ymd_His') . '.csv"',
             ]);
         }
 

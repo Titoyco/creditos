@@ -232,6 +232,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'storeMovimiento'])->name('cajas.movimientos.store');
         Route::get('/{caja}/movimientos', [\App\Http\Controllers\CajaController::class, 'movimientosJson'])->name('cajas.movimientos.json');
     });
+
+    // --- MÓDULO MÉTRICAS BI / TABLERO DE CONTROL (POWERBI STYLE) ---
+    Route::get('/metricas', [\App\Http\Controllers\MetricasController::class, 'index'])->name('metricas.index');
+    Route::get('/metricas/exportar', [\App\Http\Controllers\MetricasController::class, 'index'])->name('metricas.exportar');
 });
 
 require __DIR__.'/auth.php';

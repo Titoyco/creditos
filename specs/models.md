@@ -443,8 +443,22 @@ protected $fillable = [
 ### 8.1 Atributos e Integridad
 - **`id_caja_sesion`**: FK relacional mandatoria hacia `cajas_sesiones.id`. Ninguna venta puede emitirse si la caja de la sucursal no se encuentra abierta y al día.
 - **`medio_pago`**: Valores tipificados: `efectivo`, `tarjeta_debito`, `tarjeta_credito`, `credito_personal`, `transferencia`, `otros`.
+- **`descuento` (Venta)**: DECIMAL(12, 2). Descuento o bonificación comercial global aplicado en la factura de venta (equivalente a `MOVIMIENTO.descuento` de Access).
 - **`id_credito`**: FK relacional opcional hacia `creditos.id` generada automáticamente cuando la venta se cobra mediante `credito_personal`.
 - **`estado`**: `completada` o `anulada`. Al anularse una venta, el stock reservado se repone de inmediato y, si generó crédito personal, dicho crédito se cancela.
+
+### 8.2 Estructura del Renglón de Factura (`VentaItem`)
+- **`id_venta`**: FK obligatoria a `ventas.id` con eliminación en cascada.
+- **`id_producto`**: FK a `productos.id` (nullable para artículos genéricos o servicios).
+- **`cantidad`**: DECIMAL(10, 2). Cantidad de prendas o unidades comercializadas.
+- **`precio_unitario`**: DECIMAL(12, 2). Precio unitario bruto de lista al momento de la venta.
+- **`descuento_porcentaje`**: DECIMAL(5, 2) DEFAULT 0.00. Porcentaje de descuento específico para la línea (0.00% a 100.00%).
+- **`descuento` (Ítem)**: DECIMAL(12, 2) DEFAULT 0.00. Monto monetario descontado en la línea: $\text{descuento} = \text{round}(\text{cantidad} \times \text{precio\_unitario} \times \frac{\text{descuento\_porcentaje}}{100}, 2)$.
+- **`subtotal`**: DECIMAL(12, 2) DEFAULT 0.00. Importe neto final de la línea: $\text{subtotal} = \max(0, (\text{cantidad} \times \text{precio\_unitario}) - \text{descuento})$.
+- **Soporte de Promociones 2x1**:
+  - En compras bajo promoción 2x1 o bonificaciones totales, el artículo promocionado se registra con `descuento_porcentaje = 100.00`, `descuento = cantidad * precio_unitario` y `subtotal = 0.00`.
+  - Disminuye stock de forma atómica y completa en la sucursal emisora.
+  - La suma contable $\sum \text{venta\_items.subtotal}$ coincide con total exactitud con `ventas.subtotal`.
 
 ---
 

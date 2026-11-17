@@ -11,7 +11,14 @@
             </h1>
         </div>
 
-        <div class="flex space-x-2">
+        <div class="flex items-center space-x-2">
+            <a href="{{ route('sistema.auditoria.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+               class="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 px-3 rounded-md transition-all shadow-sm flex items-center space-x-1.5 text-xs font-bold"
+               title="Exportar logs de auditoría filtrados a Excel / CSV">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>EXPORTAR EXCEL</span>
+            </a>
+
             <a href="{{ route('sistema.index') }}" class="bg-white dark:bg-slate-800 p-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm flex items-center space-x-1 text-xs font-semibold">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -80,19 +87,68 @@
         </form>
     </div>
 
+    @php
+        $sort = $sort ?? request()->get('sort', 'id');
+        $direction = $direction ?? request()->get('direction', 'desc');
+        $nextDirection = function($col) use ($sort, $direction) {
+            return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+        };
+        $sortUrl = function($col) use ($nextDirection) {
+            return route('sistema.auditoria.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+        };
+        $sortIndicator = function($col) use ($sort, $direction) {
+            if ($sort === $col) {
+                return $direction === 'asc' 
+                    ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                    : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+            }
+            return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+        };
+    @endphp
+
     <!-- Data Grid de Auditoría -->
     <div class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse text-xs">
                 <thead>
-                    <tr class="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-700">
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-16">ID</th>
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-36">Fecha / Hora</th>
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-32">Usuario</th>
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-24 text-center">Evento</th>
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-40">Entidad</th>
+                    <tr class="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 uppercase text-[10px] tracking-wider border-b border-slate-200 dark:border-slate-700 select-none">
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-16">
+                            <a href="{{ $sortUrl('id') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por ID">
+                                <span>ID</span>
+                                {!! $sortIndicator('id') !!}
+                            </a>
+                        </th>
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-36">
+                            <a href="{{ $sortUrl('created_at') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fecha/Hora">
+                                <span>Fecha / Hora</span>
+                                {!! $sortIndicator('created_at') !!}
+                            </a>
+                        </th>
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-32">
+                            <a href="{{ $sortUrl('user') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Usuario">
+                                <span>Usuario</span>
+                                {!! $sortIndicator('user') !!}
+                            </a>
+                        </th>
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-24 text-center">
+                            <a href="{{ $sortUrl('event') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Evento">
+                                <span>Evento</span>
+                                {!! $sortIndicator('event') !!}
+                            </a>
+                        </th>
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-40">
+                            <a href="{{ $sortUrl('auditable_type') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Entidad">
+                                <span>Entidad</span>
+                                {!! $sortIndicator('auditable_type') !!}
+                            </a>
+                        </th>
                         <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold">Cambios</th>
-                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-24">IP</th>
+                        <th class="py-1.5 px-3 border-r border-slate-200/60 dark:border-slate-700/60 font-semibold w-24">
+                            <a href="{{ $sortUrl('ip_address') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por IP">
+                                <span>IP</span>
+                                {!! $sortIndicator('ip_address') !!}
+                            </a>
+                        </th>
                         <th class="py-1.5 px-3 font-semibold text-center w-24">Acción</th>
                     </tr>
                 </thead>

@@ -168,9 +168,9 @@ class VentaController extends Controller
             $query->orderBy('ventas.id', 'desc');
         }
 
-        // Exportación CSV
-        if ($request->get('export') === 'csv') {
-            return $this->exportarCsv($query);
+        // Exportación CSV / Excel (con todos los filtros aplicados)
+        if ($request->get('export') === 'csv' || $request->get('export') === 'excel') {
+            return $this->exportarCsv(clone $query);
         }
 
         // 7. KPIs de la consulta y del día
@@ -683,15 +683,17 @@ class VentaController extends Controller
                 'cliente_documento'       => 'nullable|string|max:50',
                 'tipo_comprobante'        => 'nullable|string|in:FACTURA_A,FACTURA_B,factura_a,factura_b',
                 'medio_pago'              => 'required|string|max:50',
+                'descuento'               => 'nullable|numeric|min:0',
                 'cuotas'                  => 'nullable|integer|min:1|max:4',
                 'autorizado_vendedor'     => 'nullable|boolean',
                 'observaciones'           => 'nullable|string|max:1000',
                 'items'                   => 'required|array|min:1',
-                'items.*.descripcion'     => 'required|string|max:255',
-                'items.*.cantidad'        => 'required|numeric|min:0.01',
-                'items.*.precio_unitario' => 'required|numeric|min:0',
-                'items.*.id_producto'     => 'nullable|exists:productos,id',
-                'items.*.codigo_producto' => 'nullable|string|max:50',
+                'items.*.descripcion'          => 'required|string|max:255',
+                'items.*.cantidad'             => 'required|numeric|min:0.01',
+                'items.*.precio_unitario'      => 'required|numeric|min:0',
+                'items.*.descuento_porcentaje' => 'nullable|numeric|min:0|max:100',
+                'items.*.id_producto'          => 'nullable|exists:productos,id',
+                'items.*.codigo_producto'      => 'nullable|string|max:50',
             ]);
         } catch (ValidationException $ve) {
             $firstError = collect($ve->errors())->flatten()->first() ?? 'Datos de la venta inválidos.';
@@ -732,10 +734,14 @@ class VentaController extends Controller
             return back()->with('error', $msg);
         }
 
-        // Cálculo de subtotal a partir de los renglones
+        // Cálculo de subtotal a partir de los renglones (neto de descuentos por ítem / promos)
         $subtotal = 0;
         foreach ($validated['items'] as $item) {
-            $subtotal += round((float)$item['cantidad'] * (float)$item['precio_unitario'], 2);
+            $cant = (float) $item['cantidad'];
+            $unitario = (float) $item['precio_unitario'];
+            $descPorc = max(0, min(100, (float) ($item['descuento_porcentaje'] ?? 0)));
+            $descMonto = round($cant * $unitario * ($descPorc / 100), 2);
+            $subtotal += max(0, round(($cant * $unitario) - $descMonto, 2));
         }
         $subtotal = round($subtotal, 2);
 
@@ -818,7 +824,10 @@ class VentaController extends Controller
             }
         }
 
-        $totalFinal = max(0, round($subtotal + $recargoFinanciacion - $descuentoMedio, 2));
+        $descuentoManual = max(0, round((float) ($request->input('descuento', 0)), 2));
+        $descuentoTotal = min($subtotal, round($descuentoMedio + $descuentoManual, 2));
+
+        $totalFinal = max(0, round($subtotal + $recargoFinanciacion - $descuentoTotal, 2));
 
         // 1. Resolver Punto de Venta asignado a este puesto / terminal (disponible tanto en la transacción como en la respuesta)
         $idPuntoVenta = $validated['id_punto_venta'] ?? session('terminal_punto_venta_id');
@@ -838,7 +847,7 @@ class VentaController extends Controller
                 $esCreditoPersonal,
                 $subtotal,
                 $recargoFinanciacion,
-                $descuentoMedio,
+                $descuentoTotal,
                 $totalFinal,
                 $cuotasNum,
                 $valorCuotaRef,
@@ -950,7 +959,7 @@ class VentaController extends Controller
                     'id_medio_pago'       => $idMedioPago,
                     'subtotal'            => $subtotal,
                     'recargo'             => $recargoFinanciacion,
-                    'descuento'           => $descuentoMedio,
+                    'descuento'           => $descuentoTotal,
                     'total'               => $totalFinal,
                     'id_credito'          => $idCredito,
                     'cuotas_credito'      => $esCreditoPersonal ? $cuotasNum : null,
@@ -963,7 +972,9 @@ class VentaController extends Controller
                 foreach ($validated['items'] as $itemData) {
                     $cant = (float) $itemData['cantidad'];
                     $unitario = (float) $itemData['precio_unitario'];
-                    $itemSubtotal = round($cant * $unitario, 2);
+                    $descPorc = max(0, min(100, (float) ($itemData['descuento_porcentaje'] ?? 0)));
+                    $descMonto = round($cant * $unitario * ($descPorc / 100), 2);
+                    $itemSubtotal = max(0, round(($cant * $unitario) - $descMonto, 2));
                     $prodId = $itemData['id_producto'] ?? null;
                     $descuentaStock = false;
 
@@ -1014,14 +1025,16 @@ class VentaController extends Controller
 
                     // Guardar ítem de la factura
                     VentaItem::create([
-                        'id_venta'        => $venta->id,
-                        'id_producto'     => $prodId,
-                        'codigo_producto' => $itemData['codigo_producto'] ?? null,
-                        'descripcion'     => $itemData['descripcion'],
-                        'cantidad'        => $cant,
-                        'precio_unitario' => $unitario,
-                        'subtotal'        => $itemSubtotal,
-                        'descuenta_stock' => $descuentaStock,
+                        'id_venta'             => $venta->id,
+                        'id_producto'          => $prodId,
+                        'codigo_producto'      => $itemData['codigo_producto'] ?? null,
+                        'descripcion'          => $itemData['descripcion'],
+                        'cantidad'             => $cant,
+                        'precio_unitario'      => $unitario,
+                        'descuento_porcentaje' => $descPorc,
+                        'descuento'            => $descMonto,
+                        'subtotal'             => $itemSubtotal,
+                        'descuenta_stock'      => $descuentaStock,
                     ]);
                 }
 
@@ -1254,6 +1267,7 @@ class VentaController extends Controller
                 'Documento',
                 'Medio de Pago',
                 'Subtotal',
+                'Descuento',
                 'Recargo',
                 'Total',
                 'Crédito Asociado',
@@ -1271,6 +1285,7 @@ class VentaController extends Controller
                         $v->cliente_documento ?? '-',
                         $v->medio_pago_formateado,
                         number_format((float)$v->subtotal, 2, ',', ''),
+                        number_format((float)($v->descuento ?? 0), 2, ',', ''),
                         number_format((float)$v->recargo, 2, ',', ''),
                         number_format((float)$v->total, 2, ',', ''),
                         $v->credito ? $v->credito->full_identificador : '-',

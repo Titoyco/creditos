@@ -11,8 +11,15 @@
         </div>
         
         <div class="flex items-center space-x-2">
+            <a href="{{ route('recibos.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+               class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3.5 rounded-md shadow-sm transition flex items-center space-x-1.5 uppercase"
+               title="Exportar todos los recibos filtrados a Excel / CSV">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>EXPORTAR EXCEL</span>
+            </a>
+
             <a href="{{ route('recibos.create') }}" 
-               class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-1.5 px-3.5 rounded-md shadow-sm transition flex items-center space-x-1 uppercase">
+               class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-1.5 px-3.5 rounded-md shadow-sm transition flex items-center space-x-1 uppercase">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
                 </svg>
@@ -142,6 +149,25 @@
         </form>
     </div>
 
+    @php
+        $sort = $sort ?? request()->get('sort', 'fecha');
+        $direction = $direction ?? request()->get('direction', 'desc');
+        $nextDirection = function($col) use ($sort, $direction) {
+            return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+        };
+        $sortUrl = function($col) use ($nextDirection) {
+            return route('recibos.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+        };
+        $sortIndicator = function($col) use ($sort, $direction) {
+            if ($sort === $col) {
+                return $direction === 'asc' 
+                    ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                    : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+            }
+            return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+        };
+    @endphp
+
     <!-- Grilla de Recibos -->
     <div class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-300 dark:border-slate-700 shadow-sm overflow-hidden mb-4">
         <div class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-700 px-3 py-1 flex justify-between items-center text-[10px]">
@@ -152,13 +178,48 @@
         <table class="w-full text-left border-collapse font-sans text-xs">
             <thead>
                 <tr class="bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] border-b border-slate-300 dark:border-slate-700 select-none">
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-32">N° Recibo</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-28 text-center">Fecha y Hora</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-36">Sucursal</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60">Cliente</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-28 text-center">Medio Pago</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 text-right w-28">Total Cobrado</th>
-                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 text-center w-20">Estado</th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-32">
+                        <a href="{{ $sortUrl('numero_recibo') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por N° Recibo">
+                            <span>N° Recibo</span>
+                            {!! $sortIndicator('numero_recibo') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-28 text-center">
+                        <a href="{{ $sortUrl('fecha') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Fecha y Hora">
+                            <span>Fecha y Hora</span>
+                            {!! $sortIndicator('fecha') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-36">
+                        <a href="{{ $sortUrl('sucursal') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Sucursal">
+                            <span>Sucursal</span>
+                            {!! $sortIndicator('sucursal') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60">
+                        <a href="{{ $sortUrl('cliente') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Cliente">
+                            <span>Cliente</span>
+                            {!! $sortIndicator('cliente') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-28 text-center">
+                        <a href="{{ $sortUrl('medio_pago') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Medio de Pago">
+                            <span>Medio Pago</span>
+                            {!! $sortIndicator('medio_pago') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 text-right w-28">
+                        <a href="{{ $sortUrl('importe_total') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Total Cobrado">
+                            <span>Total Cobrado</span>
+                            {!! $sortIndicator('importe_total') !!}
+                        </a>
+                    </th>
+                    <th class="py-1.5 px-3 border-r border-slate-200 dark:border-slate-700/60 text-center w-20">
+                        <a href="{{ $sortUrl('estado') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Estado">
+                            <span>Estado</span>
+                            {!! $sortIndicator('estado') !!}
+                        </a>
+                    </th>
                     <th class="py-1.5 px-3 text-center w-28">Acciones</th>
                 </tr>
             </thead>

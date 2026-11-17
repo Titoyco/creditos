@@ -1135,3 +1135,113 @@ La vista de etiquetas térmicas respeta una geometría milimétrica para impreso
 - **Código de Barras:** Generado en SVG mediante `Picqer\Barcode\BarcodeGeneratorSVG` bajo la simbología `TYPE_CODE_128` (con fallback a `TYPE_CODE_39`).
 - **Pie:** Código alfanumérico visible con asteriscos `* [CODIGO] *`.
 - **Disparo Automático:** Si la URL recibe `autoprint=1`, ejecuta automáticamente `window.print()` tras 400ms de renderizado.
+
+---
+
+## 21. Componentes de UI: Tablero de Control y Métricas BI (Estilo PowerBI - `/metricas`)
+
+### 21.1 Cinta Superior de Filtros y Presets Temporales
+- **Selectores de Rango:** Inputs de tipo fecha para `fecha_desde` y `fecha_hasta` acoplados con un selector multi-sucursal.
+- **Botones de Presets Inmediatos:**
+  - `Hoy`: Establece desde/hasta con la fecha de hoy.
+  - `7 Días`: Últimos 7 días móviles.
+  - `Este Mes`: Del primer al último día del mes en curso.
+  - `Mes Anterior`: Mes calendario inmediato anterior.
+  - `Año Actual`: Desde el 1 de enero hasta la fecha.
+  - `Histórico`: Sin límite de fecha inicial.
+- **Botón `[📥 EXPORTAR EXCEL]`:** Descarga el consolidado analítico en formato tabular respetando los filtros activos.
+
+### 21.2 Cinta de Indicadores Clave (KPIs)
+Tarjetas de alta densidad de información con fondos sutiles y bordes contrastados:
+1. **Ventas Brutas:** Facturación acumulada antes de bonificaciones.
+2. **Descuentos Otorgados:** Total de bonificaciones aplicadas en mostrador (`ventas.descuento`).
+3. **Cobro Neto:** Importe real cobrado por ventas en el período.
+4. **Prendas Vendidas:** Sumatoria de cantidades de prendas/artículos comercializados.
+5. **Ticket Promedio:** Importe promedio por venta.
+6. **Comprobantes:** Total de transacciones emitidas.
+
+### 21.3 Matrices Analíticas de Ventas (Slicers Interactivas)
+Tablas compactas tipo PowerBI con cabeceras ordenables, barras de progreso o insignias porcentuales de participación:
+- **Por Categoría y Subcategoría:** Prendas, Importe y % de participación.
+- **Por Fabricante / Proveedor:** Volumen por marca o proveedor.
+- **Por Sucursal:** Rendimiento geográfico (Ushuaia San Martín, Antártida, Trelew Centro, Interior).
+- **Por Medio de Pago:** Efectivo, Débito, Crédito bancario, Transferencia y Crédito Personal.
+- **Por Tipo de Comprobante:** Facturas A, B, Tickets y Remitos.
+
+### 21.4 Panel de Créditos y Cobranzas
+- **Tarjetas de Cartera:** Valor Base Otorgado, Total Financiado en Cuotas, Total Cobrado en Período, Deuda Exigible y Tasa de Recupero (%).
+- **Grilla por Sucursal:** Evolución del crédito por plaza comercial y mora asociada.
+
+---
+
+## 22. Estándar Transversal de Tablas: Click-to-Sort y Exportación Fiel a Excel
+
+### 22.1 Ordenamiento Interactivo Homogéneo (Click-to-Sort)
+Todas las tablas operativas del sistema implementan el patrón interactivo de cambio de orden:
+- **Estructura del Enlace en Cabecera:**
+  ```blade
+  <a href="{{ route('modulo.index', array_merge(request()->query(), [
+      'sort' => 'columna',
+      'direction' => ($sort === 'columna' && $direction === 'asc') ? 'desc' : 'asc',
+      'page' => 1
+  ])) }}" class="flex items-center gap-1 group">
+      <span>Título</span>
+      @if($sort === 'columna')
+          <span class="text-blue-600 dark:text-blue-400 font-black">{{ $direction === 'asc' ? '▲' : '▼' }}</span>
+      @else
+          <span class="text-slate-300 dark:text-slate-600 group-hover:text-slate-400">⇅</span>
+      @endif
+  </a>
+  ```
+- **Preservación Total de Contexto:** Nunca se eliminan los parámetros de búsqueda o filtros activos al hacer clic en un encabezado.
+- **Reseteo a Página 1:** Evita inconsistencias al cambiar el orden cuando el usuario se encuentra en páginas avanzadas.
+
+### 22.2 Exportación a Excel / CSV con Filtros Aplicados
+- **Botón Estándar:** Cada vista de listado incorpora un botón `[📥 EXPORTAR EXCEL]` claramente identificado.
+- **Respeto de Consulta:** La exportación clona la consulta activa en el controlador (`clone $query`), respetando los filtros de fecha, estados, categorías, texto buscado y ordenamiento seleccionado.
+- **Compatibilidad Windows/Excel:** Los archivos se generan con cabecera BOM UTF-8 (`\xEF\xBB\xBF`) y delimitador punto y coma (`;`), asegurando que Excel en español abra directamente el archivo con las columnas separadas y caracteres acentuados legibles.
+
+---
+
+## 23. Arquitectura de Navegación y Menú Principal
+
+### 23.1 Sub-barra de Navegación Superior (`layouts/app.blade.php`)
+Barra horizontal responsiva con acceso inmediato y resaltado de ruta activa (`routeIs`):
+- `🛒 POS Mostrador` (`ventas.create`)
+- `🧾 Ventas` (`ventas.index`)
+- `💵 Cajas & Turnos` (`cajas.index`)
+- `👥 Clientes` (`clientes.index`)
+- `💳 Créditos` (`creditos.index`)
+- `📦 Stock & Catálogo` (`productos.index`)
+- `📄 Compras & Remitos` (`remitos.index`)
+- `📊 Métricas BI` (`metricas.index`)
+
+### 23.2 Panel de Control de Inicio (`dashboard.blade.php`)
+Cuadrícula de tarjetas operativas para acceso a todos los módulos:
+- Punto de Venta (POS)
+- **Ventas y Facturación** (Histórico y reimpresión de facturas)
+- Control de Caja (Cierre Z)
+- Catálogo y Stock Multi-Sede
+- Compras y Remitos de Proveedores
+- Clientes y Legajos Crediticios
+- Créditos y Cuotas
+- Recibos y Cobranzas
+- **Métricas & BI** (PowerBI)
+- Sistema y Auditoría Operativa
+
+---
+
+## 24. Componentes de UI: Descuentos por Renglón y Promociones 2x1 en Mostrador (POS)
+
+### 24.1 Grilla de Detalle de Factura (`ventas/create.blade.php`)
+- **Columna `% Desc / Promo`**:
+  - Input interactivo compacto de porcentaje (`0%` a `100%`).
+  - Botón de conmutación rápida `[2x1]`: asigna automáticamente 100% de bonificación al artículo y recalcula en tiempo real el neto en `$ 0,00`.
+- **Botón de Duplicación `[+2x1]`**:
+  - Ubicado en la columna de acciones de cada fila.
+  - Duplica la prenda seleccionada como un nuevo renglón con `cantidad: 1`, `descuento_porcentaje: 100%` y `subtotal: $ 0,00`, asegurando la disminución de inventario de ambas unidades.
+- **Visor de Subtotal por Renglón**:
+  - Si el artículo tiene bonificación: muestra el importe neto a cobrar en verde negrita, el precio original tachado en gris, y un badge distintivo (`2x1 Gratis` para 100% o `-XX%` para descuentos parciales).
+- **Visor Registradora y Totales de Factura**:
+  - Discrimina claramente: `PROMOS: -$ [Total Items]` y `DESC FACT: -$ [Total Factura]`.
+  - El gran total refleja con exactitud matemática el importe a cobrar al cliente.

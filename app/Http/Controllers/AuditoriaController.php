@@ -41,6 +41,71 @@ class AuditoriaController extends Controller
             $query->whereDate('created_at', '<=', $request->fecha_hasta);
         }
 
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'id'             => 'id',
+            'created_at'     => 'created_at',
+            'user'           => 'user_id',
+            'event'          => 'event',
+            'auditable_type' => 'auditable_type',
+            'ip_address'     => 'ip_address',
+        ];
+
+        $sort = $request->get('sort', 'id');
+        $direction = strtolower($request->get('direction', 'desc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'id';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        $query->orderBy($sortableColumns[$sort], $direction);
+        if ($sort !== 'id') {
+            $query->orderBy('id', 'desc');
+        }
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'auditoria_sistema_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'ID',
+                    'Fecha y Hora',
+                    'Usuario',
+                    'Evento',
+                    'Entidad',
+                    'ID Registro',
+                    'IP Origen',
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $a) {
+                        fputcsv($handle, [
+                            $a->id,
+                            $a->created_at ? $a->created_at->format('d/m/Y H:i:s') : '-',
+                            $a->user?->name ?? 'Sistema',
+                            strtoupper($a->event),
+                            class_basename($a->auditable_type),
+                            $a->auditable_id,
+                            $a->ip_address ?? '-',
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
         $audits = $query->paginate(20)->withQueryString();
 
         // Tipos de entidades auditadas registradas en el sistema para el selector
@@ -51,7 +116,7 @@ class AuditoriaController extends Controller
             'App\Models\Presentacion' => 'Presentación',
         ];
 
-        return view('sistema.auditoria.index', compact('audits', 'entidades'));
+        return view('sistema.auditoria.index', compact('audits', 'entidades', 'sort', 'direction'));
     }
 
     /**

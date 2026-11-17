@@ -693,4 +693,64 @@ por décadas, procesamiento de rendiciones y reversas ACE/R10/R02, imputación e
     "modelo": "SMH/PT-250F"
   }
   ```
-- Retorna respuesta de descarga HTTP `Content-Disposition: attachment; filename="config.json"` con `application/json; charset=utf-8`.
+---
+
+## 12. Módulo de Ventas, Facturación y Descuentos (`VentaController`)
+
+### 12.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/ventas` | `ventas.index` | `VentaController@index` | `auth` | Historial completo de ventas con filtros avanzados y orden interactivo |
+| GET | `/ventas/crear` | `ventas.create` | `VentaController@create` | `auth` | Punto de Venta (POS Mostrador) para escaneo y cobro ágil |
+| POST | `/ventas` | `ventas.store` | `VentaController@store` | `auth` | Registro de venta atómica, persistencia de `descuento`, stock y crédito |
+| GET | `/ventas/{venta}` | `ventas.show` | `VentaController@show` | `auth` | Detalle modal/completo de venta con ítems y pagos |
+| GET | `/ventas/exportar` | `ventas.exportar` | `VentaController@exportar` | `auth` | Exportación a Excel con respeto estricto de filtros aplicados y orden |
+
+### 12.2 Descuentos por Artículo, Promociones 2x1 y Descuento Global
+- **Descuentos por Renglón (`venta_items.descuento_porcentaje` y `venta_items.descuento`):**
+  - Cada ítem permite definir un porcentaje de descuento (0% a 100%).
+  - **Promociones 2x1:** Botón de un clic `[2x1]` para bonificar el 100% de la prenda y botón `[+2x1]` para duplicar como unidad bonificada con decremento de stock y subtotal $0,00.
+  - El subtotal de la línea refleja el monto neto: $\text{subtotal} = (\text{cantidad} \times \text{precio\_unitario}) - \text{descuento}$.
+- **Descuento Global en Factura (`ventas.descuento`):**
+  - El facturador POS (`ventas/crear`) permite aplicar un descuento comercial adicional sobre el total del comprobante.
+  - Persiste en `ventas.descuento` (equivalente a `MOVIMIENTO.descuento` de Access).
+- **Cálculo Financiero:** $\text{Total Neto} = \text{Subtotal} + \text{Recargo} - \text{Descuento}$. Si la venta se abona con Crédito Personal, las cuotas se generan sobre el saldo neto resultante.
+- **Comprobantes e Impresión:** Se visualiza discriminado en mostrador, en el visor de registradora, en el ticket térmico y en la factura fiscal A4.
+
+---
+
+## 13. Módulo de Métricas y Tableros BI (`MetricasController`)
+
+### 13.1 Tabla de Rutas
+
+| Método | URI | Name | Controlador@Método | Middleware | Descripción |
+|---|---|---|---|---|---|
+| GET | `/metricas` | `metricas.index` | `MetricasController@index` | `auth` | Tablero ejecutivo estilo PowerBI con KPIs, slicers de ventas y créditos |
+| GET | `/metricas/exportar-excel` | `metricas.exportarExcel` | `MetricasController@exportarExcel` | `auth` | Exportación analítica tabular a Excel/CSV con filtros de período y sucursal |
+
+### 13.2 Lógica de Negocio y Métricas
+- **Filtros Temporales:** Rango `fecha_desde` y `fecha_hasta` con presets inmediatos (*Hoy*, *Últimos 7 días*, *Este Mes*, *Mes Anterior*, *Año Actual*, *Histórico Total*).
+- **Métricas de Ventas:**
+  - Facturación bruta, total de descuentos concedidos y cobranza neta.
+  - Cantidad total de prendas/artículos comercializados y ticket promedio.
+  - Tablas resumen multidimensionales: por Categoría, Subcategoría, Fabricante/Proveedor, Sucursal, Medio de Pago y Tipo de Comprobante.
+- **Métricas de Cartera de Créditos:**
+  - Total valor base otorgado, total en cuotas con interés, total efectivamente cobrado, deuda remanente exigible y ratio de recupero (%).
+  - Filtro por fecha de emisión y por sucursal.
+
+---
+
+## 14. Estándar Transversal: Click-to-Sort y Exportación Fiel a Excel
+
+### 14.1 Ordenamiento Interactivo (Click-to-Sort)
+Implementado de forma homogénea en todos los controladores de listado del sistema:
+- `VentaController`, `ClienteController`, `CreditoController`, `CajaController`, `ReciboController`, `ProveedorController`, `RemitoProveedorController`, `ProductoController`, `MetricasController`, `AuditoriaController`, `SucursalController`, `MedioPagoController`, `PuntoVentaController`.
+- **Alternancia:** Al pulsar el encabezado, conmuta entre `asc` y `desc`.
+- **Preservación:** Mediante `request()->query()`, se conservan intactos todos los parámetros de búsqueda, fechas, sucursales y filtros.
+- **Paginación Segura:** Reseteo a `page=1` en cada cambio de columna para evitar páginas inexistentes.
+
+### 14.2 Exportación a Excel con Filtros Activos
+- **Regla Estricta:** La descarga refleja con exactitud el resultado de la consulta visible en pantalla.
+- **Backend:** Clonación de consulta (`clone $query`) antes de paginar, aplicando idénticas cláusulas `WHERE`, `JOIN` y `ORDER BY`.
+- **Formato:** Archivos CSV delimitados por punto y coma (`;`), cabeceras en español y cabecera BOM UTF-8 (`\xEF\xBB\xBF`) para compatibilidad nativa e instantánea con Microsoft Excel.

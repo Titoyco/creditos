@@ -91,10 +91,88 @@ class ReciboController extends Controller
             ->whereDate('fecha', $hoy)
             ->count();
 
-        $recibos = $query->orderBy('fecha', 'desc')
-            ->orderBy('numero_recibo', 'desc')
-            ->paginate(15)
-            ->withQueryString();
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'numero_recibo' => 'recibos.numero_recibo',
+            'fecha'         => 'recibos.fecha',
+            'sucursal'      => 'sucursal',
+            'cliente'       => 'cliente',
+            'medio_pago'    => 'recibos.medio_pago',
+            'importe_total' => 'recibos.importe_total',
+            'estado'        => 'recibos.anulado',
+        ];
+
+        $sort = $request->get('sort', 'fecha');
+        $direction = strtolower($request->get('direction', 'desc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'fecha';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'desc';
+        }
+
+        if ($sort === 'sucursal') {
+            $query->leftJoin('sucursales', 'recibos.id_sucursal', '=', 'sucursales.id')
+                ->select('recibos.*')
+                ->orderBy('sucursales.nombre', $direction);
+        } elseif ($sort === 'cliente') {
+            $query->leftJoin('clientes', 'recibos.id_cliente', '=', 'clientes.id')
+                ->select('recibos.*')
+                ->orderBy('clientes.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id' && $sort !== 'numero_recibo') {
+            $query->orderBy('recibos.numero_recibo', 'desc');
+        }
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'recibos_cobranzas_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'Numero Recibo',
+                    'Fecha y Hora',
+                    'Sucursal',
+                    'Cliente',
+                    'DNI',
+                    'Medio de Pago',
+                    'Importe Total',
+                    'Estado',
+                    'Operador',
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $r) {
+                        fputcsv($handle, [
+                            $r->numero_recibo,
+                            $r->fecha ? \Carbon\Carbon::parse($r->fecha)->format('d/m/Y H:i') : '-',
+                            $r->sucursal?->nombre ?? '-',
+                            $r->cliente?->nombre ?? '-',
+                            $r->cliente?->dni ?? '-',
+                            $r->medio_pago,
+                            number_format((float)$r->importe_total, 2, ',', ''),
+                            $r->anulado ? 'Anulado' : 'Valido',
+                            $r->user?->name ?? '-',
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
+        $recibos = $query->paginate(15)->withQueryString();
 
         $sucursales = Sucursal::all();
 
@@ -105,7 +183,9 @@ class ReciboController extends Controller
             'provinciaActivaNombre',
             'filtroSucursal',
             'totalCobradoHoy',
-            'recibosHoyCount'
+            'recibosHoyCount',
+            'sort',
+            'direction'
         ));
     }
 

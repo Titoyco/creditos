@@ -13,7 +13,8 @@ class ImportVentasUshuaiaCommand extends Command
 {
     protected $signature = 'app:import-ventas-ushuaia 
                             {--path= : Ruta al archivo db.mdb (por defecto base_path/db.mdb)}
-                            {--chunk=2500 : Tamaño del lote de inserción}';
+                            {--chunk=2500 : Tamaño del lote de inserción}
+                            {--clean : Eliminar ventas y detalles previos de Ushuaia antes de importar}';
 
     protected $description = 'Importa todas las ventas y sus detalles de la sucursal Ushuaia desde creditos/db.mdb hacia MySQL (vinculadas a clientes, productos y créditos)';
 
@@ -55,6 +56,16 @@ class ImportVentasUshuaiaCommand extends Command
             $sucUshuaia = Sucursal::where('codigo_sucursal', 'US')->orWhere('nombre', 'like', '%Ushuaia%')->first();
             $idSucursal = $sucUshuaia?->id ?? 1;
             $this->info("Sucursal destino: ID {$idSucursal} ({$sucUshuaia?->nombre})");
+
+            if ($this->option('clean')) {
+                $this->warn("Limpiando venta_items y ventas previas de sucursal Ushuaia (ID: {$idSucursal})...");
+                DB::table('venta_items')
+                    ->whereIn('id_venta', function($q) use ($idSucursal) {
+                        $q->select('id')->from('ventas')->where('id_sucursal', $idSucursal);
+                    })->delete();
+                DB::table('ventas')->where('id_sucursal', $idSucursal)->delete();
+                $this->info("✓ Registros de ventas e items previos de Ushuaia eliminados correctamente.");
+            }
 
             // 2. Pre-cargar mapas en memoria
             $this->info("\n--- 1/4 PREPARANDO MAPAS DE VINCULACIÓN ---");
@@ -356,9 +367,20 @@ class ImportVentasUshuaiaCommand extends Command
             $itemsExistentes = DB::table('venta_items')->count();
             $this->info("Items actualmente en venta_items: {$itemsExistentes}");
 
-            // Si los items son muy pocos respecto al total de ventas, procesamos
+            // Mapear qué ventas ya tienen renglones para garantizar idempotencia estricta
+            $ventasConItems = [];
+            if ($itemsExistentes > 0) {
+                $ventasConItems = DB::table('venta_items')
+                    ->distinct()
+                    ->pluck('id_venta')
+                    ->flip()
+                    ->toArray();
+                $this->info("Ventas con items ya cargados: " . count($ventasConItems));
+            }
+
+            // Procesamos MOVIMIENTO_DETALLE
             $rsItems = $this->conn->Execute("
-                SELECT md.id_operacion, md.idproducto, md.descripcion, md.cantidad, md.precio_unitario, md.totalproducto 
+                SELECT md.id_operacion, md.idproducto, md.descripcion, md.cantidad, md.precio_unitario, md.descuento, md.totalproducto 
                 FROM [MOVIMIENTO_DETALLE] md 
                 INNER JOIN [MOVIMIENTO] m ON md.id_operacion = m.id_operacion 
                 WHERE m.Operacion = 'VENTA' 
@@ -368,16 +390,22 @@ class ImportVentasUshuaiaCommand extends Command
             $batchItems = [];
             $itemsInsertadosCount = 0;
             $itemsOmitidosCount = 0;
+            $itemsYaExistentesCount = 0;
             $now = now()->toDateTimeString();
 
-            // Si ya hay items pero menos que los 458k, limpiar items huérfanos o proceder
-            // Para asegurar consistencia si se corre por primera vez:
             while (!$rsItems->EOF) {
                 $idOp = (int)$rsItems->Fields("id_operacion")->Value;
                 $ventaId = $ventasMap[$idOp] ?? null;
 
                 if (!$ventaId) {
                     $itemsOmitidosCount++;
+                    $rsItems->MoveNext();
+                    continue;
+                }
+
+                // Si esta venta ya tiene items cargados, omitir para no duplicar
+                if (isset($ventasConItems[$ventaId])) {
+                    $itemsYaExistentesCount++;
                     $rsItems->MoveNext();
                     continue;
                 }
@@ -389,23 +417,37 @@ class ImportVentasUshuaiaCommand extends Command
 
                 $cant = max(0.01, (float)($rsItems->Fields("cantidad")->Value ?? 1));
                 $precio = (float)($rsItems->Fields("precio_unitario")->Value ?? 0);
+                $descMonto = (float)($rsItems->Fields("descuento")->Value ?? 0);
                 $subtotal = (float)($rsItems->Fields("totalproducto")->Value ?? 0);
+                $bruto = round($cant * $precio, 2);
 
-                if ($subtotal <= 0.0 && $precio > 0) {
-                    $subtotal = round($cant * $precio, 2);
+                // Calcular porcentaje de descuento si existe monto de descuento
+                $descPorcentaje = 0.0;
+                if ($descMonto > 0 && $bruto > 0) {
+                    $descPorcentaje = min(100.0, round(($descMonto / $bruto) * 100, 2));
+                }
+
+                // Si totalproducto viene en 0 pero NO hubo descuento y precio > 0, calcular
+                if ($subtotal <= 0.0 && $descMonto == 0.0 && $precio > 0) {
+                    $subtotal = $bruto;
+                } elseif ($descMonto > 0) {
+                    // Mantener el subtotal neto exacto (bruto - descMonto, ej: promo 2x1 -> subtotal = 0.00)
+                    $subtotal = max(0.0, round($bruto - $descMonto, 2));
                 }
 
                 $batchItems[] = [
-                    'id_venta'        => $ventaId,
-                    'id_producto'     => $idProd,
-                    'codigo_producto' => $code !== '' ? mb_substr($code, 0, 50) : null,
-                    'descripcion'     => mb_substr($desc, 0, 255),
-                    'cantidad'        => $cant,
-                    'precio_unitario' => $precio,
-                    'subtotal'        => $subtotal,
-                    'descuenta_stock' => 0,
-                    'created_at'      => $now,
-                    'updated_at'      => $now,
+                    'id_venta'             => $ventaId,
+                    'id_producto'          => $idProd,
+                    'codigo_producto'      => $code !== '' ? mb_substr($code, 0, 50) : null,
+                    'descripcion'          => mb_substr($desc, 0, 255),
+                    'cantidad'             => $cant,
+                    'precio_unitario'      => $precio,
+                    'descuento_porcentaje' => $descPorcentaje,
+                    'descuento'            => $descMonto,
+                    'subtotal'             => $subtotal,
+                    'descuenta_stock'      => 0,
+                    'created_at'           => $now,
+                    'updated_at'           => $now,
                 ];
 
                 $itemsInsertadosCount++;

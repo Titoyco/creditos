@@ -216,6 +216,9 @@
                 },
                 diferencia() {
                     return Math.round((Number(this.realContado || 0) - this.teoricoEfectivo) * 100) / 100;
+                },
+                validarAntesDeCerrar(e) {
+                    return window.validarCierreForm(e);
                 }
             };
         }
@@ -268,7 +271,6 @@
 
         <form method="POST" action="{{ route('cajas.cerrar.store', $caja->id) }}" class="space-y-5"
               id="formCierreCaja"
-              @submit="validarAntesDeCerrar($event)"
               onsubmit="return window.validarCierreForm(event)">
             @csrf
 

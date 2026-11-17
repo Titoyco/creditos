@@ -27,11 +27,91 @@ class ProveedorController extends Controller
             $query->where('id_localidad', $locId);
         }
 
-        $proveedores = $query->orderBy('nombre', 'asc')->paginate(20);
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'legajo'    => 'proveedores.legajo',
+            'cuit'      => 'proveedores.cuit',
+            'nombre'    => 'proveedores.nombre',
+            'localidad' => 'localidad',
+            'contacto'  => 'proveedores.contacto',
+            'saldo'     => 'proveedores.saldo',
+        ];
+
+        $sort = $request->get('sort', 'nombre');
+        $direction = strtolower($request->get('direction', 'asc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'nombre';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        if ($sort === 'localidad') {
+            $query->leftJoin('localidades', 'proveedores.id_localidad', '=', 'localidades.id')
+                ->select('proveedores.*')
+                ->orderBy('localidades.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id') {
+            $query->orderBy('proveedores.id', 'desc');
+        }
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'proveedores_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'Legajo',
+                    'CUIT',
+                    'Condicion IVA',
+                    'Proveedor / Razon Social',
+                    'Localidad',
+                    'Provincia',
+                    'Direccion',
+                    'Contacto',
+                    'Telefono',
+                    'Email',
+                    'Saldo Cuenta',
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $p) {
+                        fputcsv($handle, [
+                            $p->legajo ?? '-',
+                            $p->cuit ?? '-',
+                            $p->condicionIva?->nombre ?? '-',
+                            $p->nombre,
+                            $p->localidad?->nombre ?? '-',
+                            $p->localidad?->provincia?->nombre ?? '-',
+                            $p->direccion ?? '-',
+                            $p->contacto ?? '-',
+                            $p->telefono ?? '-',
+                            $p->email ?? '-',
+                            number_format((float)$p->saldo, 2, ',', ''),
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
+        $proveedores = $query->paginate(20)->withQueryString();
         $localidades = Localidad::orderBy('nombre')->get();
         $provincias = Provincia::orderBy('nombre')->get();
 
-        return view('proveedores.index', compact('proveedores', 'localidades', 'provincias'));
+        return view('proveedores.index', compact('proveedores', 'localidades', 'provincias', 'sort', 'direction'));
     }
 
     public function create()

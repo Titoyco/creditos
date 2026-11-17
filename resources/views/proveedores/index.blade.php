@@ -13,9 +13,15 @@
             </p>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
             <a href="{{ route('productos.index') }}" class="px-3 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-2xs transition-all">
                 &larr; Catálogo
+            </a>
+            <a href="{{ route('proveedores.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+               class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm"
+               title="Exportar proveedores filtrados a Excel / CSV">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>EXPORTAR EXCEL</span>
             </a>
             <a href="{{ route('remitos.index') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-black uppercase transition-all flex items-center space-x-1.5 shadow-sm">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
@@ -53,17 +59,66 @@
         </form>
     </div>
 
+    @php
+        $sort = $sort ?? request()->get('sort', 'nombre');
+        $direction = $direction ?? request()->get('direction', 'asc');
+        $nextDirection = function($col) use ($sort, $direction) {
+            return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+        };
+        $sortUrl = function($col) use ($nextDirection) {
+            return route('proveedores.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+        };
+        $sortIndicator = function($col) use ($sort, $direction) {
+            if ($sort === $col) {
+                return $direction === 'asc' 
+                    ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                    : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+            }
+            return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+        };
+    @endphp
+
     {{-- Tabla de Proveedores con Iluminación y Menú Contextual --}}
     <div class="bg-white dark:bg-slate-800/90 rounded-xl border border-slate-300 dark:border-slate-700 shadow-2xs mb-4">
         <table class="w-full text-left border-collapse font-sans text-xs">
             <thead>
                 <tr class="bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] border-b border-slate-300 dark:border-slate-700 select-none">
-                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-20 text-center">Legajo</th>
-                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-44">CUIT / Condición IVA</th>
-                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60">Proveedor / Razón Social</th>
-                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-48">Ubicación</th>
-                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-40">Contacto</th>
-                    <th class="py-2.5 px-3 w-32 text-right">Saldo Cuenta</th>
+                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-20 text-center">
+                        <a href="{{ $sortUrl('legajo') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Legajo">
+                            <span>Legajo</span>
+                            {!! $sortIndicator('legajo') !!}
+                        </a>
+                    </th>
+                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-44">
+                        <a href="{{ $sortUrl('cuit') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por CUIT / Condición IVA">
+                            <span>CUIT / Cond. IVA</span>
+                            {!! $sortIndicator('cuit') !!}
+                        </a>
+                    </th>
+                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60">
+                        <a href="{{ $sortUrl('nombre') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Razón Social">
+                            <span>Proveedor / Razón Social</span>
+                            {!! $sortIndicator('nombre') !!}
+                        </a>
+                    </th>
+                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-48">
+                        <a href="{{ $sortUrl('localidad') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Ubicación">
+                            <span>Ubicación</span>
+                            {!! $sortIndicator('localidad') !!}
+                        </a>
+                    </th>
+                    <th class="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700/60 w-40">
+                        <a href="{{ $sortUrl('contacto') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Contacto">
+                            <span>Contacto</span>
+                            {!! $sortIndicator('contacto') !!}
+                        </a>
+                    </th>
+                    <th class="py-2.5 px-3 w-32 text-right">
+                        <a href="{{ $sortUrl('saldo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Saldo">
+                            <span>Saldo Cuenta</span>
+                            {!! $sortIndicator('saldo') !!}
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-slate-700/60">

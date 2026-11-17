@@ -45,7 +45,7 @@
             </div>
         </div>
 
-        {{-- Cuadrícula de 6 Módulos Operativos (2 filas de 3) --}}
+        {{-- Cuadrícula de Módulos Operativos --}}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
 
             {{-- 1. Punto de Venta / Facturación (POS) --}}
@@ -72,13 +72,44 @@
                 <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
                     <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Sucursal: {{ config('app.sucursal_activa')->codigo_sucursal ?? 'N/A' }}</span>
                     <div class="flex items-center gap-1.5">
-                        <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:underline">Operar / Historial</span>
+                        <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:underline">Nueva Venta</span>
                         <span class="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-400 group-hover:bg-blue-600 group-hover:text-white dark:group-hover:bg-blue-500 transition-all duration-200 flex items-center justify-center shrink-0">
                             <svg class="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
                             </svg>
                         </span>
                     </div>
+                </div>
+            </a>
+
+            {{-- 1.B. Historial de Ventas y Facturación --}}
+            <a href="{{ route('ventas.index') }}"
+               class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                            Comprobantes
+                        </span>
+                    </div>
+                    <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-blue-700 dark:group-hover:text-blue-400 transition-colors">
+                        Ventas y Facturación
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-snug font-medium">
+                        Historial completo de ventas y facturas emitidas (A, B, Ticket, Remito), reimpresión oficial y exportación a Excel con filtros.
+                    </p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Histórico de Ventas</span>
+                    <span class="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-400 group-hover:bg-blue-600 group-hover:text-white dark:group-hover:bg-blue-500 transition-all duration-200 flex items-center justify-center shrink-0">
+                        <svg class="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </span>
                 </div>
             </a>
 
@@ -268,7 +299,38 @@
                 </div>
             </a>
 
-            {{-- 6. Sistema y Auditoría --}}
+            {{-- 6. Métricas BI (PowerBI) --}}
+            <a href="{{ route('metricas.index') }}"
+               class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-amber-400 dark:hover:border-amber-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-100 dark:border-amber-800/60 flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                        </div>
+                        <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                            PowerBI
+                        </span>
+                    </div>
+                    <h2 class="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                        Métricas & BI
+                    </h2>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-snug font-medium">
+                        Tableros ejecutivos estilo PowerBI: ventas por categoría, sucursal, medios de pago y evolución de cartera de créditos.
+                    </p>
+                </div>
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Business Intelligence</span>
+                    <span class="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-700/60 text-slate-400 group-hover:bg-amber-500 group-hover:text-white dark:group-hover:bg-amber-400 transition-all duration-200 flex items-center justify-center shrink-0">
+                        <svg class="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </span>
+                </div>
+            </a>
+
+            {{-- 7. Sistema y Auditoría --}}
             <a href="{{ route('sistema.index') }}"
                class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm hover:shadow-lg border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-500 hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 {{ !Auth::user()->is_admin ? 'opacity-80' : '' }}">
                 <div>

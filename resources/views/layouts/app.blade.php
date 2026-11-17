@@ -151,23 +151,35 @@
                         <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
                             <a href="{{ route('ventas.create') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('ventas.create') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>🛒 POS Mostrador</span>
+                                <span>🛒 Facturar</span>
+                            </a>
+                            <a href="{{ route('ventas.index') }}" 
+                               class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('ventas.index') || request()->routeIs('ventas.show') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
+                                <span>🧾 Ventas</span>
                             </a>
                             <a href="{{ route('cajas.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('cajas.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>💵 Cajas & Turnos</span>
+                                <span>💵 Cajas</span>
                             </a>
                             <a href="{{ route('clientes.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('clientes.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
                                 <span>👥 Clientes</span>
                             </a>
+                            <a href="{{ route('creditos.index') }}" 
+                               class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('creditos.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
+                                <span>💳 Créditos</span>
+                            </a>
                             <a href="{{ route('productos.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('productos.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>📦 Stock & Catálogo</span>
+                                <span>📦 Stock</span>
                             </a>
                             <a href="{{ route('remitos.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('remitos.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>📄 Compras & Remitos</span>
+                                <span>📄 Compras</span>
+                            </a>
+                            <a href="{{ route('metricas.index') }}" 
+                               class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('metricas.*') ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300 shadow-md' : 'text-amber-300 hover:bg-blue-800/80 dark:hover:bg-slate-800 font-extrabold' }}">
+                                <span>📊 Métricas</span>
                             </a>
                         </div>
 

@@ -32,9 +32,36 @@ class MedioPagoController extends Controller
             $query->where('activo', $request->estado === 'activo');
         }
 
-        $medios = $query->orderBy('orden')->orderBy('nombre')->paginate(20)->withQueryString();
+        // Click-to-Sort (conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'orden'              => 'medios_pago.orden',
+            'nombre'             => 'medios_pago.nombre',
+            'codigo'             => 'medios_pago.codigo',
+            'tipo_base'          => 'medios_pago.tipo_base',
+            'recargo_porcentaje' => 'medios_pago.recargo_porcentaje',
+            'activo'             => 'medios_pago.activo',
+            'movimientos'        => 'ventas_count',
+        ];
 
-        return view('sistema.medios_pago.index', compact('medios'));
+        $sort = $request->get('sort', 'orden');
+        $direction = strtolower($request->get('direction', 'asc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'orden';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        $query->orderBy($sortableColumns[$sort], $direction);
+
+        if ($sort !== 'id' && $sort !== 'orden') {
+            $query->orderBy('medios_pago.orden', 'asc');
+        }
+
+        $medios = $query->paginate(20)->withQueryString();
+
+        return view('sistema.medios_pago.index', compact('medios', 'sort', 'direction'));
     }
 
     /**

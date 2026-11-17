@@ -296,6 +296,56 @@ class ProductoController extends Controller
             $query->orderBy('productos.id', 'desc');
         }
 
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'catalogo_stock_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'Codigo',
+                    'Codigo Barras',
+                    'Descripcion',
+                    'Categoria',
+                    'Subcategoria',
+                    'Fabricante / Proveedor',
+                    'Precio Costo',
+                    'Precio Venta',
+                    'Stock Total',
+                    'Fecha Alta',
+                    'Ultima Venta',
+                    'Total Ventas Unidades',
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $p) {
+                        fputcsv($handle, [
+                            $p->codigo,
+                            $p->codigo_barras ?? '-',
+                            $p->descripcion,
+                            $p->categoria?->nombre ?? '-',
+                            $p->subcategoria?->nombre ?? '-',
+                            $p->proveedor?->nombre ?? '-',
+                            number_format((float)($p->precio_costo ?? 0), 2, ',', ''),
+                            number_format((float)($p->precio_venta ?? 0), 2, ',', ''),
+                            number_format((float)($p->stock_total ?? 0), 2, ',', ''),
+                            $p->fecha_alta ? \Carbon\Carbon::parse($p->fecha_alta)->format('d/m/Y') : '-',
+                            $p->fecha_ultima_venta ? \Carbon\Carbon::parse($p->fecha_ultima_venta)->format('d/m/Y') : 'Sin ventas',
+                            (int)($p->total_ventas_unidades ?? 0),
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
         // Clonamos la query filtrada para paginar
         $productos = (clone $query)->paginate(20)->withQueryString();
 

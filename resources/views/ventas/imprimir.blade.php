@@ -139,7 +139,18 @@
                     <div class="py-0.5">
                         <div class="font-bold truncate">{{ $it->descripcion }}</div>
                         <div class="flex justify-between text-[9px] text-slate-600 pl-1">
-                            <span>{{ number_format((float)$it->cantidad, 0) }} x ${{ number_format((float)$it->precio_unitario, 2, ',', '.') }}</span>
+                            <span>
+                                {{ number_format((float)$it->cantidad, 0) }} x ${{ number_format((float)$it->precio_unitario, 2, ',', '.') }}
+                                @if((float)$it->descuento > 0 || (float)$it->descuento_porcentaje > 0)
+                                    <span class="text-emerald-700 font-bold">
+                                        @if((float)$it->descuento_porcentaje >= 100 || (float)$it->subtotal <= 0)
+                                            (2x1 100% BONIF.)
+                                        @else
+                                            (-{{ number_format((float)$it->descuento_porcentaje, 0) }}%)
+                                        @endif
+                                    </span>
+                                @endif
+                            </span>
                             <span class="font-bold text-slate-900">${{ number_format((float)$it->subtotal, 2, ',', '.') }}</span>
                         </div>
                     </div>
@@ -154,6 +165,12 @@
                     <span>Subtotal:</span>
                     <span>${{ number_format((float)$venta->subtotal, 2, ',', '.') }}</span>
                 </div>
+                @if((float)$venta->descuento > 0)
+                    <div class="flex justify-between text-emerald-800 font-bold">
+                        <span>Descuento:</span>
+                        <span>-${{ number_format((float)$venta->descuento, 2, ',', '.') }}</span>
+                    </div>
+                @endif
                 @if((float)$venta->recargo > 0)
                     <div class="flex justify-between text-slate-700">
                         <span>Recargo Financiación:</span>
@@ -318,10 +335,27 @@
                                 <tr>
                                     <td class="py-1 px-2 text-center font-mono text-slate-400 text-[10px]">{{ $i + 1 }}</td>
                                     <td class="py-1 px-2 font-mono text-slate-600">{{ $item->codigo_producto ?? '-' }}</td>
-                                    <td class="py-1 px-2 font-bold">{{ $item->descripcion }}</td>
+                                    <td class="py-1 px-2 font-bold">
+                                        {{ $item->descripcion }}
+                                        @if((float)$item->descuento > 0 || (float)$item->descuento_porcentaje > 0)
+                                            <span class="text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1 py-0.2 rounded ml-1">
+                                                @if((float)$item->descuento_porcentaje >= 100 || (float)$item->subtotal <= 0)
+                                                    PROMO 2x1 (100% BONIF.)
+                                                @else
+                                                    DESC -{{ number_format((float)$item->descuento_porcentaje, 0) }}% (-${{ number_format((float)$item->descuento, 2, ',', '.') }})
+                                                @endif
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="py-1 px-2 text-center font-mono font-bold">{{ number_format((float)$item->cantidad, 2, ',', '.') }}</td>
                                     <td class="py-1 px-2 text-right font-mono">${{ number_format((float)$item->precio_unitario, 2, ',', '.') }}</td>
-                                    <td class="py-1 px-2 text-right font-mono font-bold">${{ number_format((float)$item->subtotal, 2, ',', '.') }}</td>
+                                    <td class="py-1 px-2 text-right font-mono font-bold">
+                                        @if((float)$item->subtotal <= 0 && ((float)$item->descuento > 0 || (float)$item->descuento_porcentaje >= 100))
+                                            <span class="text-emerald-700">$ 0,00</span>
+                                        @else
+                                            ${{ number_format((float)$item->subtotal, 2, ',', '.') }}
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -362,6 +396,12 @@
                                 <div class="flex justify-between text-slate-600">
                                     <span>Subtotal:</span>
                                     <span>${{ number_format((float)$venta->subtotal, 2, ',', '.') }}</span>
+                                </div>
+                            @endif
+                            @if((float)$venta->descuento > 0)
+                                <div class="flex justify-between text-emerald-700 font-bold">
+                                    <span>Descuento / Bonificación:</span>
+                                    <span>-${{ number_format((float)$venta->descuento, 2, ',', '.') }}</span>
                                 </div>
                             @endif
                             @if((float)$venta->recargo > 0)

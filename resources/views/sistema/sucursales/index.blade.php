@@ -33,17 +33,71 @@
             </span>
         </div>
 
+        @php
+            $sort = $sort ?? request()->get('sort', 'nombre');
+            $direction = $direction ?? request()->get('direction', 'asc');
+            $nextDirection = function($col) use ($sort, $direction) {
+                return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+            };
+            $sortUrl = function($col) use ($nextDirection) {
+                return route('sucursales.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+            };
+            $sortIndicator = function($col) use ($sort, $direction) {
+                if ($sort === $col) {
+                    return $direction === 'asc' 
+                        ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                        : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+                }
+                return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+            };
+        @endphp
+
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse font-sans text-xs">
                 <thead>
-                    <tr class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-700">
-                        <th class="py-2 px-3 w-14 text-center">ID</th>
-                        <th class="py-2 px-3 w-16 text-center">Cód.</th>
-                        <th class="py-2 px-3">Sucursal / Nombre</th>
-                        <th class="py-2 px-3">Dirección Física (Factura)</th>
-                        <th class="py-2 px-3">Responsable Fiscal / CUIT</th>
-                        <th class="py-2 px-3">Contacto / Web</th>
-                        <th class="py-2 px-2 text-center w-20">Clientes</th>
+                    <tr class="bg-slate-50 dark:bg-slate-900/60 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-700 select-none">
+                        <th class="py-2 px-3 w-14 text-center">
+                            <a href="{{ $sortUrl('id') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por ID">
+                                <span>ID</span>
+                                {!! $sortIndicator('id') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-3 w-20 text-center">
+                            <a href="{{ $sortUrl('codigo_sucursal') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Código">
+                                <span>Cód.</span>
+                                {!! $sortIndicator('codigo_sucursal') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-3">
+                            <a href="{{ $sortUrl('nombre') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Nombre">
+                                <span>Sucursal / Nombre</span>
+                                {!! $sortIndicator('nombre') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-3">
+                            <a href="{{ $sortUrl('direccion') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Dirección">
+                                <span>Dirección Física (Factura)</span>
+                                {!! $sortIndicator('direccion') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-3">
+                            <a href="{{ $sortUrl('cuit') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por CUIT">
+                                <span>Responsable Fiscal / CUIT</span>
+                                {!! $sortIndicator('cuit') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-3">
+                            <a href="{{ $sortUrl('telefono') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Contacto">
+                                <span>Contacto / Web</span>
+                                {!! $sortIndicator('telefono') !!}
+                            </a>
+                        </th>
+                        <th class="py-2 px-2 text-center w-24">
+                            <a href="{{ $sortUrl('clientes_count') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Cantidad de Clientes">
+                                <span>Clientes</span>
+                                {!! $sortIndicator('clientes_count') !!}
+                            </a>
+                        </th>
                         <th class="py-2 px-3 text-center w-28">Acciones</th>
                     </tr>
                 </thead>

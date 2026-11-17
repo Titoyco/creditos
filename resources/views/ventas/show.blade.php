@@ -155,6 +155,13 @@
                         <span class="font-mono tabular-nums text-slate-700 dark:text-slate-300">$ {{ number_format((float)$venta->subtotal, 2, ',', '.') }}</span>
                     </div>
 
+                    @if((float)$venta->descuento > 0)
+                        <div class="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                            <span>Descuento / Bonificación:</span>
+                            <span class="font-mono tabular-nums">-$ {{ number_format((float)$venta->descuento, 2, ',', '.') }}</span>
+                        </div>
+                    @endif
+
                     @if((float)$venta->recargo > 0)
                         <div class="flex items-center justify-between text-xs text-indigo-600">
                             <span>Recargo Financiación:</span>
@@ -270,6 +277,7 @@
                             <th class="py-2.5 px-3">Descripción</th>
                             <th class="py-2.5 px-3 text-center">Cantidad</th>
                             <th class="py-2.5 px-3 text-right">P. Unitario</th>
+                            <th class="py-2.5 px-3 text-center">Desc / Promo</th>
                             <th class="py-2.5 px-3 text-right">Subtotal</th>
                             <th class="py-2.5 px-3 text-center">Stock</th>
                         </tr>
@@ -295,8 +303,28 @@
                                 <td class="py-2 px-3 text-right font-mono text-slate-700 dark:text-slate-300">
                                     $ {{ number_format((float)$it->precio_unitario, 2, ',', '.') }}
                                 </td>
-                                <td class="py-2 px-3 text-right font-mono font-black text-slate-900 dark:text-white tabular-nums">
-                                    $ {{ number_format((float)$it->subtotal, 2, ',', '.') }}
+                                <td class="py-2 px-3 text-center">
+                                    @if((float)$it->descuento > 0 || (float)$it->descuento_porcentaje > 0)
+                                        @if((float)$it->descuento_porcentaje >= 100 || (float)$it->subtotal <= 0)
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300">
+                                                🎁 2x1 / 100%
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                                                -{{ number_format((float)$it->descuento_porcentaje, 0) }}% (-${{ number_format((float)$it->descuento, 2, ',', '.') }})
+                                            </span>
+                                        @endif
+                                    @else
+                                        <span class="text-slate-400 text-[10px]">-</span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 text-right font-mono font-black tabular-nums">
+                                    @if((float)$it->subtotal <= 0 && ((float)$it->descuento > 0 || (float)$it->descuento_porcentaje >= 100))
+                                        <span class="text-emerald-600 dark:text-emerald-400">$ 0,00</span>
+                                        <span class="block text-[10px] text-slate-400 line-through">$ {{ number_format((float)$it->cantidad * (float)$it->precio_unitario, 2, ',', '.') }}</span>
+                                    @else
+                                        <span class="text-slate-900 dark:text-white">$ {{ number_format((float)$it->subtotal, 2, ',', '.') }}</span>
+                                    @endif
                                 </td>
                                 <td class="py-2 px-3 text-center">
                                     @if($it->descuenta_stock)

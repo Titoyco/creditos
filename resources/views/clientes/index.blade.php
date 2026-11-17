@@ -17,10 +17,19 @@
             </span>
         </div>
         
-        <a href="{{ route('clientes.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center space-x-1 shadow-sm w-fit">
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
-            <span>NUEVO CLIENTE</span>
-        </a>
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{{ route('clientes.index', array_merge(request()->query(), ['export' => 'excel'])) }}" 
+               class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center space-x-1.5 shadow-sm"
+               title="Exportar todos los clientes filtrados a Excel / CSV">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>EXPORTAR EXCEL</span>
+            </a>
+
+            <a href="{{ route('clientes.create') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center space-x-1 shadow-sm w-fit">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+                <span>NUEVO CLIENTE</span>
+            </a>
+        </div>
     </div>
 
     {{-- Filtros y Búsqueda --}}
@@ -89,15 +98,54 @@
         </form>
     </div>
 
+    @php
+        $sort = $sort ?? request()->get('sort', 'nombre');
+        $direction = $direction ?? request()->get('direction', 'asc');
+        $nextDirection = function($col) use ($sort, $direction) {
+            return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+        };
+        $sortUrl = function($col) use ($nextDirection) {
+            return route('clientes.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+        };
+        $sortIndicator = function($col) use ($sort, $direction) {
+            if ($sort === $col) {
+                return $direction === 'asc' 
+                    ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                    : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+            }
+            return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+        };
+    @endphp
+
     {{-- Tabla de Clientes con Menú Contextual Integrado --}}
     <div class="bg-white dark:bg-slate-800/90 rounded-md border border-slate-300 dark:border-slate-700 shadow-sm mb-4">
         <table class="w-full text-left border-collapse font-sans text-xs">
             <thead>
                 <tr class="bg-slate-100 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] border-b border-slate-300 dark:border-slate-700 select-none">
-                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-44">Documento / Cuenta</th>
-                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60">Cliente / Sucursal</th>
-                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-48">Ubicación</th>
-                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-36 text-right">Saldo Actual</th>
+                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-44">
+                        <a href="{{ $sortUrl('dni') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Documento / Cuenta">
+                            <span>Documento / Cuenta</span>
+                            {!! $sortIndicator('dni') !!}
+                        </a>
+                    </th>
+                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60">
+                        <a href="{{ $sortUrl('nombre') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Nombre de Cliente">
+                            <span>Cliente / Sucursal</span>
+                            {!! $sortIndicator('nombre') !!}
+                        </a>
+                    </th>
+                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-48">
+                        <a href="{{ $sortUrl('localidad') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Ubicación">
+                            <span>Ubicación</span>
+                            {!! $sortIndicator('localidad') !!}
+                        </a>
+                    </th>
+                    <th class="py-2 px-3 border-r border-slate-200 dark:border-slate-700/60 w-36 text-right">
+                        <a href="{{ $sortUrl('saldo') }}" class="group flex items-center justify-end space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Saldo Actual">
+                            <span>Saldo Actual</span>
+                            {!! $sortIndicator('saldo') !!}
+                        </a>
+                    </th>
                     <th class="py-2 px-3 w-40">Contacto</th>
                 </tr>
             </thead>

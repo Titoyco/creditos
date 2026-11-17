@@ -171,9 +171,9 @@ class CreditoController extends Controller
         }
 
         // ====================================================================
-        // 8. EXPORTACIÓN A EXCEL / CSV (si se solicita)
+        // 8. EXPORTACIÓN A EXCEL / CSV (con todos los filtros aplicados)
         // ====================================================================
-        if ($request->get('export') === 'excel') {
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
             $exportQuery = clone $query;
             $filename = 'cartera_creditos_' . date('Ymd_His') . '.csv';
 

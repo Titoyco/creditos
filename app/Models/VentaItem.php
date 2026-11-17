@@ -16,6 +16,8 @@ class VentaItem extends Model
         'descripcion',
         'cantidad',
         'precio_unitario',
+        'descuento_porcentaje',
+        'descuento',
         'subtotal',
         'descuenta_stock',
     ];
@@ -23,6 +25,8 @@ class VentaItem extends Model
     protected $casts = [
         'cantidad' => 'decimal:2',
         'precio_unitario' => 'decimal:2',
+        'descuento_porcentaje' => 'decimal:2',
+        'descuento' => 'decimal:2',
         'subtotal' => 'decimal:2',
         'descuenta_stock' => 'boolean',
     ];

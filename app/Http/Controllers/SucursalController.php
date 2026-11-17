@@ -32,13 +32,43 @@ class SucursalController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $sucursales = Sucursal::withCount(['clientes', 'creditos'])
-            ->orderBy('nombre')
-            ->paginate(15);
+        $sortableColumns = [
+            'id'              => 'sucursales.id',
+            'codigo_sucursal' => 'sucursales.codigo_sucursal',
+            'nombre'          => 'sucursales.nombre',
+            'direccion'       => 'sucursales.direccion',
+            'cuit'            => 'sucursales.cuit',
+            'telefono'        => 'sucursales.telefono',
+            'clientes_count'  => 'clientes_count',
+        ];
 
-        return view('sistema.sucursales.index', compact('sucursales'));
+        $sort = $request->get('sort', 'nombre');
+        $direction = strtolower($request->get('direction', 'asc'));
+
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'nombre';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        $query = Sucursal::withCount(['clientes', 'creditos']);
+
+        if ($sort === 'clientes_count') {
+            $query->orderBy('clientes_count', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id') {
+            $query->orderBy('sucursales.id', 'asc');
+        }
+
+        $sucursales = $query->paginate(15)->withQueryString();
+
+        return view('sistema.sucursales.index', compact('sucursales', 'sort', 'direction'));
     }
 
     /**

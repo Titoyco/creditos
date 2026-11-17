@@ -103,20 +103,74 @@
             </form>
         </div>
 
+        @php
+            $sort = $sort ?? request()->get('sort', 'orden');
+            $direction = $direction ?? request()->get('direction', 'asc');
+            $nextDirection = function($col) use ($sort, $direction) {
+                return ($sort === $col && $direction === 'asc') ? 'desc' : 'asc';
+            };
+            $sortUrl = function($col) use ($nextDirection) {
+                return route('sistema.medios-pago.index', array_merge(request()->query(), ['sort' => $col, 'direction' => $nextDirection($col), 'page' => 1]));
+            };
+            $sortIndicator = function($col) use ($sort, $direction) {
+                if ($sort === $col) {
+                    return $direction === 'asc' 
+                        ? '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▲</span>' 
+                        : '<span class="inline-block text-blue-600 dark:text-blue-400 font-black ml-1 text-[11px] leading-none">▼</span>';
+                }
+                return '<span class="inline-block text-slate-300 dark:text-slate-600 group-hover:text-slate-500 font-normal ml-1 text-[10px] leading-none">⇅</span>';
+            };
+        @endphp
+
         <!-- Tabla Data-Grid de Medios de Pago -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 uppercase text-[10px] font-black border-b border-slate-200 dark:border-slate-700">
+                    <thead class="bg-slate-50 dark:bg-slate-900/80 text-slate-600 dark:text-slate-400 uppercase text-[10px] font-black border-b border-slate-200 dark:border-slate-700 select-none">
                         <tr>
-                            <th class="py-3 px-4">Orden</th>
-                            <th class="py-3 px-4">Medio de Pago</th>
-                            <th class="py-3 px-4">Código / Slug</th>
-                            <th class="py-3 px-4">Categoría Base</th>
-                            <th class="py-3 px-4 text-center">Recargo / Descuento</th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('orden') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Orden">
+                                    <span>Orden</span>
+                                    {!! $sortIndicator('orden') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('nombre') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Nombre">
+                                    <span>Medio de Pago</span>
+                                    {!! $sortIndicator('nombre') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('codigo') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Código">
+                                    <span>Código / Slug</span>
+                                    {!! $sortIndicator('codigo') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4">
+                                <a href="{{ $sortUrl('tipo_base') }}" class="group flex items-center justify-between text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Categoría Base">
+                                    <span>Categoría Base</span>
+                                    {!! $sortIndicator('tipo_base') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4 text-center">
+                                <a href="{{ $sortUrl('recargo_porcentaje') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Recargo/Descuento">
+                                    <span>Recargo / Descuento</span>
+                                    {!! $sortIndicator('recargo_porcentaje') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-4 text-center">Configuración</th>
-                            <th class="py-3 px-4 text-center">Movimientos Asociados</th>
-                            <th class="py-3 px-4 text-center">Estado</th>
+                            <th class="py-3 px-4 text-center">
+                                <a href="{{ $sortUrl('movimientos') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Movimientos Asociados">
+                                    <span>Movimientos Asociados</span>
+                                    {!! $sortIndicator('movimientos') !!}
+                                </a>
+                            </th>
+                            <th class="py-3 px-4 text-center">
+                                <a href="{{ $sortUrl('activo') }}" class="group flex items-center justify-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title="Ordenar por Estado">
+                                    <span>Estado</span>
+                                    {!! $sortIndicator('activo') !!}
+                                </a>
+                            </th>
                             <th class="py-3 px-4 text-center">Acciones</th>
                         </tr>
                     </thead>

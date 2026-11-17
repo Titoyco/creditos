@@ -571,19 +571,20 @@
                         <table class="w-full text-left text-xs border-collapse">
                             <thead>
                                 <tr class="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase font-bold sticky top-0 z-10">
-                                    <th class="py-2 px-2.5 w-8">#</th>
+                                    <th class="py-2 px-2 w-7">#</th>
                                     <th class="py-2 px-2.5">Artículo / Descripción</th>
                                     <th class="py-2 px-1 text-center w-24">Cantidad</th>
-                                    <th class="py-2 px-2 text-right w-24">P. Unitario</th>
-                                    <th class="py-2 px-2.5 text-right w-24">Subtotal</th>
-                                    <th class="py-2 px-1 text-center w-10">✕</th>
+                                    <th class="py-2 px-2 text-right w-22">P. Unitario</th>
+                                    <th class="py-2 px-1 text-center w-28">% Desc / Promo</th>
+                                    <th class="py-2 px-2.5 text-right w-26">Subtotal</th>
+                                    <th class="py-2 px-1 text-center w-14">Acción</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60 font-sans">
                                 <template x-for="(item, index) in items" :key="index">
                                     <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-700/40 transition">
                                         {{-- Nro --}}
-                                        <td class="py-2 px-2.5 font-mono text-[10px] text-slate-400" x-text="index + 1"></td>
+                                        <td class="py-2 px-2 font-mono text-[10px] text-slate-400" x-text="index + 1"></td>
                                         
                                         {{-- Descripción --}}
                                         <td class="py-2 px-2.5">
@@ -624,15 +625,43 @@
                                                    class="w-20 text-right text-xs font-mono font-bold py-0.5 px-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500">
                                         </td>
 
+                                        {{-- % Desc --}}
+                                        <td class="py-2 px-1 text-center">
+                                            <div class="inline-flex items-center gap-1 justify-center">
+                                                <input type="number" min="0" max="100" step="1" 
+                                                       x-model.number="item.descuento_porcentaje"
+                                                       @input="validarItem(index)"
+                                                       placeholder="0"
+                                                       title="Porcentaje de descuento para este artículo"
+                                                       class="w-12 text-center text-xs font-mono font-bold py-0.5 px-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-indigo-500">
+                                                <span class="text-[10px] font-bold text-slate-400">%</span>
+                                            </div>
+                                        </td>
+
                                         {{-- Subtotal --}}
-                                        <td class="py-2 px-2.5 text-right font-mono font-black text-slate-900 dark:text-white tabular-nums text-xs"
-                                            x-text="'$ ' + formatDinero(item.cantidad * item.precio_unitario)">
+                                        <td class="py-2 px-2.5 text-right font-mono tabular-nums text-xs">
+                                            <template x-if="item.descuento_porcentaje > 0">
+                                                <div class="leading-tight">
+                                                    <span class="font-black text-emerald-600 dark:text-emerald-400 block"
+                                                          x-text="'$ ' + formatDinero(calcularSubtotalItem(item))"></span>
+                                                    <span class="text-[10px] text-slate-400 line-through block"
+                                                          x-text="'$ ' + formatDinero(item.cantidad * item.precio_unitario)"></span>
+                                                    <span class="inline-block text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                                                        -<span x-text="item.descuento_porcentaje"></span>%
+                                                    </span>
+                                                </div>
+                                            </template>
+                                            <template x-if="!item.descuento_porcentaje || item.descuento_porcentaje == 0">
+                                                <span class="font-black text-slate-900 dark:text-white"
+                                                      x-text="'$ ' + formatDinero(item.cantidad * item.precio_unitario)"></span>
+                                            </template>
                                         </td>
 
                                         {{-- Botón Quitar --}}
                                         <td class="py-2 px-1 text-center">
                                             <button type="button" @click="quitarItem(index)" 
-                                                    class="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition text-xs font-bold" title="Eliminar fila">
+                                                    class="text-rose-500 hover:text-rose-700 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition text-xs font-bold cursor-pointer" 
+                                                    title="Eliminar fila">
                                                 ✕
                                             </button>
                                         </td>
@@ -641,7 +670,7 @@
 
                                 <template x-if="items.length === 0">
                                     <tr>
-                                        <td colspan="6" class="py-12 text-center text-slate-400 dark:text-slate-500">
+                                        <td colspan="7" class="py-12 text-center text-slate-400 dark:text-slate-500">
                                             <div class="text-3xl mb-1.5">🛒</div>
                                             <p class="font-bold text-xs">Factura vacía</p>
                                             <p class="text-[11px] mt-0.5" x-text="esTrelew ? '1) Seleccione cliente (F2), 2) Escanee código (F3) o cargue monto con ENTER (F4).' : 'Escanee un código de barras (F3) o use la carga rápida de monto (F4).'"></p>
@@ -676,7 +705,15 @@
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span>TOTAL FACTURADO</span>
                         </span>
-                        <span class="text-slate-400 text-xs" x-text="'SUBTOTAL: $ ' + formatDinero(calcularSubtotal())"></span>
+                        <div class="flex items-center gap-2">
+                            <template x-if="calcularDescuentoTotalItems() > 0">
+                                <span class="text-amber-400 text-xs font-bold" x-text="'PROMOS: -$ ' + formatDinero(calcularDescuentoTotalItems())"></span>
+                            </template>
+                            <span class="text-slate-400 text-xs" x-text="'SUBTOTAL: $ ' + formatDinero(calcularSubtotal())"></span>
+                            <template x-if="calcularDescuento() > 0">
+                                <span class="text-emerald-400 text-xs font-bold" x-text="'DESC FACT: -$ ' + formatDinero(calcularDescuento())"></span>
+                            </template>
+                        </div>
                     </div>
 
                     <div class="flex items-baseline justify-between my-1">
@@ -696,6 +733,76 @@
                             <span class="text-indigo-400 font-bold uppercase text-sm" x-text="cuotasPlan + ' x $' + formatDinero(calcularValorCuota(cuotasPlan))"></span>
                         </div>
                     </template>
+                </div>
+
+                <!-- TARJETA DE DESCUENTO / BONIFICACIÓN -->
+                <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm">🏷️</span>
+                            <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">
+                                Descuento / Bonificación en Factura
+                            </span>
+                        </div>
+                        <template x-if="calcularDescuento() > 0">
+                            <span class="text-xs font-mono font-black text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-300 dark:border-emerald-700">
+                                - $ <span x-text="formatDinero(calcularDescuento())"></span>
+                            </span>
+                        </template>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                        <!-- Toggle Monto / Porcentaje -->
+                        <div class="sm:col-span-4 flex rounded-lg border border-slate-300 dark:border-slate-600 p-0.5 bg-slate-50 dark:bg-slate-900 text-xs">
+                            <button type="button" 
+                                    @click="tipoDescuentoManual = 'monto'; if (descuentoManual > calcularSubtotal()) descuentoManual = calcularSubtotal();"
+                                    :class="tipoDescuentoManual === 'monto' ? 'bg-indigo-600 text-white font-black shadow-xs' : 'text-slate-600 dark:text-slate-300'"
+                                    class="flex-1 py-1 px-2 rounded-md font-bold transition text-center cursor-pointer text-[11px]">
+                                $ Monto
+                            </button>
+                            <button type="button" 
+                                    @click="tipoDescuentoManual = 'porcentaje'; if (descuentoManual > 100) descuentoManual = 100;"
+                                    :class="tipoDescuentoManual === 'porcentaje' ? 'bg-indigo-600 text-white font-black shadow-xs' : 'text-slate-600 dark:text-slate-300'"
+                                    class="flex-1 py-1 px-2 rounded-md font-bold transition text-center cursor-pointer text-[11px]">
+                                % Porc.
+                            </button>
+                        </div>
+
+                        <!-- Input Valor Descuento -->
+                        <div class="sm:col-span-5 relative">
+                            <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-400 font-bold text-xs" 
+                                  x-text="tipoDescuentoManual === 'monto' ? '$' : '%'"></span>
+                            <input type="number" 
+                                   step="0.01" 
+                                   min="0"
+                                   :max="tipoDescuentoManual === 'porcentaje' ? 100 : calcularSubtotal()"
+                                   x-model.number="descuentoManual"
+                                   placeholder="0.00"
+                                   class="w-full pl-7 pr-3 py-1.5 rounded-lg border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-right font-mono font-bold text-xs focus:ring-2 focus:ring-indigo-500 shadow-xs">
+                        </div>
+
+                        <!-- Chips rápidos / Botón Limpiar -->
+                        <div class="sm:col-span-3 flex items-center justify-end gap-1">
+                            <template x-if="tipoDescuentoManual === 'porcentaje'">
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="descuentoManual = 5" class="px-1.5 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer">5%</button>
+                                    <button type="button" @click="descuentoManual = 10" class="px-1.5 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer">10%</button>
+                                </div>
+                            </template>
+                            <template x-if="tipoDescuentoManual === 'monto'">
+                                <div class="flex items-center gap-1">
+                                    <button type="button" @click="descuentoManual = 5000" class="px-1.5 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer">$5k</button>
+                                    <button type="button" @click="descuentoManual = 10000" class="px-1.5 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-indigo-50 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer">$10k</button>
+                                </div>
+                            </template>
+                            <button type="button" @click="descuentoManual = 0" 
+                                    x-show="descuentoManual > 0"
+                                    class="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer" 
+                                    title="Quitar descuento">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- TARJETA DE MEDIOS DE PAGO (BOTONES GRANDES TABLET TOUCH CONSOLIDADOS) -->
@@ -2525,10 +2632,38 @@
                     });
                 },
 
+                calcularSubtotalItem(item) {
+                    let cant = Number(item.cantidad) || 0;
+                    let pu = Number(item.precio_unitario) || 0;
+                    let pct = Math.max(0, Math.min(100, Number(item.descuento_porcentaje) || 0));
+                    let bruto = cant * pu;
+                    let desc = bruto * (pct / 100);
+                    return Math.max(0, Math.round((bruto - desc) * 100) / 100);
+                },
+
                 calcularSubtotal() {
                     let sum = 0;
                     for (let it of this.items) {
+                        sum += this.calcularSubtotalItem(it);
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                calcularSubtotalBruto() {
+                    let sum = 0;
+                    for (let it of this.items) {
                         sum += (Number(it.cantidad) || 0) * (Number(it.precio_unitario) || 0);
+                    }
+                    return Math.round(sum * 100) / 100;
+                },
+
+                calcularDescuentoTotalItems() {
+                    let sum = 0;
+                    for (let it of this.items) {
+                        let cant = Number(it.cantidad) || 0;
+                        let pu = Number(it.precio_unitario) || 0;
+                        let pct = Math.max(0, Math.min(100, Number(it.descuento_porcentaje) || 0));
+                        sum += (cant * pu) * (pct / 100);
                     }
                     return Math.round(sum * 100) / 100;
                 },
@@ -2553,13 +2688,28 @@
                     return 0;
                 },
 
+                descuentoManual: 0,
+                tipoDescuentoManual: 'monto',
+
+                calcularDescuentoManual() {
+                    let sub = this.calcularSubtotal();
+                    let val = Number(this.descuentoManual) || 0;
+                    if (val <= 0) return 0;
+                    if (this.tipoDescuentoManual === 'porcentaje') {
+                        return Math.round(sub * (val / 100) * 100) / 100;
+                    }
+                    return Math.min(sub, Math.round(val * 100) / 100);
+                },
+
                 calcularDescuento() {
                     let sub = this.calcularSubtotal();
+                    let descMedio = 0;
                     let mp = this.medioPagoActual;
                     if (mp && Number(mp.descuento_porcentaje) > 0) {
-                        return Math.round(sub * (Number(mp.descuento_porcentaje) / 100) * 100) / 100;
+                        descMedio = Math.round(sub * (Number(mp.descuento_porcentaje) / 100) * 100) / 100;
                     }
-                    return 0;
+                    let totalDesc = descMedio + this.calcularDescuentoManual();
+                    return Math.min(sub, Math.round(totalDesc * 100) / 100);
                 },
 
                 calcularTotal(cuotas = null) {
@@ -2726,7 +2876,7 @@
 
                 agregarItem(prod, cantidad = 1) {
                     this.creditoAutorizado = false;
-                    let exist = this.items.find(it => it.id_producto === prod.id);
+                    let exist = this.items.find(it => it.id_producto === prod.id && (!it.descuento_porcentaje || it.descuento_porcentaje == 0));
                     if (exist) {
                         exist.cantidad += cantidad;
                         exist.stock = prod.stock;
@@ -2739,6 +2889,7 @@
                             descripcion: prod.descripcion,
                             cantidad: cantidad,
                             precio_unitario: Number(prod.precio_venta) || 0,
+                            descuento_porcentaje: 0,
                             controla_stock: prod.controla_stock,
                             stock: prod.stock
                         });
@@ -2761,6 +2912,7 @@
                         descripcion: 'VARIOS - ARTICULO GENERAL',
                         cantidad: 1,
                         precio_unitario: monto,
+                        descuento_porcentaje: 0,
                         controla_stock: false,
                         stock: 9999
                     });
@@ -2827,6 +2979,11 @@
                     let item = this.items[index];
                     if (item.cantidad <= 0) item.cantidad = 1;
                     if (item.precio_unitario < 0) item.precio_unitario = 0;
+                    if (item.descuento_porcentaje === undefined || item.descuento_porcentaje === null || isNaN(item.descuento_porcentaje) || item.descuento_porcentaje < 0) {
+                        item.descuento_porcentaje = 0;
+                    } else if (item.descuento_porcentaje > 100) {
+                        item.descuento_porcentaje = 100;
+                    }
                     this.creditoAutorizado = false;
                     if (item.controla_stock && item.cantidad > (Number(item.stock) || 0)) {
                         let solicitada = item.cantidad;
@@ -3303,6 +3460,7 @@
                         cliente_nombre: this.clienteSeleccionado ? String(this.clienteSeleccionado.nombre) : 'CONSUMIDOR FINAL',
                         cliente_documento: (this.clienteSeleccionado && this.clienteSeleccionado.dni) ? String(this.clienteSeleccionado.dni) : null,
                         medio_pago: this.medioPago,
+                        descuento: this.calcularDescuento(),
                         cuotas: this.esCredito ? parseInt(this.cuotasPlan || 1) : null,
                         autorizado_vendedor: this.esCredito ? (this.autorizadoPorVendedor ? true : false) : false,
                         observaciones: this.referenciaPago ? ('[Ref: ' + this.referenciaPago + ']') : null,
@@ -3311,7 +3469,8 @@
                             codigo_producto: it.codigo_producto ? String(it.codigo_producto) : (it.codigo ? String(it.codigo) : null),
                             descripcion: String(it.descripcion || 'ARTICULO GENERAL'),
                             cantidad: parseFloat(it.cantidad) || 1,
-                            precio_unitario: parseFloat(it.precio_unitario) || 0
+                            precio_unitario: parseFloat(it.precio_unitario) || 0,
+                            descuento_porcentaje: Math.max(0, Math.min(100, parseFloat(it.descuento_porcentaje) || 0))
                         }))
                     };
 
@@ -3428,6 +3587,8 @@
 
                 iniciarNuevaVenta() {
                     this.items = [];
+                    this.descuentoManual = 0;
+                    this.tipoDescuentoManual = 'monto';
                     this.clienteSeleccionado = null;
                     this.clienteQuery = '';
                     this.sugerenciasClientes = [];

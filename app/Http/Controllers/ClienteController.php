@@ -76,21 +76,104 @@ class ClienteController extends Controller
         // Saldo > 0
         if ($request->boolean('has_saldo')) {
             $query->where('saldo', '>', 0);
-            };
+        }
 
-        $clientes = $query->orderBy('nombre', 'asc')
-                        ->paginate(15)
-                        ->withQueryString();
+        // Ordenamiento interactivo (Click-to-Sort conforme a .agents/rules/table_sorting.md)
+        $sortableColumns = [
+            'dni'        => 'clientes.dni',
+            'nro_cuenta' => 'clientes.nro_cuenta',
+            'nombre'     => 'clientes.nombre',
+            'sucursal'   => 'sucursal',
+            'localidad'  => 'localidad',
+            'saldo'      => 'clientes.saldo',
+        ];
 
+        $sort = $request->get('sort', 'nombre');
+        $direction = strtolower($request->get('direction', 'asc'));
 
-        
+        if (!array_key_exists($sort, $sortableColumns)) {
+            $sort = 'nombre';
+        }
+        if (!in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        if ($sort === 'sucursal') {
+            $query->leftJoin('sucursales', 'clientes.id_sucursal', '=', 'sucursales.id')
+                ->select('clientes.*')
+                ->orderBy('sucursales.nombre', $direction);
+        } elseif ($sort === 'localidad') {
+            $query->leftJoin('localidades', 'clientes.id_localidad', '=', 'localidades.id')
+                ->select('clientes.*')
+                ->orderBy('localidades.nombre', $direction);
+        } else {
+            $query->orderBy($sortableColumns[$sort], $direction);
+        }
+
+        if ($sort !== 'id') {
+            $query->orderBy('clientes.id', 'desc');
+        }
+
+        // Exportación a Excel / CSV con todos los filtros aplicados
+        if ($request->get('export') === 'excel' || $request->get('export') === 'csv') {
+            $exportQuery = clone $query;
+            $filename = 'clientes_' . date('Ymd_His') . '.csv';
+
+            return response()->streamDownload(function () use ($exportQuery) {
+                $handle = fopen('php://output', 'w');
+                fputs($handle, "\xEF\xBB\xBF"); // BOM UTF-8
+
+                fputcsv($handle, [
+                    'DNI',
+                    'CUIT',
+                    'Nro Cuenta',
+                    'Cliente',
+                    'Sucursal',
+                    'Localidad',
+                    'Provincia',
+                    'Direccion',
+                    'Telefono',
+                    'Email',
+                    'Saldo Actual',
+                    'Limite Credito',
+                    'Estado',
+                ], ';');
+
+                $exportQuery->chunk(1000, function ($chunk) use ($handle) {
+                    foreach ($chunk as $c) {
+                        fputcsv($handle, [
+                            $c->dni,
+                            $c->cuit ?? '-',
+                            $c->nro_cuenta ?? '-',
+                            $c->nombre,
+                            $c->sucursal?->nombre ?? '-',
+                            $c->localidad?->nombre ?? '-',
+                            $c->localidad?->provincia?->nombre ?? '-',
+                            $c->direccion ?? '-',
+                            $c->telefono ?? '-',
+                            $c->email ?? '-',
+                            number_format((float)$c->saldo, 2, ',', ''),
+                            number_format((float)($c->limite_credito ?? 0), 2, ',', ''),
+                            $c->suspendido ? 'Suspendido' : 'Activo',
+                        ], ';');
+                    }
+                });
+
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ]);
+        }
+
+        $clientes = $query->paginate(15)->withQueryString();
 
         $sucursales   = Sucursal::orderBy('nombre')->get();
         $localidades  = Localidad::orderBy('nombre')->get();
         $provincias   = Provincia::orderBy('nombre')->get();
         $estadosBanco = EstadoBanco::orderBy('codigo')->get();
 
-        return view('clientes.index', compact('clientes', 'sucursales', 'localidades', 'provincias', 'estadosBanco'));
+        return view('clientes.index', compact('clientes', 'sucursales', 'localidades', 'provincias', 'estadosBanco', 'sort', 'direction'));
     }
 
     public function create()
