@@ -4,8 +4,59 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "59fef52521cb34523588c58f0db68c83",
+    "content-hash": "9bae2b6a287cb0cdea93860c95bf1342",
     "packages": [
+        {
+            "name": "afipsdk/afip.php",
+            "version": "V1.3.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/AfipSDK/afip.php.git",
+                "reference": "2ad4e6b14f1c90706457cfb4b4255772cb1c1acd"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/AfipSDK/afip.php/zipball/2ad4e6b14f1c90706457cfb4b4255772cb1c1acd",
+                "reference": "2ad4e6b14f1c90706457cfb4b4255772cb1c1acd",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.3"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/Afip.php"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Afip SDK",
+                    "email": "afipsdk@gmail.com"
+                }
+            ],
+            "description": "Libreria para usar los Web Services de AFIP (Argentina) ",
+            "homepage": "https://github.com/afipsdk/afip.php",
+            "keywords": [
+                "afip",
+                "cae",
+                "contribuyente",
+                "facturacion-electronica",
+                "gratis",
+                "libreria",
+                "padron",
+                "soap"
+            ],
+            "support": {
+                "issues": "https://github.com/AfipSDK/afip.php/issues",
+                "source": "https://github.com/AfipSDK/afip.php/tree/V1.3.1"
+            },
+            "time": "2026-11-03T19:16:38+00:00"
+        },
         {
             "name": "brick/math",
             "version": "0.14.8",

@@ -12,6 +12,7 @@ use App\Http\Controllers\PresentacionController;
 use App\Http\Controllers\AuditoriaController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\PuntoVentaController;
+use App\Http\Controllers\FacturacionController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
@@ -208,6 +209,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/ventas/{venta}', [\App\Http\Controllers\VentaController::class, 'show'])->name('ventas.show');
     Route::get('/ventas/{venta}/imprimir', [\App\Http\Controllers\VentaController::class, 'imprimir'])->name('ventas.imprimir');
     Route::post('/ventas/{venta}/anular', [\App\Http\Controllers\VentaController::class, 'anular'])->name('ventas.anular');
+    Route::post('/ventas/{venta}/facturar-remito', [\App\Http\Controllers\VentaController::class, 'facturarRemito'])->name('ventas.facturar-remito');
+
+    // --- FACTURACIÓN ELECTRÓNICA DIGITAL ARCA (WSAA + WSFEv1) ---
+    Route::post('/facturacion/emitir-digital', [FacturacionController::class, 'emitirDigital'])->name('facturacion.emitir-digital');
+    Route::post('/facturacion/consultar-ultimo', [FacturacionController::class, 'consultarUltimo'])->name('facturacion.consultar-ultimo');
 
     // --- MÓDULO RECIBOS DE COBRANZA / CUENTA CORRIENTE ---
     Route::get('/recibos', [\App\Http\Controllers\ReciboController::class, 'index'])->name('recibos.index');

@@ -262,47 +262,95 @@
                         </template>
                     </div>
 
-                    <!-- Selector de Tipo de Comprobante & Régimen Fiscal -->
-                    <div class="mb-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
-                        @if($esTdf)
-                            <div class="flex items-center justify-between text-xs">
-                                <div class="flex items-center gap-1.5 font-bold text-teal-800 dark:text-teal-300">
-                                    <span>🌴</span>
-                                    <span>Régimen Ushuaia (Ley 19.640):</span>
-                                    <span class="font-normal text-[11px] text-teal-700 dark:text-teal-400">Operaciones Exentas de IVA.</span>
-                                </div>
-                                <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-teal-200/80 dark:bg-teal-900/80 text-teal-900 dark:text-teal-200 uppercase">
-                                    Factura B (Exenta)
-                                </span>
+                    <!-- Selector Compacto de Tipo de Comprobante -->
+                    <div class="mb-2 p-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <div class="flex flex-wrap items-center justify-between gap-1.5">
+                            <div class="flex flex-wrap items-center gap-1 text-[11px]">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">Comprobante:</span>
+                                
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('FACTURA_B')"
+                                        :class="tipoComprobante === 'FACTURA_B' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer">
+                                    Factura B
+                                </button>
+
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('FACTURA_A')"
+                                        :class="tipoComprobante === 'FACTURA_A' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer">
+                                    Factura A
+                                </button>
+
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('FACTURA_C')"
+                                        :class="tipoComprobante === 'FACTURA_C' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer">
+                                    Factura C
+                                </button>
+
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('REMITO')"
+                                        :class="tipoComprobante === 'REMITO' ? 'bg-amber-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer"
+                                        title="Descuenta stock. No se factura en este momento.">
+                                    Remito
+                                </button>
+
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('PRESUPUESTO')"
+                                        :class="tipoComprobante === 'PRESUPUESTO' ? 'bg-purple-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer"
+                                        title="Cotización previa. No afecta stock y no se factura.">
+                                    Presupuesto
+                                </button>
+
+                                <button type="button" 
+                                        @click="seleccionarTipoComprobante('NOTA_CREDITO')"
+                                        :class="tipoComprobante.includes('NOTA_CREDITO') ? 'bg-rose-600 text-white shadow-xs font-black' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'"
+                                        class="px-2 py-0.5 rounded text-[11px] transition cursor-pointer"
+                                        title="Reingreso de mercadería / Devolución.">
+                                    Nota de Crédito
+                                </button>
                             </div>
-                        @else
-                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-slate-500 uppercase">Tipo Cbte:</span>
-                                    <div class="inline-flex rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-0.5">
-                                        <button type="button" 
-                                                @click="seleccionarTipoComprobante('FACTURA_B')"
-                                                :class="tipoComprobante === 'FACTURA_B' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'"
-                                                class="px-2.5 py-1 text-xs font-bold rounded-md transition cursor-pointer">
-                                            Factura B (Cons. Final)
-                                        </button>
-                                        <button type="button" 
-                                                @click="seleccionarTipoComprobante('FACTURA_A')"
-                                                :class="tipoComprobante === 'FACTURA_A' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'"
-                                                class="px-2.5 py-1 text-xs font-bold rounded-md transition cursor-pointer">
-                                            Factura A (Resp. Inscripto)
-                                        </button>
-                                    </div>
-                                </div>
+
+                            <div class="text-[10px] font-mono">
                                 <template x-if="tipoComprobante === 'FACTURA_A'">
-                                    <div class="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
-                                        <span>Neto: <strong>$<span x-text="formatDinero(calcularTotal() / 1.21)"></span></strong></span>
-                                        <span>•</span>
-                                        <span>IVA 21%: <strong>$<span x-text="formatDinero(calcularTotal() - (calcularTotal() / 1.21))"></span></strong></span>
-                                    </div>
+                                    <span class="text-indigo-600 dark:text-indigo-300">
+                                        Neto: <strong>$<span x-text="formatDinero(calcularTotal() / 1.21)"></span></strong> • IVA 21%: <strong>$<span x-text="formatDinero(calcularTotal() - (calcularTotal() / 1.21))"></span></strong>
+                                    </span>
+                                </template>
+                                <template x-if="tipoComprobante === 'REMITO'">
+                                    <span class="text-amber-700 dark:text-amber-400 font-sans font-bold">
+                                        Descuenta stock • Facturación posterior
+                                    </span>
+                                </template>
+                                <template x-if="tipoComprobante === 'PRESUPUESTO'">
+                                    <span class="text-purple-700 dark:text-purple-400 font-sans font-bold">
+                                        No afecta stock • No fiscal
+                                    </span>
+                                </template>
+                                <template x-if="tipoComprobante.includes('NOTA_CREDITO')">
+                                    <span class="text-rose-700 dark:text-rose-400 font-sans font-bold">
+                                        Reingresa stock al inventario
+                                    </span>
+                                </template>
+                                <template x-if="tipoComprobante === 'FACTURA_B'">
+                                    <span class="text-slate-500 dark:text-slate-400 font-sans">
+                                        @if($esTdf)
+                                            <span class="text-teal-700 dark:text-teal-300 font-bold">TDF Ley 19.640 (Exenta)</span>
+                                        @else
+                                            Consumidor Final (IVA Incluido)
+                                        @endif
+                                    </span>
+                                </template>
+                                <template x-if="tipoComprobante === 'FACTURA_C'">
+                                    <span class="text-blue-600 dark:text-blue-300 font-sans font-bold">
+                                        Régimen Simplificado
+                                    </span>
                                 </template>
                             </div>
-                        @endif
+                        </div>
                     </div>
 
                     <!-- CASO A: CONSUMIDOR FINAL (ESTADO POR DEFECTO) -->
@@ -969,13 +1017,22 @@
                             :class="[
                                 items.length === 0 
                                     ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-400 dark:text-slate-500' 
-                                    : (esCredito 
-                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400' 
-                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400'),
+                                    : (esPresupuesto
+                                        ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-xl hover:shadow-purple-500/25 active:scale-98 focus:ring-4 focus:ring-purple-400'
+                                        : (esRemito
+                                            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xl hover:shadow-amber-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400'
+                                            : (esNotaCredito
+                                                ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-xl hover:shadow-rose-500/25 active:scale-98 focus:ring-4 focus:ring-rose-400'
+                                                : (esCredito 
+                                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl hover:shadow-indigo-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400' 
+                                                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl hover:shadow-emerald-500/25 active:scale-98 focus:ring-4 focus:ring-amber-400')
+                                            )
+                                        )
+                                    ),
                                 pasoActualFlujo === 5 ? 'ring-4 ring-amber-400' : ''
                             ]"
                             class="w-full py-4 px-4 rounded-2xl font-black text-base sm:text-lg uppercase tracking-wide transition flex items-center justify-center gap-2 cursor-pointer">
-                        <span x-text="procesando ? 'Procesando...' : (esCredito ? (creditoAutorizado ? '5. Facturar y Generar Pagaré' : '4. Ir a Crédito Personal') : 'PAGAR / COBRAR AHORA')"></span>
+                        <span x-text="procesando ? 'Procesando...' : (esPresupuesto ? 'EMITIR PRESUPUESTO' : (esRemito ? 'EMITIR REMITO' : (esNotaCredito ? 'EMITIR NOTA DE CRÉDITO' : (esCredito ? (creditoAutorizado ? '5. Facturar y Generar Pagaré' : '4. Ir a Crédito Personal') : 'PAGAR / FACTURAR AHORA'))))"></span>
                         <span x-show="!procesando" class="font-mono text-sm sm:text-base font-bold" x-text="'($ ' + formatDinero(calcularTotal()) + ')'"></span>
                         <span x-show="!procesando && items.length > 0" class="text-xs font-mono px-2 py-0.5 rounded bg-black/25 text-amber-300" x-text="esCredito ? (creditoAutorizado ? 'ENTER / F8' : 'ENTER / F5') : 'ENTER'"></span>
                     </button>
@@ -1329,14 +1386,17 @@
                 <!-- Resumen Fiscal de Comprobante en Modal Cobro -->
                 <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
                     <span class="text-slate-500 uppercase font-bold text-[10px]">Comprobante a emitir:</span>
-                    @if($esTdf)
-                        <span class="font-bold font-mono text-teal-700 dark:text-teal-300">FACTURA B (Exento Ley 19.640)</span>
-                    @else
-                        <span class="font-bold font-mono" 
-                              :class="tipoComprobante === 'FACTURA_A' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-slate-200'"
-                              x-text="tipoComprobante === 'FACTURA_A' ? 'FACTURA A (IVA 21% Discriminado)' : 'FACTURA B (IVA Incluido)'">
-                        </span>
-                    @endif
+                    <span class="font-bold font-mono" 
+                          :class="{
+                              'text-indigo-600 dark:text-indigo-400': tipoComprobante === 'FACTURA_A',
+                              'text-emerald-600 dark:text-emerald-400': tipoComprobante === 'FACTURA_B',
+                              'text-blue-600 dark:text-blue-400': tipoComprobante === 'FACTURA_C',
+                              'text-amber-600 dark:text-amber-400': tipoComprobante === 'REMITO',
+                              'text-purple-600 dark:text-purple-400': tipoComprobante === 'PRESUPUESTO',
+                              'text-rose-600 dark:text-rose-400': tipoComprobante.includes('NOTA_CREDITO')
+                          }"
+                          x-text="nombreComprobanteActual">
+                    </span>
                 </div>
 
                 <!-- Campo de referencia / comprobante si el medio de pago lo requiere -->
@@ -1391,7 +1451,7 @@
                     <button type="button" @click="enviarVenta()"
                             :disabled="procesando"
                             class="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-2 px-6 rounded-lg shadow uppercase">
-                        <span x-text="procesando ? 'Facturando...' : 'Emitir Factura'"></span>
+                        <span x-text="procesando ? 'Procesando...' : textoBotonEmitir"></span>
                     </button>
                 </div>
             </div>
@@ -2032,28 +2092,56 @@
                 esTdf: {{ $esTdf ? 'true' : 'false' }},
                 esChubut: {{ $esChubut ? 'true' : 'false' }},
                 tipoComprobante: 'FACTURA_B',
-                get esFacturaA() {
-                    return this.tipoComprobante === 'FACTURA_A';
+                get esFacturaA() { return this.tipoComprobante === 'FACTURA_A'; },
+                get esFacturaB() { return this.tipoComprobante === 'FACTURA_B'; },
+                get esFacturaC() { return this.tipoComprobante === 'FACTURA_C'; },
+                get esRemito() { return this.tipoComprobante === 'REMITO'; },
+                get esPresupuesto() { return this.tipoComprobante === 'PRESUPUESTO'; },
+                get esNotaCredito() { return this.tipoComprobante.includes('NOTA_CREDITO'); },
+
+                get nombreComprobanteActual() {
+                    switch(this.tipoComprobante) {
+                        case 'FACTURA_A': return 'FACTURA A (IVA 21% Discriminado)';
+                        case 'FACTURA_B': return this.esTdf ? 'FACTURA B (Exento Ley 19.640)' : 'FACTURA B (Consumidor Final)';
+                        case 'FACTURA_C': return 'FACTURA C (Régimen Simplificado)';
+                        case 'REMITO': return 'REMITO DE SALIDA (Descuenta Stock - Sin Facturar)';
+                        case 'PRESUPUESTO': return 'PRESUPUESTO (Cotización - No Afecta Stock)';
+                        case 'NOTA_CREDITO_B': return 'NOTA DE CRÉDITO B';
+                        case 'NOTA_CREDITO_A': return 'NOTA DE CRÉDITO A';
+                        case 'NOTA_CREDITO': return 'NOTA DE CRÉDITO';
+                        default: return this.tipoComprobante;
+                    }
                 },
+
+                get textoBotonEmitir() {
+                    if (this.esPresupuesto) return 'Emitir Presupuesto';
+                    if (this.esRemito) return 'Emitir Remito de Salida';
+                    if (this.esNotaCredito) return 'Emitir Nota de Crédito';
+                    if (this.esFacturaA) return 'Emitir Factura A';
+                    if (this.esFacturaC) return 'Emitir Factura C';
+                    return 'Emitir Factura B';
+                },
+
                 get clienteTieneCuit() {
                     if (!this.clienteSeleccionado) return false;
                     let doc = String(this.clienteSeleccionado.dni || '').replace(/\D/g, '');
                     return doc.length === 11;
                 },
                 seleccionarTipoComprobante(tipo) {
-                    if (tipo === 'FACTURA_A') {
+                    if (tipo === 'FACTURA_A' || tipo === 'NOTA_CREDITO_A') {
                         if (!this.clienteSeleccionado) {
-                            alert('Para emitir Factura A primero debe buscar y seleccionar un cliente con CUIT (11 dígitos).');
+                            alert('Para comprobantes tipo A primero debe buscar y seleccionar un cliente con CUIT (11 dígitos).');
                             this.focusCliente();
                             return;
                         }
                         if (!this.clienteTieneCuit) {
-                            alert('El cliente seleccionado tiene DNI (' + (this.clienteSeleccionado.dni || 'Sin DNI') + '). Para emitir Factura A ante ARCA es obligatorio registrar su CUIT de 11 dígitos.');
+                            alert('El cliente seleccionado tiene DNI (' + (this.clienteSeleccionado.dni || 'Sin DNI') + '). Para comprobantes tipo A ante ARCA es obligatorio registrar su CUIT de 11 dígitos.');
                             return;
                         }
                     }
                     this.tipoComprobante = tipo;
                 },
+                presupuestoCargado: @json($presupuestoInicial ?? null),
                 items: [],
                 barcodeQuery: '',
                 sugerenciasProductos: [],
@@ -2413,6 +2501,10 @@
                 initPos() {
                     if (this.clienteSeleccionado) {
                         this.consultarInfoCredito(this.clienteSeleccionado.id);
+                    }
+
+                    if (this.presupuestoCargado && this.presupuestoCargado.items && this.presupuestoCargado.items.length > 0) {
+                        this.items = JSON.parse(JSON.stringify(this.presupuestoCargado.items));
                     }
 
                     this.focusInicialSegunModo();
