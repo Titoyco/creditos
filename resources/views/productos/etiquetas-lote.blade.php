@@ -6,7 +6,7 @@
     <title>Lote de Etiquetas Térmicas - {{ $totalEtiquetas }} sticker(s)</title>
     <style>
         @page {
-            size: 50mm 25mm;
+            size: 50mm 23.5mm;
             margin: 0mm !important;
         }
 
@@ -107,12 +107,12 @@
         /* Estructura Física de la Etiqueta (50mm x 25mm) calibrada para Zebra GC420t */
         .etiqueta-sticker {
             width: 50mm;
-            height: 23.8mm;
+            height: 22.8mm;
             min-width: 50mm;
             max-width: 50mm;
-            min-height: 23.8mm;
-            max-height: 23.8mm;
-            padding: 0.8mm 1.5mm 0.4mm 1.5mm;
+            min-height: 22.8mm;
+            max-height: 22.8mm;
+            padding: 0.5mm 1.2mm 0.2mm 1.2mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -137,13 +137,14 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            height: 4.5mm;
+            height: 4.0mm;
+            max-height: 4.0mm;
             overflow: hidden;
         }
 
         .etiqueta-logo {
-            height: 4.0mm;
-            max-width: 18mm;
+            height: 3.8mm;
+            max-width: 20mm;
             object-fit: contain;
         }
 
@@ -156,7 +157,7 @@
         }
 
         .etiqueta-precio {
-            font-size: 10.5pt;
+            font-size: 10pt;
             font-weight: 900;
             color: #000;
             line-height: 1;
@@ -166,29 +167,30 @@
 
         /* Descripción del Producto */
         .etiqueta-desc {
-            font-size: 6.2pt;
+            font-size: 6pt;
             font-weight: 700;
             text-transform: uppercase;
             color: #000;
             text-align: center;
-            line-height: 1.1;
-            height: 3.0mm;
-            max-height: 3.0mm;
+            line-height: 1;
+            height: 2.6mm;
+            max-height: 2.6mm;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
-            margin: 0.2mm 0;
+            margin: 0.1mm 0;
         }
 
         /* Variantes de Talle, Color y Fabricante */
         .etiqueta-variantes {
-            font-size: 5.5pt;
+            font-size: 5pt;
             font-weight: 800;
             text-transform: uppercase;
             color: #000;
             text-align: center;
             line-height: 1;
-            height: 2.0mm;
+            height: 1.8mm;
+            max-height: 1.8mm;
             overflow: hidden;
             white-space: nowrap;
         }
@@ -199,28 +201,30 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: 7.0mm;
+            height: 6.2mm;
+            max-height: 6.2mm;
             overflow: hidden;
-            margin: 0.2mm 0;
+            margin: 0.1mm 0;
         }
 
         .etiqueta-barcode svg {
             width: 100% !important;
             height: 100% !important;
-            max-height: 7.0mm;
+            max-height: 6.2mm;
             display: block;
         }
 
         /* Pie de Etiqueta (Código con asteriscos) */
         .etiqueta-footer {
-            font-size: 6.5pt;
+            font-size: 6pt;
             font-weight: 800;
             font-family: "Courier New", Courier, monospace;
             text-align: center;
             letter-spacing: 0.15em;
             color: #000;
             line-height: 1;
-            height: 2.4mm;
+            height: 2.0mm;
+            max-height: 2.0mm;
             white-space: nowrap;
             overflow: hidden;
         }
@@ -228,13 +232,14 @@
         /* Reglas estrictas de impresión para Zebra GC420t (EPL / ZPL) */
         @media print {
             @page {
-                size: 50mm 25mm;
+                size: 50mm 23.5mm;
                 margin: 0mm !important;
             }
 
             html, body {
                 width: 50mm !important;
-                height: 25mm !important;
+                height: 22.8mm !important;
+                max-height: 22.8mm !important;
                 margin: 0mm !important;
                 padding: 0mm !important;
                 background: #ffffff !important;
@@ -260,12 +265,12 @@
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 margin: 0 !important;
-                padding: 0.8mm 1.5mm 0.4mm 1.5mm !important;
+                padding: 0.5mm 1.2mm 0.2mm 1.2mm !important;
                 width: 50mm !important;
                 max-width: 50mm !important;
-                height: 23.8mm !important;
-                max-height: 23.8mm !important;
-                min-height: 23.8mm !important;
+                height: 22.8mm !important;
+                max-height: 22.8mm !important;
+                min-height: 22.8mm !important;
                 overflow: hidden !important;
                 box-sizing: border-box !important;
                 page-break-inside: avoid !important;
@@ -340,15 +345,22 @@
             </div>
         </div>
 
+        @php
+            $logoBase64 = null;
+            if (file_exists(public_path('img/logo_letras.png'))) {
+                $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents(public_path('img/logo_letras.png')));
+            } elseif (file_exists(public_path('img/logo.png'))) {
+                $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents(public_path('img/logo.png')));
+            }
+        @endphp
+
         @foreach($etiquetasAImprimir as $item)
             @for($i = 0; $i < $item['cantidad']; $i++)
                 <div class="etiqueta-sticker">
                     <!-- 1. Encabezado: Logo y Precio de Venta -->
                     <div class="etiqueta-header">
-                        @if(file_exists(public_path('img/logo_letras.png')))
-                            <img src="{{ asset('img/logo_letras.png') }}" alt="La Marina" class="etiqueta-logo">
-                        @elseif(file_exists(public_path('img/logo.png')))
-                            <img src="{{ asset('img/logo.png') }}" alt="La Marina" class="etiqueta-logo">
+                        @if($logoBase64)
+                            <img src="{{ $logoBase64 }}" alt="La Marina" class="etiqueta-logo">
                         @else
                             <span class="etiqueta-logo-text">LA MARINA</span>
                         @endif

@@ -230,6 +230,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/recibos/{recibo}/anular', [\App\Http\Controllers\ReciboController::class, 'anular'])->name('recibos.anular');
 
     // --- MÓDULO CONTROL DE CAJA / TURNOS & CIERRE Z ---
+    Route::redirect('/caja', '/cajas');
     Route::prefix('cajas')->group(function () {
         Route::get('/', [\App\Http\Controllers\CajaController::class, 'index'])->name('cajas.index');
         Route::get('/estado-actual', [\App\Http\Controllers\CajaController::class, 'estadoActual'])->name('cajas.estado-actual');
