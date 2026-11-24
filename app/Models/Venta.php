@@ -34,6 +34,8 @@ class Venta extends Model implements Auditable
         'fecha',
         'medio_pago',
         'id_medio_pago',
+        'pagos',
+        'numero_cupon',
         'subtotal',
         'recargo',
         'descuento',
@@ -57,6 +59,7 @@ class Venta extends Model implements Auditable
         'numero_factura' => 'integer',
         'cae_vencimiento' => 'date',
         'datos_fiscales' => 'array',
+        'pagos' => 'array',
     ];
     public function getRecargoFinanciacionAttribute(): float
     {
@@ -127,11 +130,16 @@ class Venta extends Model implements Auditable
 
     public function getMedioPagoFormateadoAttribute(): string
     {
+        if ($this->medio_pago === 'multipago' && !empty($this->pagos) && is_array($this->pagos)) {
+            $nombres = array_map(fn($p) => $p['nombre'] ?? $p['medio_pago'] ?? '', $this->pagos);
+            return 'Múltiples (' . implode(' + ', array_filter($nombres)) . ')';
+        }
         return match ($this->medio_pago) {
             'credito_personal' => 'Crédito Personal',
             'tarjeta_debito'   => 'Tarjeta Débito',
             'tarjeta_credito'  => 'Tarjeta Crédito',
             'transferencia'    => 'Transferencia',
+            'multipago'        => 'Múltiples Medios',
             default            => 'Efectivo',
         };
     }

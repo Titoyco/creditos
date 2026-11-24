@@ -42,22 +42,28 @@
             console.log('2. [PAYLOAD ENVIADO]:', payloadZ);
 
             let dataBridge = null;
-            const hostsATestear = ['127.0.0.1', 'localhost'];
-            for (let h of hostsATestear) {
+            const endpointsATestear = [
+                `http://127.0.0.1:${puertoLocal}/imprimir`,
+                `https://127.0.0.1:8586/imprimir`,
+                `http://127.0.0.1:${puertoLocal}/cierre-z`,
+                `https://127.0.0.1:8586/cierre-z`,
+                `http://localhost:${puertoLocal}/imprimir`
+            ];
+            for (let url of endpointsATestear) {
                 try {
-                    console.log(`3. [INTENTO FETCH PUENTE]: http://${h}:${puertoLocal}/imprimir`);
-                    let resBridge = await fetch(`http://${h}:${puertoLocal}/imprimir`, {
+                    console.log(`3. [INTENTO FETCH PUENTE]: ${url}`);
+                    let resBridge = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json; charset=utf-8' },
                         body: JSON.stringify(payloadZ)
                     });
                     if (resBridge && resBridge.ok) {
                         dataBridge = await resBridge.json();
-                        console.log(`✓ [PUENTE RESPONDIÓ EN ${h}:${puertoLocal}]:`, dataBridge);
+                        console.log(`✓ [PUENTE RESPONDIÓ EN ${url}]:`, dataBridge);
                         break;
                     }
                 } catch (err) {
-                    console.warn(`Fetch a http://${h}:${puertoLocal}/imprimir no disponible:`, err.message);
+                    console.warn(`Fetch a ${url} no disponible:`, err.message);
                 }
             }
 

@@ -713,7 +713,15 @@ class VentaController extends Controller
                 'cliente_nombre'          => 'nullable|string|max:191',
                 'cliente_documento'       => 'nullable|string|max:50',
                 'tipo_comprobante'        => 'nullable|string|in:FACTURA_B,FACTURA_A,FACTURA_C,REMITO,PRESUPUESTO,NOTA_CREDITO,NOTA_CREDITO_B,NOTA_CREDITO_A,factura_b,factura_a,factura_c,remito,presupuesto,nota_credito,nota_credito_b,nota_credito_a',
-                'medio_pago'              => 'required|string|max:50',
+                'medio_pago'              => 'nullable|string|max:50',
+                'pagos'                   => 'nullable|array',
+                'pagos.*.id_medio_pago'   => 'nullable',
+                'pagos.*.medio_pago'      => 'nullable|string|max:50',
+                'pagos.*.nombre'          => 'nullable|string|max:100',
+                'pagos.*.monto'           => 'nullable|numeric|min:0.01',
+                'pagos.*.cupon'           => 'nullable|string|max:100',
+                'numero_cupon'            => 'nullable|string|max:100',
+                'cupon'                   => 'nullable|string|max:100',
                 'descuento'               => 'nullable|numeric|min:0',
                 'cuotas'                  => 'nullable|integer|min:1|max:4',
                 'autorizado_vendedor'     => 'nullable|boolean',
@@ -785,10 +793,64 @@ class VentaController extends Controller
             return back()->with('error', 'El total de la venta debe ser mayor a cero.');
         }
 
-        $medioPago = $validated['medio_pago'];
-        $medioPagoModel = \App\Models\MedioPago::where('codigo', $medioPago)->first();
-        $idMedioPago = $medioPagoModel?->id;
-        $esCreditoPersonal = ($medioPago === 'credito_personal' || $medioPagoModel?->tipo_base === 'credito');
+        // Procesar lista de medios de pago (soporte unificado multipago y trazabilidad de cupones)
+        $pagosInput = $request->input('pagos');
+        $pagosLista = [];
+        $cuponesArray = [];
+        $cuponInput = $request->input('numero_cupon') ?? $request->input('cupon') ?? null;
+        if (!empty($cuponInput)) {
+            $cuponesArray[] = trim((string) $cuponInput);
+        }
+
+        if (!empty($pagosInput) && is_array($pagosInput)) {
+            foreach ($pagosInput as $p) {
+                $pMonto = (float) ($p['monto'] ?? 0);
+                if ($pMonto <= 0) continue;
+                $pMedio = $p['medio_pago'] ?? 'efectivo';
+                $pModel = \App\Models\MedioPago::where('codigo', $pMedio)->orWhere('id', $p['id_medio_pago'] ?? 0)->first();
+                $pCupon = trim((string) ($p['cupon'] ?? ''));
+                if ($pCupon !== '') {
+                    $cuponesArray[] = $pCupon;
+                }
+                $pagosLista[] = [
+                    'id_medio_pago' => $pModel?->id ?? ($p['id_medio_pago'] ?? null),
+                    'medio_pago'    => $pModel?->codigo ?? $pMedio,
+                    'nombre'        => $p['nombre'] ?? $pModel?->nombre ?? ucwords(str_replace('_', ' ', $pMedio)),
+                    'monto'         => $pMonto,
+                    'cupon'         => $pCupon ?: null,
+                    'tipo_base'     => $pModel?->tipo_base ?? 'efectivo',
+                ];
+            }
+        }
+
+        $numeroCuponFinal = !empty($cuponesArray) ? implode(', ', array_unique($cuponesArray)) : null;
+
+        if (count($pagosLista) > 1) {
+            $medioPago = 'multipago';
+            $idMedioPago = null;
+            $medioPagoModel = null;
+            $esCreditoPersonal = collect($pagosLista)->contains(fn($p) => ($p['medio_pago'] === 'credito_personal' || ($p['tipo_base'] ?? '') === 'credito'));
+        } elseif (count($pagosLista) === 1) {
+            $medioPago = $pagosLista[0]['medio_pago'];
+            $idMedioPago = $pagosLista[0]['id_medio_pago'];
+            $medioPagoModel = \App\Models\MedioPago::find($idMedioPago) ?? \App\Models\MedioPago::where('codigo', $medioPago)->first();
+            $esCreditoPersonal = ($medioPago === 'credito_personal' || $medioPagoModel?->tipo_base === 'credito');
+        } else {
+            $medioPago = $validated['medio_pago'] ?? 'efectivo';
+            $medioPagoModel = \App\Models\MedioPago::where('codigo', $medioPago)->first();
+            $idMedioPago = $medioPagoModel?->id;
+            $esCreditoPersonal = ($medioPago === 'credito_personal' || $medioPagoModel?->tipo_base === 'credito');
+            $pagosLista = [
+                [
+                    'id_medio_pago' => $idMedioPago,
+                    'medio_pago'    => $medioPago,
+                    'nombre'        => $medioPagoModel?->nombre ?? ucwords(str_replace('_', ' ', $medioPago)),
+                    'monto'         => 0, // Se actualizará al total final
+                    'cupon'         => $numeroCuponFinal,
+                    'tipo_base'     => $medioPagoModel?->tipo_base ?? 'efectivo',
+                ]
+            ];
+        }
 
         $cliente = null;
         $credito = null;
@@ -862,6 +924,10 @@ class VentaController extends Controller
 
         $totalFinal = max(0, round($subtotal + $recargoFinanciacion - $descuentoTotal, 2));
 
+        if (count($pagosLista) === 1 && $pagosLista[0]['monto'] <= 0) {
+            $pagosLista[0]['monto'] = $totalFinal;
+        }
+
         // 1. Resolver Punto de Venta asignado a este puesto / terminal (disponible tanto en la transacción como en la respuesta)
         $idPuntoVenta = $validated['id_punto_venta'] ?? session('terminal_punto_venta_id');
         $puntoVenta = $idPuntoVenta 
@@ -877,6 +943,8 @@ class VentaController extends Controller
                 $validated,
                 $medioPago,
                 $idMedioPago,
+                $pagosLista,
+                $numeroCuponFinal,
                 $esCreditoPersonal,
                 $subtotal,
                 $recargoFinanciacion,
@@ -1024,6 +1092,8 @@ class VentaController extends Controller
                     'fecha'               => now(),
                     'medio_pago'          => $medioPago,
                     'id_medio_pago'       => $idMedioPago,
+                    'pagos'               => $pagosLista,
+                    'numero_cupon'        => $numeroCuponFinal,
                     'subtotal'            => $subtotal,
                     'recargo'             => $recargoFinanciacion,
                     'descuento'           => $descuentoTotal,
@@ -1171,6 +1241,8 @@ class VentaController extends Controller
                             'hasar_ip'     => $puntoVenta->configuracion['hasar_ip'] ?? null,
                             'puerto_local' => $puntoVenta->configuracion['puerto_local'] ?? 8585,
                             'letra'        => $letra,
+                            'pagos'        => $pagosLista,
+                            'cupon'        => $numeroCuponFinal,
                         ],
                     ]);
                 } elseif (!$esFiscal) {
@@ -1527,6 +1599,25 @@ class VentaController extends Controller
             ];
         }
 
+        $pagosPayload = [];
+        if (!empty($venta->pagos) && is_array($venta->pagos)) {
+            foreach ($venta->pagos as $p) {
+                $pagosPayload[] = [
+                    'descripcion'  => $p['nombre'] ?? $p['medio_pago'] ?? 'Efectivo',
+                    'monto'        => (float) ($p['monto'] ?? 0),
+                    'codigo_forma' => $p['codigo_forma'] ?? null,
+                    'cupon'        => $p['cupon'] ?? $venta->numero_cupon ?? null,
+                ];
+            }
+        }
+        if (empty($pagosPayload)) {
+            $pagosPayload[] = [
+                'descripcion' => $venta->medio_pago_formateado,
+                'monto'       => (float) $venta->total,
+                'cupon'       => $venta->numero_cupon ?? null,
+            ];
+        }
+
         $payload = [
             'accion'           => $accion,
             'hasar_ip'         => $hasarIp,
@@ -1540,12 +1631,7 @@ class VentaController extends Controller
                 'domicilio'        => $cliente?->domicilio ?: 'Av. Fontana 123',
             ],
             'items'            => $items,
-            'pagos'            => [
-                [
-                    'descripcion' => $venta->medio_pago_formateado,
-                    'monto'       => (float) $venta->total,
-                ]
-            ],
+            'pagos'            => $pagosPayload,
         ];
 
         return response()->json($payload);

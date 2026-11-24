@@ -216,6 +216,12 @@
                             <td class="py-2 px-3 text-center">
                                 <div class="flex items-center justify-center space-x-1.5">
                                     @if($pv->tipo_emision === 'fiscal_hasar')
+                                        <button type="button"
+                                                @click="emitirCierreZHasar('{{ $pv->configuracion['hasar_ip'] ?? '192.168.0.199' }}', {{ (int) ($pv->configuracion['hasar_puerto'] ?? 80) }}, {{ (int) ($pv->configuracion['puerto_local'] ?? 8585) }})"
+                                                title="Emitir Cierre Diario Z en Impresora Fiscal Hasar"
+                                                class="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-600 hover:text-white border border-amber-300 dark:border-amber-700 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1 shadow-sm cursor-pointer">
+                                            <span>⚡ Cierre Z</span>
+                                        </button>
                                         <a href="{{ route('sistema.puntos-venta.descargar-config', $pv) }}"
                                            title="Descargar config.json para el puente Windows local"
                                            class="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900 border border-emerald-300 dark:border-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1 shadow-sm">
@@ -426,6 +432,41 @@
                     this.pvAmbiente = ambiente || 'homologacion';
                     this.resultado = null;
                     this.modalAbierto = true;
+                },
+
+                async emitirCierreZHasar(ip, puerto, localPort) {
+                    if (!confirm(`¿Desea emitir el Cierre Diario Z en el Controlador Fiscal Hasar 2G (${ip})?\\n\\nEsta acción cerrará la jornada fiscal del día en la memoria del impresor.`)) {
+                        return;
+                    }
+                    const endpoints = [
+                        `http://127.0.0.1:${localPort || 8585}/imprimir`,
+                        `https://127.0.0.1:8586/imprimir`,
+                        `http://127.0.0.1:${localPort || 8585}/cierre-z`,
+                        `https://127.0.0.1:8586/cierre-z`
+                    ];
+                    let payload = { accion: "cierre_z", hasar_ip: ip, hasar_puerto: puerto };
+                    let data = null;
+                    let errorMsg = '';
+                    for (let url of endpoints) {
+                        try {
+                            let res = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            if (res.ok) {
+                                data = await res.json();
+                                break;
+                            }
+                        } catch (e) {
+                            errorMsg = e.message;
+                        }
+                    }
+                    if (data && data.exito) {
+                        alert(`✓ CIERRE Z EXITOSO!\\n\\nNúmero de Cierre Z emitido: ${data.numero_comprobante || 'OK'}\\n${data.mensaje}`);
+                    } else {
+                        alert(`❌ No se pudo emitir el Cierre Z.\\n\\n${(data && data.mensaje) ? data.mensaje : ('Error de conexión con el puente Hasar: ' + errorMsg)}`);
+                    }
                 },
 
                 cerrarModal() {
