@@ -24,7 +24,7 @@ class SetSucursalGlobal
                 session(['sucursal_activa_id' => $id]);
             }
             
-            $sucursal = Sucursal::find($id);
+            $sucursal = Sucursal::find($id) ?? Sucursal::first();
 
             if ($sucursal) {
                 // Guardamos como OBJETO para acceder con config('app.sucursal_activa')->nombre o ->id

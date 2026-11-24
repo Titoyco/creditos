@@ -118,7 +118,7 @@
                                     class="bg-blue-900/90 dark:bg-slate-800 hover:bg-blue-900 dark:hover:bg-slate-700 text-white text-xs font-black border border-blue-500 dark:border-slate-600 rounded-lg py-1 px-2 focus:ring-2 focus:ring-amber-400 cursor-pointer transition-all shadow-sm">
                                     @foreach(\App\Models\Sucursal::all() as $suc)
                                         <option value="{{ $suc->id }}" 
-                                            {{ (int)config('app.sucursal_activa.id') === (int)$suc->id ? 'selected' : '' }}>
+                                            {{ (int)data_get(config('app.sucursal_activa'), 'id', 1) === (int)$suc->id ? 'selected' : '' }}>
                                             {{ $suc->nombre }}
                                         </option>
                                     @endforeach
@@ -130,7 +130,7 @@
                             <p class="text-[9px] uppercase text-blue-300 dark:text-slate-400 font-black leading-none mb-1 tracking-tighter">Sucursal Asignada</p>
                             <div class="flex items-center gap-1.5 text-xs font-black text-white bg-blue-900/70 dark:bg-slate-800 border border-blue-600 dark:border-slate-700 rounded-lg py-1 px-2 shadow-sm">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                <span>{{ config('app.sucursal_activa.nombre') ?? Auth::user()->sucursal?->nombre ?? 'Sin sucursal' }}</span>
+                                <span>{{ data_get(config('app.sucursal_activa'), 'nombre') ?? Auth::user()->sucursal?->nombre ?? 'Sin sucursal' }}</span>
                             </div>
                         </div>
                         @endif
@@ -151,7 +151,7 @@
                         <div class="flex items-center gap-1.5 overflow-x-auto py-0.5">
                             <a href="{{ route('ventas.create') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('ventas.create') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>🛒 Facturar</span>
+                                <span>🛒 POS Mostrador</span>
                             </a>
                             <a href="{{ route('ventas.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('ventas.index') || request()->routeIs('ventas.show') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
@@ -159,7 +159,7 @@
                             </a>
                             <a href="{{ route('cajas.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('cajas.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>💵 Cajas</span>
+                                <span>💵 Cajas & Turnos</span>
                             </a>
                             <a href="{{ route('clientes.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('clientes.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
@@ -171,15 +171,15 @@
                             </a>
                             <a href="{{ route('productos.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('productos.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>📦 Stock</span>
+                                <span>📦 Stock & Catálogo</span>
                             </a>
                             <a href="{{ route('remitos.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('remitos.*') ? 'bg-blue-950 text-amber-300 ring-1 ring-blue-500 shadow-inner' : 'text-blue-100 hover:bg-blue-800/80 dark:hover:bg-slate-800' }}">
-                                <span>📄 Compras</span>
+                                <span>📄 Compras & Remitos</span>
                             </a>
                             <a href="{{ route('metricas.index') }}" 
                                class="px-3 py-1 rounded-md text-xs font-bold uppercase transition flex items-center gap-1.5 whitespace-nowrap {{ request()->routeIs('metricas.*') ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300 shadow-md' : 'text-amber-300 hover:bg-blue-800/80 dark:hover:bg-slate-800 font-extrabold' }}">
-                                <span>📊 Métricas</span>
+                                <span>📊 Métricas BI</span>
                             </a>
                         </div>
 
