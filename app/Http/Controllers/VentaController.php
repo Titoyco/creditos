@@ -725,6 +725,8 @@ class VentaController extends Controller
                 'items.*.descuento_porcentaje' => 'nullable|numeric|min:0|max:100',
                 'items.*.id_producto'          => 'nullable|exists:productos,id',
                 'items.*.codigo_producto'      => 'nullable|string|max:50',
+                'hasar_ticket_numero'          => 'nullable|integer',
+                'hasar_pv_numero'              => 'nullable|integer',
             ]);
         } catch (ValidationException $ve) {
             $firstError = collect($ve->errors())->flatten()->first() ?? 'Datos de la venta inválidos.';
@@ -922,7 +924,9 @@ class VentaController extends Controller
                 }
 
                 $tipoEmision = $esFiscal ? $puntoVenta?->tipo_emision : null;
-                $pvNumero = $puntoVenta ? $puntoVenta->numero : $sucursal->id;
+                $pvNumero = !empty($validated['hasar_pv_numero'])
+                    ? (int) $validated['hasar_pv_numero']
+                    : ($puntoVenta ? $puntoVenta->numero : $sucursal->id);
 
                 // Número correlativo de comprobante
                 $numeroFactura = !empty($validated['hasar_ticket_numero'])
@@ -1206,7 +1210,7 @@ class VentaController extends Controller
                 'hasar_config'            => ($venta->tipo_emision === 'fiscal_hasar' && $pvConfig && $venta->isFiscal()) ? [
                     'puerto_local' => $pvConfig->configuracion['puerto_local'] ?? 8585,
                     'hasar_ip'     => $pvConfig->configuracion['hasar_ip'] ?? '',
-                    'hasar_puerto' => $pvConfig->configuracion['hasar_puerto'] ?? 2000,
+                    'hasar_puerto' => (int) (($pvConfig->configuracion['hasar_puerto'] ?? 20000) == 2000 ? 20000 : ($pvConfig->configuracion['hasar_puerto'] ?? 20000)),
                     'modelo'       => $pvConfig->configuracion['modelo'] ?? 'SMH/PT-250F',
                     'letra'        => $venta->letra_comprobante,
                     'es_exento_iva'=> $venta->esExentoIva(),
@@ -1477,5 +1481,73 @@ class VentaController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Retorna el payload JSON formateado para la Impresora Fiscal Hasar 2G.
+     */
+    public function hasarPayload(Venta $venta)
+    {
+        $venta->load(['items.producto', 'cliente', 'medioPago', 'puntoVenta', 'sucursal']);
+
+        $pv = $venta->puntoVenta;
+        $hasarIp = $pv?->configuracion['hasar_ip'] ?? '192.168.0.199';
+        $hasarPuerto = (int) ($pv?->configuracion['hasar_puerto'] ?? 80);
+
+        $letra = match(strtoupper((string) $venta->tipo_comprobante)) {
+            'FACTURA_A', 'NOTA_CREDITO_A' => 'A',
+            'FACTURA_C', 'NOTA_CREDITO_C' => 'C',
+            default => 'B',
+        };
+
+        $accion = $venta->isNotaCredito() ? 'nota_credito' : 'factura';
+
+        $cliente = $venta->cliente;
+        $doc = preg_replace('/\D/', '', (string) ($venta->cliente_documento ?? $cliente?->cuit ?? $cliente?->dni ?? ''));
+
+        $tipoDoc = 'DNI';
+        if (strlen($doc) === 11) {
+            $tipoDoc = 'CUIT';
+        }
+
+        $resp = 'C';
+        if ($letra === 'A') {
+            $resp = 'I';
+        }
+
+        $items = [];
+        foreach ($venta->items as $idx => $it) {
+            $items[] = [
+                'id'              => (string) ($it->id_producto ?? ($idx + 1)),
+                'codigo'          => (string) ($it->producto?->codigo_barra ?? $it->producto?->codigo ?? ('VAR' . ($idx + 1))),
+                'descripcion'     => $it->descripcion,
+                'cantidad'        => (float) $it->cantidad,
+                'precio_unitario' => (float) $it->precio_unitario,
+                'alicuota_iva'    => $venta->esExentoIva() ? 0.0 : 21.0,
+            ];
+        }
+
+        $payload = [
+            'accion'           => $accion,
+            'hasar_ip'         => $hasarIp,
+            'hasar_puerto'     => $hasarPuerto,
+            'tipo_comprobante' => $letra,
+            'cliente'          => [
+                'nombre'           => $venta->cliente_nombre ?: 'CONSUMIDOR FINAL',
+                'tipo_documento'   => $tipoDoc,
+                'numero_documento' => $doc ?: '0',
+                'responsabilidad'  => $resp,
+                'domicilio'        => $cliente?->domicilio ?: 'Av. Fontana 123',
+            ],
+            'items'            => $items,
+            'pagos'            => [
+                [
+                    'descripcion' => $venta->medio_pago_formateado,
+                    'monto'       => (float) $venta->total,
+                ]
+            ],
+        ];
+
+        return response()->json($payload);
     }
 }

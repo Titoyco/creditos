@@ -408,7 +408,7 @@ class CajaSesion extends Model implements Auditable
         foreach ($pvsHasarSucursal as $pv) {
             $config = $pv->configuracion ?? [];
             $ip = $config['hasar_ip'] ?? '127.0.0.1';
-            $puerto = (int) ($config['hasar_puerto'] ?? 2000);
+            $puerto = (int) (($config['hasar_puerto'] ?? 20000) == 2000 ? 20000 : ($config['hasar_puerto'] ?? 20000));
             $puertoLocal = (int) ($config['puerto_local'] ?? 8585);
             $modelo = $config['modelo'] ?? 'SMH/PT-250F';
             $key = "{$ip}:{$puerto}";
@@ -468,7 +468,7 @@ class CajaSesion extends Model implements Auditable
                 // Resolver a qué IP pertenece el punto de venta
                 $config = $pv?->configuracion ?? $v->datos_fiscales ?? [];
                 $ip = $config['hasar_ip'] ?? '127.0.0.1';
-                $puerto = (int) ($config['hasar_puerto'] ?? 2000);
+                $puerto = (int) (($config['hasar_puerto'] ?? 20000) == 2000 ? 20000 : ($config['hasar_puerto'] ?? 20000));
                 $key = "{$ip}:{$puerto}";
 
                 if (!isset($controladoresHasar[$key])) {

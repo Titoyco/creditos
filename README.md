@@ -24,6 +24,13 @@ El sistema gestiona de forma diferenciada la facturación y los datos fiscales s
 
 ---
 
+## 📖 Manual de Usuario Operativo
+
+Para la capacitación del personal de caja, administración y mostrador, consulte el documento integral:
+- 📘 [**MANUAL_DE_USUARIO.md**](MANUAL_DE_USUARIO.md): Manual operativo dividido en 11 capítulos según los módulos del menú principal, con guías paso a paso para cada tarea operativa (facturar, anular, cambiar comprobante, facturar remitos, arqueo de caja, legajos, cobro de cuotas, etiquetas de código de barras, métricas y configuración de ARCA).
+
+---
+
 ## 🚀 Módulos Principales del Sistema
 
 ### 1. Punto de Venta (POS) & Facturación

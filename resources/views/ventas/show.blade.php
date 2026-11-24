@@ -1,5 +1,58 @@
 <x-app-layout>
-    <div class="max-w-6xl mx-auto py-3 space-y-4" x-data="{ modalAnular: false, motivoAnulacion: '', modalFacturarRemito: false, tipoFacturaRemito: 'FACTURA_B' }">
+    <div class="max-w-6xl mx-auto py-3 space-y-4" x-data="{
+        modalAnular: false,
+        motivoAnulacion: '',
+        modalFacturarRemito: false,
+        tipoFacturaRemito: 'FACTURA_B',
+        async enviarAHasar() {
+            if (!confirm('¿Desea enviar la impresión de este comprobante a la Impresora Fiscal Hasar?')) return;
+            try {
+                let resPayload = await fetch('{{ route("ventas.hasar-payload", $venta->id) }}');
+                if (!resPayload.ok) throw new Error('No se pudo generar el payload fiscal de la venta.');
+                let payload = await resPayload.json();
+
+                let urls = [
+                    'http://127.0.0.1:8585/imprimir',
+                    'https://127.0.0.1:8586/imprimir'
+                ];
+                if (window.location.protocol === 'https:') {
+                    urls = [
+                        'https://127.0.0.1:8586/imprimir',
+                        'http://127.0.0.1:8585/imprimir'
+                    ];
+                }
+
+                let exito = false;
+                let resData = null;
+                let lastErr = null;
+
+                for (let u of urls) {
+                    try {
+                        let r = await fetch(u, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (r.ok) {
+                            resData = await r.json();
+                            exito = true;
+                            break;
+                        }
+                    } catch (err) {
+                        lastErr = err;
+                    }
+                }
+
+                if (exito) {
+                    alert('✅ Comprobante enviado e impreso exitosamente en la Hasar 2G. Ticket Oficial N° ' + (resData.numero_comprobante || ''));
+                } else {
+                    alert('⚠️ No se pudo comunicar con el Puente Fiscal Hasar (127.0.0.1:8585).\n\n1. Verifique que puente-hasar prog.exe esté abierto.\n2. En Brave / Chrome, permita Contenido no seguro en la configuración del sitio.');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+    }">
         
         <!-- Header con Acciones -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-2 border-b border-slate-200 dark:border-slate-800">
@@ -83,6 +136,12 @@
                         <span>🧾 Facturar Remito</span>
                     </button>
                 @endif
+
+                <button type="button" @click="enviarAHasar()"
+                        class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-sm transition flex items-center gap-1.5 uppercase"
+                        title="Mandar impresión física a la controladora fiscal Hasar">
+                    <span>🖨️ Mandar a Hasar</span>
+                </button>
 
                 <a href="{{ route('ventas.imprimir', ['venta' => $venta->id, 'formato' => 'ticket']) }}" target="_blank"
                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3 rounded-lg shadow-sm transition flex items-center gap-1.5 uppercase">

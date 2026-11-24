@@ -208,6 +208,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/ventas/clientes/{cliente}/comentarios', [\App\Http\Controllers\VentaController::class, 'agregarComentarioCliente'])->name('ventas.cliente-agregar-comentario');
     Route::get('/ventas/{venta}', [\App\Http\Controllers\VentaController::class, 'show'])->name('ventas.show');
     Route::get('/ventas/{venta}/imprimir', [\App\Http\Controllers\VentaController::class, 'imprimir'])->name('ventas.imprimir');
+    Route::get('/ventas/{venta}/hasar-payload', [\App\Http\Controllers\VentaController::class, 'hasarPayload'])->name('ventas.hasar-payload');
     Route::post('/ventas/{venta}/anular', [\App\Http\Controllers\VentaController::class, 'anular'])->name('ventas.anular');
     Route::post('/ventas/{venta}/facturar-remito', [\App\Http\Controllers\VentaController::class, 'facturarRemito'])->name('ventas.facturar-remito');
 

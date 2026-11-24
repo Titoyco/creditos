@@ -2449,6 +2449,16 @@
                     }
                 },
                 imprimirComprobanteExito(volverAComenzar = false) {
+                    if (this.ventaExitosa && this.ventaExitosa.tipo_emision === 'fiscal_hasar') {
+                        if (this.ventaExitosa.hasar_payload) {
+                            this.enviarAHasarBridge(this.ventaExitosa.hasar_payload, true);
+                        }
+                        if (volverAComenzar) {
+                            this.cerrarModalExito();
+                        }
+                        return;
+                    }
+
                     let iframe = document.getElementById('iframeComprobanteExito');
                     if (!iframe || !iframe.contentWindow) return;
 
@@ -2492,6 +2502,83 @@
                     setTimeout(() => {
                         alTerminar();
                     }, 250);
+                },
+                async enviarAHasarBridge(payload, esReintento = false) {
+                    let puertoHTTP = 8585;
+                    let puertoHTTPS = 8586;
+                    let urls = [
+                        `http://127.0.0.1:${puertoHTTP}/imprimir`,
+                        `https://127.0.0.1:${puertoHTTPS}/imprimir`
+                    ];
+                    if (window.location.protocol === 'https:') {
+                        urls = [
+                            `https://127.0.0.1:${puertoHTTPS}/imprimir`,
+                            `http://127.0.0.1:${puertoHTTP}/imprimir`
+                        ];
+                    }
+
+                    let exito = false;
+                    let ultimoError = null;
+                    let resData = null;
+
+                    for (let u of urls) {
+                        try {
+                            let res = await fetch(u, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                                body: JSON.stringify(payload)
+                            });
+                            if (res.ok) {
+                                resData = await res.json();
+                                exito = true;
+                                break;
+                            } else {
+                                let errText = await res.text();
+                                ultimoError = `Error HTTP ${res.status}: ${errText}`;
+                            }
+                        } catch (err) {
+                            ultimoError = err;
+                        }
+                    }
+
+                    if (exito) {
+                        console.log('✅ Hasar Fiscal impreso exitosamente:', resData);
+                        if (esReintento) {
+                            alert('✅ Ticket enviado e impreso correctamente en la Impresora Fiscal Hasar.');
+                        }
+                        return true;
+                    } else {
+                        console.warn('⚠️ No se pudo comunicar con el Puente Fiscal Hasar:', ultimoError);
+                        alert('⚠️ ATENCIÓN: No se pudo comunicar con la Impresora Fiscal Hasar.\n\n' +
+                              '1. Verifique que el programa "Puente Fiscal Hasar" esté abierto en la barra de tareas de Windows.\n' +
+                              '2. Si está accediendo por HTTPS en Brave o Chrome, configure el sitio para "Permitir contenido no seguro" (haga clic en el icono a la izquierda de la barra de direcciones).\n' +
+                              '3. Verifique que la impresora fiscal esté encendida con luz verde y papel.');
+                        return false;
+                    }
+                },
+                async consultarProximoNumeroHasar() {
+                    let urls = [
+                        'http://127.0.0.1:8585/proximo-numero',
+                        'https://127.0.0.1:8586/proximo-numero'
+                    ];
+                    if (window.location.protocol === 'https:') {
+                        urls = [
+                            'https://127.0.0.1:8586/proximo-numero',
+                            'http://127.0.0.1:8585/proximo-numero'
+                        ];
+                    }
+                    for (let u of urls) {
+                        try {
+                            let res = await fetch(u, { method: 'GET', headers: { 'Accept': 'application/json' } });
+                            if (res.ok) {
+                                let json = await res.json();
+                                if (json && json.exito) return json;
+                            }
+                        } catch (e) {
+                            // continuar
+                        }
+                    }
+                    return null;
                 },
                 cerrarModalExito() {
                     this.modalExito = false;
@@ -3566,6 +3653,13 @@
                         }))
                     };
 
+                    // Consultar número oficial previo a la controladora fiscal Hasar
+                    let hasarInfo = await this.consultarProximoNumeroHasar();
+                    if (hasarInfo && hasarInfo.exito) {
+                        payload.hasar_ticket_numero = hasarInfo.proximo_comprobante;
+                        payload.hasar_pv_numero = hasarInfo.punto_venta;
+                    }
+
                     try {
                         let res = await fetch(`{{ route('ventas.store') }}`, {
                             method: 'POST',
@@ -3602,14 +3696,17 @@
                             return;
                         }
 
-                        // Si el punto de venta es Controlador Fiscal Hasar, enviar comando al simulador / puente local
+                        // Si el punto de venta es Controlador Fiscal Hasar, enviar comando al puente local
                         if (data.tipo_emision === 'fiscal_hasar') {
-                            let puertoLocal = (data.hasar_config && data.hasar_config.puerto_local) ? data.hasar_config.puerto_local : 8585;
+                            let hasarIp = (data.hasar_config && data.hasar_config.hasar_ip) ? data.hasar_config.hasar_ip : undefined;
+                            let hasarPuerto = (data.hasar_config && data.hasar_config.hasar_puerto) ? parseInt(data.hasar_config.hasar_puerto) : 80;
                             let letraComprobante = (this.tipoComprobante === 'FACTURA_A') ? 'A' : 'B';
                             let descMedio = this.medioPagoActual ? this.medioPagoActual.nombre : (this.medioPago === 'efectivo' ? 'Efectivo' : (this.medioPago === 'tarjeta_debito' ? 'Tarjeta Débito' : (this.medioPago === 'tarjeta_credito' ? 'Tarjeta Crédito' : 'Transferencia')));
 
                             let bodyHasar = {
                                 accion: "factura",
+                                hasar_ip: hasarIp,
+                                hasar_puerto: hasarPuerto,
                                 tipo_comprobante: letraComprobante,
                                 cliente: {
                                     nombre: this.clienteSeleccionado ? (this.clienteSeleccionado.nombre || this.clienteSeleccionado.razon_social) : 'CONSUMIDOR FINAL',
@@ -3618,7 +3715,9 @@
                                     responsabilidad: (this.tipoComprobante === 'FACTURA_A') ? 'I' : 'C',
                                     domicilio: (this.clienteSeleccionado && this.clienteSeleccionado.domicilio) ? this.clienteSeleccionado.domicilio : 'Av. Fontana 123'
                                 },
-                                items: (this.items || []).map(it => ({
+                                items: (this.items || []).map((it, idx) => ({
+                                    id: String(it.id || (idx + 1)),
+                                    codigo: String(it.codigo_barra || it.id || ('VAR' + (idx + 1))),
                                     descripcion: it.descripcion,
                                     cantidad: parseFloat(it.cantidad) || 1,
                                     precio_unitario: parseFloat(it.precio_unitario) || 0,
@@ -3632,16 +3731,8 @@
                                 ]
                             };
 
-                            try {
-                                // Enviar a endpoint /imprimir probado en el simulador Hasar
-                                await fetch(`http://127.0.0.1:${puertoLocal}/imprimir`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-                                    body: JSON.stringify(bodyHasar)
-                                });
-                            } catch (eHasar) {
-                                console.warn('Aviso: No se pudo contactar el simulador Hasar en http://127.0.0.1:' + puertoLocal + '/imprimir', eHasar);
-                            }
+                            data.hasar_payload = bodyHasar;
+                            await this.enviarAHasarBridge(bodyHasar, false);
                         }
 
                         // Éxito: cerrar modales de cobro y mostrar modal final
@@ -3654,9 +3745,10 @@
                         this.impresionPendienteExito = false;
                         this.ventaExitosa = {
                             id: data.venta_id,
-                            comprobante: data.comprobante,
+                            comprobante: (hasarInfo && hasarInfo.exito && data.tipo_emision === 'fiscal_hasar') ? hasarInfo.comprobante_formateado : data.comprobante,
                             total: data.total,
                             tipo_emision: data.tipo_emision,
+                            hasar_payload: (data.tipo_emision === 'fiscal_hasar') ? data.hasar_payload : null,
                             cae: data.cae,
                             cae_vencimiento: data.cae_vencimiento,
                             afip_qr: data.afip_qr,
