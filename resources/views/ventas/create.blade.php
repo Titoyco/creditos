@@ -307,8 +307,10 @@
                                 <input type="text" 
                                        x-ref="clienteQueryInput"
                                        x-model="clienteQuery"
-                                       @input.debounce.250ms="buscarClientesSugeridos()"
-                                       @keydown.enter.prevent="if (sugerenciasClientes.length > 0) seleccionarCliente(sugerenciasClientes[0]); else focusBarcode();"
+                                       @input.debounce.250ms="buscarClientes()"
+                                       @keydown.enter.prevent="confirmarClienteEnter()"
+                                       @keydown.arrow-down.prevent="moverSugerenciaCliente(1)"
+                                       @keydown.arrow-up.prevent="moverSugerenciaCliente(-1)"
                                        placeholder="Buscar cliente (DNI, Nombre, CUIT)... [F2]"
                                        class="w-full text-xs py-1.5 pl-8 pr-12 rounded-lg border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 shadow-2xs">
                                 <span class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-[9px] font-mono font-bold text-slate-400">
@@ -320,9 +322,10 @@
                                      @click.away="sugerenciasClientes = []"
                                      class="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800"
                                      x-cloak>
-                                    <template x-for="cl in sugerenciasClientes" :key="cl.id">
+                                    <template x-for="(cl, idx) in sugerenciasClientes" :key="cl.id">
                                         <button type="button" 
-                                                @click="seleccionarCliente(cl); sugerenciasClientes = [];"
+                                                @click="seleccionarCliente(cl)"
+                                                :class="{'bg-indigo-50 dark:bg-slate-800 font-bold': idx === indiceSugerenciaCliente}"
                                                 class="w-full text-left p-2.5 hover:bg-indigo-50 dark:hover:bg-slate-800 transition flex items-center justify-between text-xs">
                                             <div>
                                                 <span class="font-bold text-slate-900 dark:text-white block" x-text="cl.nombre || cl.razon_social"></span>
@@ -3044,6 +3047,10 @@
                     }
                 },
 
+                buscarClientesSugeridos() {
+                    return this.buscarClientes();
+                },
+
                 moverSugerenciaCliente(delta) {
                     if (!this.sugerenciasClientes || this.sugerenciasClientes.length === 0) return;
                     let max = this.sugerenciasClientes.length - 1;
@@ -3088,6 +3095,8 @@
 
                     if (this.esTrelew && this.items.length === 0) {
                         this.focusMontoGenerico();
+                    } else if (!this.esTrelew) {
+                        this.focusBarcode();
                     }
                 },
 

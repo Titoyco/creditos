@@ -7,7 +7,7 @@
     <style>
         @page {
             size: 50mm 25mm;
-            margin: 0;
+            margin: 0mm !important;
         }
 
         * {
@@ -128,23 +128,21 @@
             gap: 12px;
         }
 
-        /* Estructura Física de la Etiqueta (50mm x 25mm) */
+        /* Estructura Física de la Etiqueta (50mm x 25mm) calibrada para Zebra GC420t */
         .etiqueta-sticker {
             width: 50mm;
-            height: 25mm;
+            height: 23.8mm;
             min-width: 50mm;
             max-width: 50mm;
-            min-height: 25mm;
-            max-height: 25mm;
-            padding: 1.5mm 2mm 1mm 2mm;
+            min-height: 23.8mm;
+            max-height: 23.8mm;
+            padding: 0.8mm 1.5mm 0.4mm 1.5mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             background: #ffffff;
             overflow: hidden;
             box-sizing: border-box;
-            page-break-after: always;
-            break-after: page;
             position: relative;
         }
 
@@ -163,18 +161,18 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            height: 5.2mm;
+            height: 4.5mm;
             overflow: hidden;
         }
 
         .etiqueta-logo {
-            height: 4.8mm;
-            max-width: 20mm;
+            height: 4.0mm;
+            max-width: 18mm;
             object-fit: contain;
         }
 
         .etiqueta-logo-text {
-            font-size: 8pt;
+            font-size: 7.5pt;
             font-weight: 900;
             letter-spacing: 0.05em;
             color: #000;
@@ -182,7 +180,7 @@
         }
 
         .etiqueta-precio {
-            font-size: 11pt;
+            font-size: 10.5pt;
             font-weight: 900;
             color: #000;
             line-height: 1;
@@ -192,27 +190,29 @@
 
         /* Descripción del Producto */
         .etiqueta-desc {
-            font-size: 6.8pt;
+            font-size: 6.2pt;
             font-weight: 700;
             text-transform: uppercase;
             color: #000;
             text-align: center;
             line-height: 1.1;
-            max-height: 3.6mm;
+            height: 3.0mm;
+            max-height: 3.0mm;
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
+            margin: 0.2mm 0;
         }
 
         /* Variantes de Talle, Color y Fabricante */
         .etiqueta-variantes {
-            font-size: 6pt;
+            font-size: 5.5pt;
             font-weight: 800;
             text-transform: uppercase;
             color: #000;
             text-align: center;
             line-height: 1;
-            height: 2.5mm;
+            height: 2.0mm;
             overflow: hidden;
             white-space: nowrap;
         }
@@ -223,41 +223,52 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            height: 8.2mm;
+            height: 7.0mm;
             overflow: hidden;
+            margin: 0.2mm 0;
         }
 
         .etiqueta-barcode svg {
             width: 100% !important;
             height: 100% !important;
-            max-height: 8.2mm;
+            max-height: 7.0mm;
             display: block;
         }
 
         /* Pie de Etiqueta (Código con asteriscos) */
         .etiqueta-footer {
-            font-size: 7.2pt;
+            font-size: 6.5pt;
             font-weight: 800;
             font-family: "Courier New", Courier, monospace;
             text-align: center;
-            letter-spacing: 0.22em;
+            letter-spacing: 0.15em;
             color: #000;
             line-height: 1;
-            height: 3mm;
+            height: 2.4mm;
             white-space: nowrap;
             overflow: hidden;
         }
 
-        /* Reglas estrictas de impresión */
+        /* Reglas estrictas de impresión para Zebra GC420t (EPL / ZPL) */
         @media print {
-            .no-print {
-                display: none !important;
+            @page {
+                size: 50mm 25mm;
+                margin: 0mm !important;
             }
 
-            body {
+            html, body {
+                width: 50mm !important;
+                height: 25mm !important;
+                margin: 0mm !important;
+                padding: 0mm !important;
                 background: #ffffff !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                overflow: hidden !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .no-print {
+                display: none !important;
             }
 
             .preview-wrapper {
@@ -265,6 +276,7 @@
                 margin: 0 !important;
                 gap: 0 !important;
                 display: block !important;
+                width: 50mm !important;
             }
 
             .etiqueta-sticker {
@@ -272,11 +284,27 @@
                 border-radius: 0 !important;
                 box-shadow: none !important;
                 margin: 0 !important;
-                padding: 1.5mm 2mm 1mm 2mm !important;
+                padding: 0.8mm 1.5mm 0.4mm 1.5mm !important;
                 width: 50mm !important;
-                height: 25mm !important;
+                max-width: 50mm !important;
+                height: 23.8mm !important;
+                max-height: 23.8mm !important;
+                min-height: 23.8mm !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+
+            /* Corta página SOLO entre etiquetas, NUNCA en la última para no expulsar etiqueta vacía */
+            .etiqueta-sticker:not(:last-child) {
                 page-break-after: always !important;
                 break-after: page !important;
+            }
+
+            .etiqueta-sticker:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
             }
         }
     </style>
@@ -360,6 +388,13 @@
                     </div>
                 </div>
             @endif
+
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 8px; padding: 8px 12px; font-size: 11px; line-height: 1.4; display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                <span style="font-size: 16px;">🖨️</span>
+                <div>
+                    <strong>Zebra GC420t (50×25mm):</strong> En la ventana de impresión (Ctrl+P), en <em>Más opciones / Ajustes</em> configure: <strong>Márgenes: "Ninguno"</strong> y <strong>desmarque "Encabezados y pies de página"</strong> para evitar texto de URL y páginas adicionales.
+                </div>
+            </div>
         </div>
 
         @for($i = 0; $i < $cantidad; $i++)

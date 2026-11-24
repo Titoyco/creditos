@@ -243,7 +243,7 @@ class CajaSesion extends Model implements Auditable
 
         if ($ventasActivas->isNotEmpty()) {
             foreach ($ventasActivas as $v) {
-                $pagosLista = $v->pagos;
+                $pagosLista = $v->pagos ?? ($v->datos_fiscales['pagos'] ?? null);
                 // Si la venta tiene pagos múltiples o detallados en array JSON
                 if (!empty($pagosLista) && is_array($pagosLista) && count($pagosLista) > 0) {
                     foreach ($pagosLista as $pago) {

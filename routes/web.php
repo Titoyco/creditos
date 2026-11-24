@@ -31,6 +31,11 @@ Route::post('/cambiar-sucursal', [SucursalController::class, 'updateGlobal'])
     ->name('sucursal.update.global')
     ->middleware('auth');
 
+// Alias de retrocompatibilidad para vistas y componentes heredados
+Route::match(['get', 'post'], '/cambiar-sucursal-alias', [SucursalController::class, 'updateGlobal'])
+    ->name('cambiar.sucursal')
+    ->middleware('auth');
+
 Route::middleware('auth')->group(function () {
 
     // --- MÓDULO CLIENTES ---
